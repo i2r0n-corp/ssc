@@ -13,8 +13,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
 
       - name: Install CF CLI
         run: |
@@ -28,28 +26,6 @@ jobs:
           cf auth "${{ secrets.CF_USERNAME }}" "${{ secrets.CF_PASSWORD }}"
           cf target -o d980443atrial -s dev
 
-      - name: Check what changed
-        id: changes
-        run: |
-          CHANGED=$(git diff --name-only HEAD~1 HEAD -- assets/catalog-ui/)
-          echo "changed files: $CHANGED"
-
-          if echo "$CHANGED" | grep -qE "(package\.json|manifest\.yml|Procfile|server\.js)"; then
-            echo "mode=full" >> $GITHUB_OUTPUT
-          else
-            echo "mode=restart" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Full deploy (manifest or package.json changed)
-        if: steps.changes.outputs.mode == 'full'
+      - name: Deploy UI
         working-directory: assets/catalog-ui
         run: cf push
-
-      - name: Quick file update (only static files changed)
-        if: steps.changes.outputs.mode == 'restart'
-        run: |
-          for FILE in $(git diff --name-only HEAD~1 HEAD -- assets/catalog-ui/ | sed 's|assets/catalog-ui/||'); do
-            echo "Uploading $FILE..."
-            cf ssh ssc-catalog-ui -c "cat > /home/vcap/app/$FILE" < assets/catalog-ui/$FILE
-          done
-          cf restart ssc-catalog-ui
