@@ -1,0 +1,43 @@
+apiVersion: asset.sap/v1
+kind: Asset
+
+metadata:
+  name: catalog-ui
+  version: 1.0.0
+  description: >
+    React + SAP UI5 Web Components application providing the visual interface for
+    browsing and filtering the SSC Services Catalog, uploading customer incident files,
+    managing the export cart, downloading PowerPoint files, and chatting with the
+    catalog intelligence agent.
+
+type: service
+
+container:
+  buildPath: .
+  port: 3000
+
+provides:
+  apis:
+    - name: catalog-ui
+      kind: rest
+      ordId: customer.build:apiResource:ssc-catalog-intelligence-c3b74.catalog-ui:v1
+      description: SSC Catalog Intelligence web application
+
+probes:
+  startup:
+    path: /
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 18
+  liveness:
+    path: /
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    path: /
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3

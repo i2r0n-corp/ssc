@@ -1,0 +1,213 @@
+{
+    "name": "Catalog Full Build Workflow",
+    "description": "Triggers a full SSC Services Catalog rebuild via the CAP backend sync API. Call this webhook once during initial setup or whenever a complete rebuild is required. The CAP backend fetches all catalog pages from the SSC API, applies Excel enrichment, and publishes the updated data product.",
+    "nodes": [
+        {
+            "id": "sticky-env-vars",
+            "name": "Setup Notes",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                -400,
+                -200
+            ],
+            "parameters": {
+                "content": "## Catalog Full Build Workflow\n\nTriggers a full SSC catalog rebuild via the CAP backend.\n\n**Required: Configure the SAP MCP Client node**\nSet the MCP server to: `catalog-cap-backend-mcp-server`\nTool: `syncFull`\n\n**Power Automate bridge for Excel files:**\nUpload Excels to `PUT /api/catalog/excel/:bsCode` before running this workflow.\n\nThis workflow should be run:\n- Once during initial setup\n- Whenever a complete rebuild is required\n\nFor daily updates, use the Incremental Check workflow instead."
+            }
+        },
+        {
+            "id": "webhook-full-build",
+            "name": "Catalog Full Build Trigger",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2.1,
+            "position": [
+                0,
+                0
+            ],
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "ssc-catalog-intelligence-c3b74/catalog-sync-workflow/catalog-full-build-trigger",
+                "responseMode": "responseNode",
+                "authentication": "none"
+            }
+        },
+        {
+            "id": "respond-ack",
+            "name": "Acknowledge Request",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                240,
+                0
+            ],
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { \"status\": \"started\", \"mode\": \"full-build\", \"message\": \"Catalog full build initiated. This may take several minutes.\" } }}"
+            }
+        },
+        {
+            "id": "mcp-sync-full",
+            "name": "Run Full Catalog Sync",
+            "type": "CUSTOM.sapMcpClient",
+            "typeVersion": 1,
+            "position": [
+                480,
+                0
+            ],
+            "parameters": {
+                "mcpServerName": "catalog-cap-backend-mcp-server",
+                "toolMode": "id",
+                "toolById": "syncFull",
+                "inputMode": "json",
+                "toolArguments": {},
+                "mcpServers": "[{\"ordId\":\"customer.build:apiResource:ssc-catalog-intelligence-c3b74.cap-backend-mcp-server:v1\",\"name\":\"ssc_catalog_cap_backend\",\"description\":\"MCP server for the ssc_catalog_cap_backend service.\",\"tools\":[{\"name\":\"publishSnapshot\",\"description\":\"Publish or update the catalog snapshot (token-protected)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"body\":{\"type\":\"string\"}}}},{\"name\":\"getSnapshot\",\"description\":\"Retrieve the latest catalog snapshot\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},{\"name\":\"searchServices\",\"description\":\"Search catalog services by keyword and optional attribute filters\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Natural language search query\"},\"engagementtype\":{\"type\":\"string\",\"description\":\"Filter by engagement type (e.g. Max Success Plan)\"},\"businessscenario\":{\"type\":\"string\",\"description\":\"Filter by business scenario code or name\"},\"module\":{\"type\":\"string\",\"description\":\"Filter by module code\"}}}},{\"name\":\"filterServices\",\"description\":\"Filter catalog services by one or more attributes (intersection)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"engagementtype\":{\"type\":\"string\"},\"businessscenario\":{\"type\":\"string\"},\"module\":{\"type\":\"string\"}}}},{\"name\":\"listExcelFiles\",\"description\":\"List all staged Business Scenario Excel mapping files\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},{\"name\":\"downloadExcelFile\",\"description\":\"Download the staged Excel file for a Business Scenario\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"bscode\":{\"type\":\"string\"}}}},{\"name\":\"uploadExcelFile\",\"description\":\"Upload an Excel mapping file for a Business Scenario (token-protected)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"body\":{\"type\":\"string\"},\"bscode\":{\"type\":\"string\"}}}},{\"name\":\"syncFull\",\"description\":\"Trigger a full catalog rebuild from SSC API + Excel enrichment (token-protected)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},{\"name\":\"syncIncremental\",\"description\":\"Check for changed Business Scenarios and update only those (token-protected)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},{\"name\":\"syncExcelEnrich\",\"description\":\"Re-enrich from staged Excel files. Optional bsCode limits to one BS.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"body\":{\"type\":\"string\"}}}},{\"name\":\"generatePptx\",\"description\":\"Generate a PowerPoint file from selected catalog services\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"body\":{\"type\":\"string\"}}}},{\"name\":\"downloadPptx\",\"description\":\"Download a previously generated PPTX file\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"fileid\":{\"type\":\"string\"}}}}]}]"
+            }
+        },
+        {
+            "id": "check-result",
+            "name": "Check Sync Result",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.3,
+            "position": [
+                720,
+                0
+            ],
+            "parameters": {
+                "conditions": {
+                    "combinator": "and",
+                    "options": {
+                        "caseSensitive": false,
+                        "leftValue": "",
+                        "typeValidation": "loose"
+                    },
+                    "conditions": [
+                        {
+                            "id": "check-success",
+                            "leftValue": "={{ $json.result.structuredContent.status }}",
+                            "operator": {
+                                "type": "string",
+                                "operation": "equals"
+                            },
+                            "rightValue": "completed"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "log-success",
+            "name": "Log Success",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.5,
+            "position": [
+                960,
+                -100
+            ],
+            "parameters": {
+                "mode": "raw",
+                "jsonOutput": "={{ { \"milestone\": \"M1.achieved\", \"message\": \"catalog data product published (full build)\", \"serviceCount\": $json.result.structuredContent.serviceCount, \"businessScenarioCount\": $json.result.structuredContent.businessScenarioCount, \"enrichedServices\": $json.result.structuredContent.enrichedServices, \"timestamp\": $now } }}"
+            }
+        },
+        {
+            "id": "log-failure",
+            "name": "Log Failure",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.5,
+            "position": [
+                960,
+                100
+            ],
+            "parameters": {
+                "mode": "raw",
+                "jsonOutput": "={{ { \"milestone\": \"M1.missed\", \"message\": \"catalog full build failed\", \"error\": $json.result.structuredContent.error ?? $json.result.content[0].text, \"timestamp\": $now } }}"
+            }
+        }
+    ],
+    "connections": {
+        "Catalog Full Build Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "Acknowledge Request",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Run Full Catalog Sync",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Run Full Catalog Sync": {
+            "main": [
+                [
+                    {
+                        "node": "Check Sync Result",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check Sync Result": {
+            "main": [
+                [
+                    {
+                        "node": "Log Success",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Log Failure",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {
+        "Run Full Catalog Sync": [
+            {
+                "success": true,
+                "requestId": "req-full-build-001",
+                "tool": "syncFull",
+                "mcpServer": {
+                    "name": "catalog-cap-backend-mcp-server",
+                    "ordId": "customer.build:apiResource:ssc-catalog-intelligence-c3b74.catalog-cap-backend-mcp-server:v1",
+                    "globalTenantId": null
+                },
+                "result": {
+                    "isError": false,
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Full build completed"
+                        }
+                    ],
+                    "structuredContent": {
+                        "status": "completed",
+                        "mode": "full",
+                        "serviceCount": 1250,
+                        "businessScenarioCount": 24,
+                        "enrichedServices": 890
+                    }
+                },
+                "timestamp": "2026-09-25T02:00:00.000Z"
+            }
+        ]
+    },
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [],
+    "triggerCount": 1,
+    "updatedAt": "2026-09-25T00:00:00.000Z",
+    "versionId": "1",
+    "id": "LaeCHuFeCCFiHfD6"
+}

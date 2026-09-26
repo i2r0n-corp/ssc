@@ -1,0 +1,238 @@
+{
+    "name": "Catalog Excel Enrichment Workflow",
+    "description": "Triggers targeted Excel-based catalog enrichment via the CAP backend. When an Excel mapping file changes in SharePoint, the Power Automate bridge uploads it to the CAP backend and then calls this webhook with the affected Business Scenario code. The CAP backend re-enriches only that BS and republishes the data product. Omit bsCode to re-enrich all staged Business Scenarios.",
+    "nodes": [
+        {
+            "id": "sticky-excel",
+            "name": "Excel Enrichment Notes",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                -400,
+                -220
+            ],
+            "parameters": {
+                "content": "## Catalog Excel Enrichment Workflow\n\nCalled by the **Power Automate bridge** when a BS Excel file changes in SharePoint.\n\n**Power Automate flow steps:**\n1. Trigger: SharePoint file-change event on BS mappings library\n2. GET changed Excel file from SharePoint\n3. PUT to `/api/catalog/excel/{bsCode}` (Authorization: Bearer CAP_PUBLISH_TOKEN)\n4. POST to this webhook with body: `{ \"bsCode\": \"MAX00001\" }`\n\n**Manual fallback:**\nPOST to this webhook with `{ \"bsCode\": \"MAX00001\" }` to re-enrich one BS.\nOmit `bsCode` to re-enrich ALL staged Business Scenarios (slower).\n\n**What happens:**\n- CAP backend clears stale enrichment for the specified BS\n- Re-applies matching from the updated Excel file\n- Republishes the data product immediately"
+            }
+        },
+        {
+            "id": "webhook-excel-enrich",
+            "name": "Catalog Excel Enrichment Trigger",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2.1,
+            "position": [
+                0,
+                0
+            ],
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "ssc-catalog-intelligence-c3b74/catalog-sync-workflow/catalog-excel-enrichment-trigger",
+                "responseMode": "responseNode",
+                "authentication": "none"
+            }
+        },
+        {
+            "id": "respond-ack-excel",
+            "name": "Acknowledge Enrichment Request",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                240,
+                0
+            ],
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { \"status\": \"started\", \"mode\": \"excel-enrich\", \"bsCode\": $json.body.bsCode ?? \"all\", \"message\": \"Excel enrichment initiated for \" + ($json.body.bsCode ?? \"all Business Scenarios\") } }}"
+            }
+        },
+        {
+            "id": "extract-bs-code",
+            "name": "Extract Target BS Code",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.5,
+            "position": [
+                480,
+                0
+            ],
+            "parameters": {
+                "mode": "raw",
+                "jsonOutput": "={{ { \"bsCode\": $json.body.bsCode ?? null } }}"
+            }
+        },
+        {
+            "id": "mcp-excel-enrich",
+            "name": "Run Excel Enrichment",
+            "type": "CUSTOM.sapMcpClient",
+            "typeVersion": 1,
+            "position": [
+                720,
+                0
+            ],
+            "parameters": {
+                "mcpServerName": "catalog-cap-backend-mcp-server",
+                "toolMode": "id",
+                "toolById": "syncExcelEnrich",
+                "inputMode": "json",
+                "toolArguments": "={{ { \"bsCode\": $json.bsCode } }}",
+                "mcpServers": "[{\"ordId\":\"customer.build:apiResource:ssc-catalog-intelligence-c3b74.cap-backend-mcp-server:v1\",\"name\":\"ssc_catalog_cap_backend\",\"description\":\"MCP server for the ssc_catalog_cap_backend service.\",\"tools\":[{\"name\":\"publishSnapshot\",\"description\":\"Publish or update the catalog snapshot (token-protected)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"body\":{\"type\":\"string\"}}}},{\"name\":\"getSnapshot\",\"description\":\"Retrieve the latest catalog snapshot\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},{\"name\":\"searchServices\",\"description\":\"Search catalog services by keyword and optional attribute filters\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Natural language search query\"},\"engagementtype\":{\"type\":\"string\",\"description\":\"Filter by engagement type (e.g. Max Success Plan)\"},\"businessscenario\":{\"type\":\"string\",\"description\":\"Filter by business scenario code or name\"},\"module\":{\"type\":\"string\",\"description\":\"Filter by module code\"}}}},{\"name\":\"filterServices\",\"description\":\"Filter catalog services by one or more attributes (intersection)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"engagementtype\":{\"type\":\"string\"},\"businessscenario\":{\"type\":\"string\"},\"module\":{\"type\":\"string\"}}}},{\"name\":\"listExcelFiles\",\"description\":\"List all staged Business Scenario Excel mapping files\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},{\"name\":\"downloadExcelFile\",\"description\":\"Download the staged Excel file for a Business Scenario\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"bscode\":{\"type\":\"string\"}}}},{\"name\":\"uploadExcelFile\",\"description\":\"Upload an Excel mapping file for a Business Scenario (token-protected)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"body\":{\"type\":\"string\"},\"bscode\":{\"type\":\"string\"}}}},{\"name\":\"syncFull\",\"description\":\"Trigger a full catalog rebuild from SSC API + Excel enrichment (token-protected)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},{\"name\":\"syncIncremental\",\"description\":\"Check for changed Business Scenarios and update only those (token-protected)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},{\"name\":\"syncExcelEnrich\",\"description\":\"Re-enrich from staged Excel files. Optional bsCode limits to one BS.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"body\":{\"type\":\"string\"}}}},{\"name\":\"generatePptx\",\"description\":\"Generate a PowerPoint file from selected catalog services\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"body\":{\"type\":\"string\"}}}},{\"name\":\"downloadPptx\",\"description\":\"Download a previously generated PPTX file\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"fileid\":{\"type\":\"string\"}}}}]}]"
+            }
+        },
+        {
+            "id": "check-enrich-result",
+            "name": "Enrichment Successful?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.3,
+            "position": [
+                960,
+                0
+            ],
+            "parameters": {
+                "conditions": {
+                    "combinator": "and",
+                    "options": {
+                        "caseSensitive": false,
+                        "leftValue": "",
+                        "typeValidation": "loose"
+                    },
+                    "conditions": [
+                        {
+                            "id": "check-status",
+                            "leftValue": "={{ $json.result.structuredContent.status }}",
+                            "operator": {
+                                "type": "string",
+                                "operation": "equals"
+                            },
+                            "rightValue": "completed"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "log-enrich-success",
+            "name": "Log Enrichment Success",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.5,
+            "position": [
+                1200,
+                -100
+            ],
+            "parameters": {
+                "mode": "raw",
+                "jsonOutput": "={{ { \"milestone\": \"M1.achieved\", \"message\": \"catalog excel-enrich published\", \"processed\": $json.result.structuredContent.processed, \"totalEnriched\": $json.result.structuredContent.totalEnriched, \"notFound\": $json.result.structuredContent.notFound, \"serviceCount\": $json.result.structuredContent.serviceCount, \"timestamp\": $now } }}"
+            }
+        },
+        {
+            "id": "log-enrich-failure",
+            "name": "Log Enrichment Failure",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.5,
+            "position": [
+                1200,
+                100
+            ],
+            "parameters": {
+                "mode": "raw",
+                "jsonOutput": "={{ { \"milestone\": \"M1.missed\", \"message\": \"excel-enrich failed\", \"error\": $json.result.structuredContent.error ?? $json.result.content[0].text, \"timestamp\": $now } }}"
+            }
+        }
+    ],
+    "connections": {
+        "Catalog Excel Enrichment Trigger": {
+            "main": [
+                [
+                    {
+                        "node": "Acknowledge Enrichment Request",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Extract Target BS Code",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract Target BS Code": {
+            "main": [
+                [
+                    {
+                        "node": "Run Excel Enrichment",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Run Excel Enrichment": {
+            "main": [
+                [
+                    {
+                        "node": "Enrichment Successful?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Enrichment Successful?": {
+            "main": [
+                [
+                    {
+                        "node": "Log Enrichment Success",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Log Enrichment Failure",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {
+        "Run Excel Enrichment": [
+            {
+                "success": true,
+                "requestId": "req-excel-enrich-001",
+                "tool": "syncExcelEnrich",
+                "mcpServer": {
+                    "name": "catalog-cap-backend-mcp-server",
+                    "ordId": "customer.build:apiResource:ssc-catalog-intelligence-c3b74.catalog-cap-backend-mcp-server:v1",
+                    "globalTenantId": null
+                },
+                "result": {
+                    "isError": false,
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Excel enrichment completed"
+                        }
+                    ],
+                    "structuredContent": {
+                        "status": "completed",
+                        "processed": 1,
+                        "totalEnriched": 45,
+                        "notFound": [],
+                        "serviceCount": 1250
+                    }
+                },
+                "timestamp": "2026-09-25T01:55:00.000Z"
+            }
+        ]
+    },
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [],
+    "triggerCount": 1,
+    "updatedAt": "2026-09-25T00:00:00.000Z",
+    "versionId": "1",
+    "id": "d7eA1IF4VTKwdeTG"
+}

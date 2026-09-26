@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SSC Catalog Intelligence</title>
+  <!-- Plain HTML with SAP styling — no UI5 web component imports needed -->
+  <style>
+    :root { --sap-brand-color: #0070F2; --sap-dark-color: #003366; }
+    * { box-sizing: border-box; font-family: '72', 'SAP72', Arial, sans-serif; }
+    body { margin: 0; background: #f5f6f7; }
+    .page-content { padding: 1.5rem; max-width: 1400px; margin: 0 auto; }
+    .nav-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .nav-tab { padding: 0.5rem 1.2rem; border: 1px solid #c0c0c0; border-radius: 4px; background: white; cursor: pointer; font-size: 0.875rem; }
+    .nav-tab.active { background: var(--sap-brand-color); color: white; border-color: var(--sap-brand-color); }
+    .filter-row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem; background: white; padding: 1rem; border-radius: 8px; border: 1px solid #e0e0e0; }
+    .filter-group { display: flex; flex-direction: column; gap: 0.25rem; min-width: 200px; }
+    .filter-group label { font-size: 0.75rem; color: #6a6a6a; font-weight: 600; }
+    .results-info { font-size: 0.8rem; color: #6a6a6a; margin-bottom: 0.5rem; }
+    .service-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0; }
+    .service-table th { background: var(--sap-dark-color); color: white; padding: 0.75rem 1rem; text-align: left; font-size: 0.8rem; font-weight: 600; }
+    .service-table td { padding: 0.75rem 1rem; font-size: 0.85rem; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+    .service-table tr:hover td { background: #f0f7ff; }
+    .service-table tr.selected td { background: #e8f4fd; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+    .badge-max { background: #d4edda; color: #155724; }
+    .badge-adv { background: #d1ecf1; color: #0c5460; }
+    .badge-ent { background: #fff3cd; color: #856404; }
+    .empty-state { text-align: center; padding: 3rem; color: #6a6a6a; }
+    .btn { padding: 0.5rem 1.2rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.875rem; font-weight: 600; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--sap-brand-color); color: white; }
+    .btn-secondary { background: white; color: var(--sap-brand-color); border: 1px solid var(--sap-brand-color); }
+    .btn-danger { background: #dc3545; color: white; }
+    .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.8rem; }
+    .card { background: white; border-radius: 8px; border: 1px solid #e0e0e0; padding: 1.5rem; margin-bottom: 1rem; }
+    .chat-messages { height: 400px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: white; display: flex; flex-direction: column; gap: 0.75rem; }
+    .chat-msg { max-width: 80%; padding: 0.6rem 1rem; border-radius: 12px; font-size: 0.875rem; }
+    .chat-msg.user { align-self: flex-end; background: var(--sap-brand-color); color: white; }
+    .chat-msg.agent { align-self: flex-start; background: #f0f0f0; color: #333; }
+    .chat-input-row { display: flex; gap: 0.5rem; }
+    .chat-input-row input { flex: 1; padding: 0.6rem 1rem; border: 1px solid #c0c0c0; border-radius: 4px; font-size: 0.875rem; }
+    .incident-result { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.75rem; border-bottom: 1px solid #f0f0f0; }
+    .incident-result:last-child { border-bottom: none; }
+    .loading { display: flex; align-items: center; gap: 0.5rem; color: #6a6a6a; font-size: 0.875rem; padding: 1rem; }
+    .loading-spinner { width: 20px; height: 20px; border: 2px solid #e0e0e0; border-top-color: var(--sap-brand-color); border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-strip { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 0.75rem 1rem; color: #856404; font-size: 0.875rem; margin-bottom: 1rem; }
+    .success-strip { background: #d4edda; border: 1px solid #28a745; border-radius: 4px; padding: 0.75rem 1rem; color: #155724; font-size: 0.875rem; margin-bottom: 1rem; }
+    .template-option { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.75rem 1rem; border: 1px solid #e0e0e0; border-radius: 8px; cursor: pointer; margin-bottom: 0.5rem; }
+    .template-option:hover { border-color: var(--sap-brand-color); }
+    .template-option.selected { border-color: var(--sap-brand-color); background: #f0f7ff; }
+    .template-option label { cursor: pointer; }
+    .cart-count { background: #dc3545; color: white; border-radius: 50%; padding: 2px 7px; font-size: 0.75rem; font-weight: 700; margin-left: 4px; }
+    .last-updated { font-size: 0.75rem; color: #6a6a6a; margin-left: auto; }
+    h2 { color: var(--sap-dark-color); margin-top: 0; }
+    h3 { color: var(--sap-dark-color); margin-top: 0; }
+    input[type="text"], input[type="search"], select { padding: 0.5rem 0.75rem; border: 1px solid #c0c0c0; border-radius: 4px; font-size: 0.875rem; }
+    input[type="text"]:focus, select:focus { outline: none; border-color: var(--sap-brand-color); }
+    .upload-area { border: 2px dashed #c0c0c0; border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+    .upload-area:hover { border-color: var(--sap-brand-color); }
+    .upload-area.dragover { border-color: var(--sap-brand-color); background: #f0f7ff; }
+    .shell-bar { background: var(--sap-dark-color); color: white; padding: 0 1.5rem; height: 52px; display: flex; align-items: center; gap: 1.5rem; }
+    .shell-bar-title { font-size: 1rem; font-weight: 700; color: white; text-decoration: none; }
+    .shell-nav { display: flex; gap: 0.5rem; }
+    .shell-nav-item { padding: 0.4rem 0.9rem; color: rgba(255,255,255,0.85); text-decoration: none; border-radius: 4px; font-size: 0.875rem; }
+    .shell-nav-item:hover, .shell-nav-item.active { background: rgba(255,255,255,0.15); color: white; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

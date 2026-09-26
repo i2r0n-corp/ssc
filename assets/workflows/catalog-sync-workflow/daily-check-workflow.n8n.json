@@ -1,0 +1,274 @@
+{
+    "name": "Catalog Daily Incremental Check Workflow",
+    "description": "Triggers an incremental SSC catalog check via the CAP backend sync API. The CAP backend compares Business Scenario modifiedTime values against the cached snapshot and updates only changed BS entries. Trigger this workflow daily at 02:00 CET via an external scheduler (e.g. Power Automate or BTP Job Scheduler).",
+    "nodes": [
+        {
+            "id": "sticky-notes",
+            "name": "Daily Check Notes",
+            "type": "n8n-nodes-base.stickyNote",
+            "typeVersion": 1,
+            "position": [
+                -400,
+                -200
+            ],
+            "parameters": {
+                "content": "## Catalog Daily Incremental Check\n\nThis webhook should be called daily at **02:00 CET** by an external scheduler.\n\n**Recommended scheduler:** Power Automate (SAP M365 tenant)\n- Action: HTTP POST to this webhook URL\n- Schedule: daily at 01:50 CET (before Excel upload) + 02:00 CET (after Excel upload)\n\n**Alternative:** BTP Job Scheduler or any cron-capable system.\n\n**What happens:**\n1. CAP backend checks SSC API for changed Business Scenarios\n2. If changed: fetches full data + re-enriches from staged Excels\n3. Publishes updated data product\n4. If no changes: responds with 'up-to-date'"
+            }
+        },
+        {
+            "id": "webhook-daily-check",
+            "name": "Catalog Daily Check Trigger",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2.1,
+            "position": [
+                0,
+                0
+            ],
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "ssc-catalog-intelligence-c3b74/catalog-sync-workflow/catalog-daily-check-trigger",
+                "responseMode": "responseNode",
+                "authentication": "none"
+            }
+        },
+        {
+            "id": "respond-ack-daily",
+            "name": "Acknowledge Daily Check",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.5,
+            "position": [
+                240,
+                0
+            ],
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ { \"status\": \"started\", \"mode\": \"incremental\", \"message\": \"Daily catalog check initiated.\" } }}"
+            }
+        },
+        {
+            "id": "mcp-sync-incremental",
+            "name": "Run Incremental Sync",
+            "type": "CUSTOM.sapMcpClient",
+            "typeVersion": 1,
+            "position": [
+                480,
+                0
+            ],
+            "parameters": {
+                "mcpServerName": "catalog-cap-backend-mcp-server",
+                "toolMode": "id",
+                "toolById": "syncIncremental",
+                "inputMode": "json",
+                "toolArguments": {},
+                "mcpServers": "[{\"ordId\":\"customer.build:apiResource:ssc-catalog-intelligence-c3b74.cap-backend-mcp-server:v1\",\"name\":\"ssc_catalog_cap_backend\",\"description\":\"MCP server for the ssc_catalog_cap_backend service.\",\"tools\":[{\"name\":\"publishSnapshot\",\"description\":\"Publish or update the catalog snapshot (token-protected)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"body\":{\"type\":\"string\"}}}},{\"name\":\"getSnapshot\",\"description\":\"Retrieve the latest catalog snapshot\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},{\"name\":\"searchServices\",\"description\":\"Search catalog services by keyword and optional attribute filters\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Natural language search query\"},\"engagementtype\":{\"type\":\"string\",\"description\":\"Filter by engagement type (e.g. Max Success Plan)\"},\"businessscenario\":{\"type\":\"string\",\"description\":\"Filter by business scenario code or name\"},\"module\":{\"type\":\"string\",\"description\":\"Filter by module code\"}}}},{\"name\":\"filterServices\",\"description\":\"Filter catalog services by one or more attributes (intersection)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"engagementtype\":{\"type\":\"string\"},\"businessscenario\":{\"type\":\"string\"},\"module\":{\"type\":\"string\"}}}},{\"name\":\"listExcelFiles\",\"description\":\"List all staged Business Scenario Excel mapping files\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},{\"name\":\"downloadExcelFile\",\"description\":\"Download the staged Excel file for a Business Scenario\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"bscode\":{\"type\":\"string\"}}}},{\"name\":\"uploadExcelFile\",\"description\":\"Upload an Excel mapping file for a Business Scenario (token-protected)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"body\":{\"type\":\"string\"},\"bscode\":{\"type\":\"string\"}}}},{\"name\":\"syncFull\",\"description\":\"Trigger a full catalog rebuild from SSC API + Excel enrichment (token-protected)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},{\"name\":\"syncIncremental\",\"description\":\"Check for changed Business Scenarios and update only those (token-protected)\",\"inputSchema\":{\"type\":\"object\",\"properties\":{}}},{\"name\":\"syncExcelEnrich\",\"description\":\"Re-enrich from staged Excel files. Optional bsCode limits to one BS.\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"body\":{\"type\":\"string\"}}}},{\"name\":\"generatePptx\",\"description\":\"Generate a PowerPoint file from selected catalog services\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"body\":{\"type\":\"string\"}}}},{\"name\":\"downloadPptx\",\"description\":\"Download a previously generated PPTX file\",\"inputSchema\":{\"type\":\"object\",\"properties\":{\"fileid\":{\"type\":\"string\"}}}}]}]"
+            }
+        },
+        {
+            "id": "check-incremental-result",
+            "name": "Changes Detected?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.3,
+            "position": [
+                720,
+                0
+            ],
+            "parameters": {
+                "conditions": {
+                    "combinator": "and",
+                    "options": {
+                        "caseSensitive": false,
+                        "leftValue": "",
+                        "typeValidation": "loose"
+                    },
+                    "conditions": [
+                        {
+                            "id": "check-status",
+                            "leftValue": "={{ $json.result.structuredContent.status }}",
+                            "operator": {
+                                "type": "string",
+                                "operation": "equals"
+                            },
+                            "rightValue": "completed"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "id": "build-excel-manifest",
+            "name": "Build Excel Manifest",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [960, 0],
+            "parameters": {
+                "method": "GET",
+                "url": "={{ $env.CAP_BACKEND_URL }}/api/catalog/getSnapshot",
+                "options": {}
+            }
+        },
+        {
+            "id": "extract-manifest-entries",
+            "name": "Extract Manifest Entries",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1200, 0],
+            "parameters": {
+                "jsCode": "const data = $input.first().json;\nconst payload = typeof data.payload === 'string' ? JSON.parse(data.payload) : data.payload;\nconst flatIndex = payload.flat_index || {};\n\nconst entries = [];\nfor (const [code, svc] of Object.entries(flatIndex)) {\n  if (svc.serviceObject !== 'Business Scenario') continue;\n  const text = svc.serviceTeaserText || svc.serviceMainContentText || svc.description || '';\n  // Find the first href after 'Entitlements Service List'\n  const idx = text.toLowerCase().indexOf('entitlements service list');\n  if (idx === -1) continue;\n  const section = text.substring(idx, idx + 800);\n  const match = section.match(/href=\"([^\"]+\\.xlsx[^\"]*)\"/i);\n  if (!match) continue;\n  const excelUrl = match[1].replace(/&amp;/g, '&');\n  // Extract just the filename from the URL path\n  const fileName = decodeURIComponent(excelUrl.split('/').find(p => p.endsWith('.xlsx') || p.includes('.xlsx?')) || '').split('?')[0];\n  entries.push({ bsCode: code, bsName: svc.name, excelUrl, fileName });\n}\n\nconsole.log(`Manifest: found ${entries.length} BS with Excel URLs`);\nreturn [{ json: { entries } }];"
+            }
+        },
+        {
+            "id": "save-excel-manifest",
+            "name": "Save Excel Manifest",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [1440, 0],
+            "parameters": {
+                "method": "PUT",
+                "url": "={{ $env.CAP_BACKEND_URL }}/api/catalog/excel-manifest",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        { "name": "Content-Type", "value": "application/json" },
+                        { "name": "Authorization", "value": "=Bearer {{ $env.CAP_PUBLISH_TOKEN }}" }
+                    ]
+                },
+                "sendBody": true,
+                "contentType": "raw",
+                "rawContentType": "application/json",
+                "body": "={{ JSON.stringify({ entries: $json.entries }) }}",
+                "options": {}
+            }
+        },
+        {
+            "id": "log-manifest-saved",
+            "name": "Log Manifest Saved",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.5,
+            "position": [1680, 0],
+            "parameters": {
+                "mode": "raw",
+                "jsonOutput": "={{ { \"milestone\": \"manifest-updated\", \"message\": \"Excel manifest updated — Power Automate can now fetch the latest file list\", \"count\": $json.count, \"updatedAt\": $json.updatedAt, \"timestamp\": $now } }}"
+            }
+        },
+        {
+            "id": "log-incremental-success",
+            "name": "Log Incremental Update",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.5,
+            "position": [
+                960,
+                -100
+            ],
+            "parameters": {
+                "mode": "raw",
+                "jsonOutput": "={{ { \"milestone\": \"M1.achieved\", \"message\": \"catalog incremental update published\", \"changedBsCount\": $json.result.structuredContent.changedBsCount, \"changedBsCodes\": $json.result.structuredContent.changedBsCodes, \"serviceCount\": $json.result.structuredContent.serviceCount, \"timestamp\": $now } }}"
+            }
+        },
+        {
+            "id": "log-uptodate",
+            "name": "Log Up To Date",
+            "type": "n8n-nodes-base.set",
+            "typeVersion": 3.5,
+            "position": [
+                960,
+                100
+            ],
+            "parameters": {
+                "mode": "raw",
+                "jsonOutput": "={{ { \"milestone\": \"check-complete\", \"message\": \"Daily check: no Business Scenario changes detected. Snapshot is up to date.\", \"status\": $json.result.structuredContent.status, \"timestamp\": $now } }}"
+            }
+        }
+    ],
+    "connections": {
+        "Catalog Daily Check Trigger": {
+            "main": [
+                [
+                    { "node": "Acknowledge Daily Check", "type": "main", "index": 0 },
+                    { "node": "Run Incremental Sync", "type": "main", "index": 0 }
+                ]
+            ]
+        },
+        "Run Incremental Sync": {
+            "main": [
+                [
+                    { "node": "Changes Detected?", "type": "main", "index": 0 }
+                ]
+            ]
+        },
+        "Changes Detected?": {
+            "main": [
+                [
+                    { "node": "Log Incremental Update", "type": "main", "index": 0 },
+                    { "node": "Build Excel Manifest", "type": "main", "index": 0 }
+                ],
+                [
+                    { "node": "Log Up To Date", "type": "main", "index": 0 },
+                    { "node": "Build Excel Manifest", "type": "main", "index": 0 }
+                ]
+            ]
+        },
+        "Build Excel Manifest": {
+            "main": [
+                [
+                    { "node": "Extract Manifest Entries", "type": "main", "index": 0 }
+                ]
+            ]
+        },
+        "Extract Manifest Entries": {
+            "main": [
+                [
+                    { "node": "Save Excel Manifest", "type": "main", "index": 0 }
+                ]
+            ]
+        },
+        "Save Excel Manifest": {
+            "main": [
+                [
+                    { "node": "Log Manifest Saved", "type": "main", "index": 0 }
+                ]
+            ]
+        }
+    },
+    "pinData": {
+        "Run Incremental Sync": [
+            {
+                "success": true,
+                "requestId": "req-incremental-001",
+                "tool": "syncIncremental",
+                "mcpServer": {
+                    "name": "catalog-cap-backend-mcp-server",
+                    "ordId": "customer.build:apiResource:ssc-catalog-intelligence-c3b74.catalog-cap-backend-mcp-server:v1",
+                    "globalTenantId": null
+                },
+                "result": {
+                    "isError": false,
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Incremental sync completed"
+                        }
+                    ],
+                    "structuredContent": {
+                        "status": "completed",
+                        "changedBsCount": 2,
+                        "changedBsCodes": [
+                            "MAX00001",
+                            "MAX00005"
+                        ],
+                        "serviceCount": 1252
+                    }
+                },
+                "timestamp": "2026-09-25T02:00:00.000Z"
+            }
+        ]
+    },
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "staticData": null,
+    "tags": [],
+    "triggerCount": 1,
+    "updatedAt": "2026-09-25T00:00:00.000Z",
+    "versionId": "1",
+    "id": "6ZuLPiKegAmLZ4g4"
+}

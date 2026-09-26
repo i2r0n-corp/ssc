@@ -1,0 +1,16 @@
+---
+applications:
+  - name: ssc-catalog-ui
+    memory: 256M
+    disk_quota: 256M
+    instances: 1
+    buildpacks:
+      - nodejs_buildpack
+    command: npm start
+    health-check-type: http
+    health-check-http-endpoint: /
+    env:
+      NODE_ENV: production
+      AGENT_BASE_URL: https://e6e2f2d6-591b30dc.ce3c27bb.dev-eu1.ca.ai.cloud.sap
+      # CAP_BACKEND_URL will be set after the backend is deployed:
+      # CAP_BACKEND_URL: https://ssc-catalog-cap-backend.cfapps.us10-001.hana.ondemand.com

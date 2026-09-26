@@ -1,0 +1,46 @@
+apiVersion: asset.sap/v1
+kind: Asset
+
+metadata:
+  name: catalog-sync-workflow
+  description: SSC Catalog sync, enrichment, and data product publish workflows. Three webhook-triggered workflows orchestrate catalog rebuilds and Excel enrichment via the CAP backend.
+  version: "1.0.0"
+  type: n8nworkflow
+
+projectVersion: "1"
+sourceRoot: "."
+
+workflow:
+  definitionFile: full-build-workflow.n8n.json
+  name: catalog-sync-workflow
+  ordId: sap.btpn8n:apiResource:ManagedN8nMcpServer:v1
+
+provides:
+  apis:
+    - name: catalog_full_build_trigger
+      path: /ssc-catalog-intelligence-c3b74/catalog-sync-workflow/catalog-full-build-trigger
+      kind: rest
+      description: Triggers a full SSC catalog rebuild from scratch via the CAP backend
+      ordId: "sap.n8nwfrt:apiResource:ssc-catalog-intelligence-c3b74_catalog-sync-workflow.catalogFullBuildTrigger:v1"
+    - name: catalog_full_build_trigger_mcp_server
+      kind: mcp-server
+      description: MCP server for catalog full build trigger operations
+      ordId: "sap.n8nwfrt:apiResource:ssc-catalog-intelligence-c3b74_catalog-sync-workflow.catalogFullBuildTriggerMcpServer:v1"
+    - name: catalog_daily_check_trigger
+      path: /ssc-catalog-intelligence-c3b74/catalog-sync-workflow/catalog-daily-check-trigger
+      kind: rest
+      description: Triggers incremental catalog check; call daily at 02:00 CET via external scheduler
+      ordId: "sap.n8nwfrt:apiResource:ssc-catalog-intelligence-c3b74_catalog-sync-workflow.catalogDailyCheckTrigger:v1"
+    - name: catalog_daily_check_trigger_mcp_server
+      kind: mcp-server
+      description: MCP server for catalog daily check trigger operations
+      ordId: "sap.n8nwfrt:apiResource:ssc-catalog-intelligence-c3b74_catalog-sync-workflow.catalogDailyCheckTriggerMcpServer:v1"
+    - name: catalog_excel_enrichment_trigger
+      path: /ssc-catalog-intelligence-c3b74/catalog-sync-workflow/catalog-excel-enrichment-trigger
+      kind: rest
+      description: Triggers Excel-based enrichment for a specific BS code; called by Power Automate bridge when an Excel file changes in SharePoint
+      ordId: "sap.n8nwfrt:apiResource:ssc-catalog-intelligence-c3b74_catalog-sync-workflow.catalogExcelEnrichmentTrigger:v1"
+    - name: catalog_excel_enrichment_trigger_mcp_server
+      kind: mcp-server
+      description: MCP server for catalog excel enrichment trigger operations
+      ordId: "sap.n8nwfrt:apiResource:ssc-catalog-intelligence-c3b74_catalog-sync-workflow.catalogExcelEnrichmentTriggerMcpServer:v1"

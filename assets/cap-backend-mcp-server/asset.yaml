@@ -1,0 +1,16 @@
+apiVersion: asset.sap/v1
+kind: Asset
+type: mcp-server
+
+metadata:
+  name: cap-backend-mcp-server
+  version: "1.0.0"
+  translation: mcp-translation/translation.json
+  apiSpec: mcp-translation/api-spec.json
+
+provides:
+  apis:
+    - name: cap-backend-mcp-server
+      kind: mcp-server
+      description: MCP server exposing catalog snapshot, search, filter, Excel file store, sync operations, and PPTX generation from the CAP backend
+      ordId: customer.build:apiResource:ssc-catalog-intelligence-c3b74.cap-backend-mcp-server:v1

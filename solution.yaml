@@ -1,0 +1,14 @@
+apiVersion: solution.sap/v1
+kind: Solution
+
+metadata:
+  name: ssc-catalog-intelligence-c3b74
+  version: 1.0.0
+  description: >
+    SSC Success Plan Catalog Intelligence — AI agent and UI enabling Solutioning Leads
+    and SPMs to query the SSC Services Catalog, analyze customer incidents, and export
+    positioning slides to PowerPoint. Backed by a centrally managed, enriched catalog
+    data product updated via three n8n workflows.
+
+assets:
+  - ref: ./assets/catalog-intelligence-agent/asset.yaml

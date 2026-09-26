@@ -1,0 +1,24 @@
+{
+  "name": "catalog-ui",
+  "version": "1.0.0",
+  "description": "SSC Catalog Intelligence UI — React + SAP UI5 Web Components visual interface",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "build": "node -e \"console.log('Build complete — static files in public/')\"",
+    "dev": "node server.js",
+    "test": "jest --forceExit --testTimeout=10000"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": ["**/tests/**/*.test.js"]
+  },
+  "dependencies": {
+    "express": "^4.22.3"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "jest": "^30.5.2",
+    "supertest": "^7.3.0"
+  }
+}

@@ -1,0 +1,42 @@
+apiVersion: asset.sap/v1
+kind: Asset
+
+metadata:
+  name: catalog-cap-backend
+  version: 1.0.0
+  description: >
+    CAP Node.js backend that stores and serves the enriched SSC Services Catalog
+    snapshot, exposes catalog search/filter APIs, hosts pre-staged Excel mapping
+    files, and generates PowerPoint exports in two templates.
+
+type: service
+
+container:
+  buildPath: .
+  port: 4004
+
+provides:
+  apis:
+    - name: catalog-cap-backend
+      kind: rest
+      ordId: customer.build:apiResource:ssc-catalog-intelligence-c3b74.catalog-cap-backend:v1
+      description: Catalog snapshot, search, filter, Excel file store, and PPTX generation API
+
+probes:
+  startup:
+    path: /health
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 18
+  liveness:
+    path: /health
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3

@@ -1,0 +1,6 @@
+Incident ID,Description,Category,Priority,Affected Module
+INC-001,System performance degradation during month-end close processing,Performance,High,SAP S/4HANA Finance
+INC-002,Data migration from legacy system failing with mapping errors,Data Migration,Critical,SAP S/4HANA
+INC-003,Integration between SAP and third-party logistics system broken,Integration,High,SAP Integration Suite
+INC-004,Users not adopting new SAP Fiori interface - low utilization,User Adoption,Medium,SAP Fiori
+INC-005,Business data quality issues affecting reporting accuracy,Data Quality,Medium,SAP Analytics Cloud

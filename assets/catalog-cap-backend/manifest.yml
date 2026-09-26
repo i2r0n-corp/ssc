@@ -1,0 +1,16 @@
+---
+applications:
+  - name: ssc-catalog-cap-backend
+    memory: 512M
+    disk_quota: 512M
+    instances: 1
+    buildpacks:
+      - nodejs_buildpack
+    command: npm start
+    health-check-type: http
+    health-check-http-endpoint: /health
+    env:
+      NODE_ENV: production
+      # Add your SSC credentials here:
+      # SSC_BASE_URL: https://your-ssc-instance.com
+      # SSC_API_KEY: your-api-key

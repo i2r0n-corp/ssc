@@ -1,0 +1,627 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "SSC Catalog CAP Backend",
+    "version": "1.0.0",
+    "description": "Catalog snapshot store, search/filter, Excel file store, and PPTX generation for the SSC Catalog Intelligence solution."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "CAP Backend"
+    }
+  ],
+  "paths": {
+    "/api/catalog/publishSnapshot": {
+      "post": {
+        "operationId": "publishSnapshot",
+        "summary": "Publish or update the catalog snapshot (token-protected)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "payload"
+                ],
+                "properties": {
+                  "payload": {
+                    "type": "string",
+                    "description": "JSON string of the full master_data catalog"
+                  },
+                  "lastFullBuild": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Timestamp of the last full build"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Snapshot published",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "serviceCount": {
+                      "type": "integer"
+                    },
+                    "lastUpdated": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — missing or invalid CAP_PUBLISH_TOKEN"
+          }
+        }
+      }
+    },
+    "/api/catalog/getSnapshot": {
+      "get": {
+        "operationId": "getSnapshot",
+        "summary": "Retrieve the latest catalog snapshot",
+        "responses": {
+          "200": {
+            "description": "Current catalog snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "lastUpdated": {
+                      "type": "string"
+                    },
+                    "lastFullBuild": {
+                      "type": "string"
+                    },
+                    "serviceCount": {
+                      "type": "integer"
+                    },
+                    "payload": {
+                      "type": "string",
+                      "description": "Full master_data JSON string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No snapshot available yet"
+          }
+        }
+      }
+    },
+    "/api/catalog/searchServices": {
+      "get": {
+        "operationId": "searchServices",
+        "summary": "Search catalog services by keyword and optional attribute filters",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Natural language search query"
+          },
+          {
+            "name": "engagementType",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by engagement type (e.g. Max Success Plan)"
+          },
+          {
+            "name": "businessScenario",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by business scenario code or name"
+          },
+          {
+            "name": "module",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by module code"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching services",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "services": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ServiceSummary"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/catalog/filterServices": {
+      "get": {
+        "operationId": "filterServices",
+        "summary": "Filter catalog services by one or more attributes (intersection)",
+        "parameters": [
+          {
+            "name": "engagementType",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "businessScenario",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "module",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Filtered services",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "services": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ServiceSummary"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "At least one filter parameter required"
+          }
+        }
+      }
+    },
+    "/api/catalog/excel": {
+      "get": {
+        "operationId": "listExcelFiles",
+        "summary": "List all staged Business Scenario Excel mapping files",
+        "responses": {
+          "200": {
+            "description": "List of staged BS codes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bsCodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/catalog/excel/{bsCode}": {
+      "put": {
+        "operationId": "uploadExcelFile",
+        "summary": "Upload an Excel mapping file for a Business Scenario (token-protected)",
+        "parameters": [
+          {
+            "name": "bsCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "File stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "bsCode": {
+                      "type": "string"
+                    },
+                    "sizeBytes": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "get": {
+        "operationId": "downloadExcelFile",
+        "summary": "Download the staged Excel file for a Business Scenario",
+        "parameters": [
+          {
+            "name": "bsCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Excel file binary",
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No Excel staged for this BS code"
+          }
+        }
+      }
+    },
+    "/api/catalog/sync/full": {
+      "post": {
+        "operationId": "syncFull",
+        "summary": "Trigger a full catalog rebuild from SSC API + Excel enrichment (token-protected)",
+        "responses": {
+          "200": {
+            "description": "Full build completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "type": "string"
+                    },
+                    "serviceCount": {
+                      "type": "integer"
+                    },
+                    "businessScenarioCount": {
+                      "type": "integer"
+                    },
+                    "enrichedServices": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Sync failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/catalog/sync/incremental": {
+      "post": {
+        "operationId": "syncIncremental",
+        "summary": "Check for changed Business Scenarios and update only those (token-protected)",
+        "responses": {
+          "200": {
+            "description": "Incremental sync completed or up-to-date",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "changedBsCount": {
+                      "type": "integer"
+                    },
+                    "changedBsCodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No cached snapshot — run full build first"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/catalog/sync/excel-enrich": {
+      "post": {
+        "operationId": "syncExcelEnrich",
+        "summary": "Re-enrich from staged Excel files. Optional bsCode limits to one BS.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "bsCode": {
+                    "type": "string",
+                    "description": "Optional — limit enrichment to this BS code"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Excel enrichment completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "processed": {
+                      "type": "integer"
+                    },
+                    "totalEnriched": {
+                      "type": "integer"
+                    },
+                    "notFound": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No cached snapshot"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/pptx/generatePptx": {
+      "post": {
+        "operationId": "generatePptx",
+        "summary": "Generate a PowerPoint file from selected catalog services",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "serviceCodes",
+                  "template"
+                ],
+                "properties": {
+                  "serviceCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "description": "List of catalog service codes to include"
+                  },
+                  "template": {
+                    "type": "string",
+                    "enum": [
+                      "short-description",
+                      "one-pager"
+                    ],
+                    "description": "Template: 'short-description' for summary table, 'one-pager' for one slide per service"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "PPTX file generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "downloadUrl": {
+                      "type": "string",
+                      "description": "Relative URL to download the generated file"
+                    },
+                    "filename": {
+                      "type": "string"
+                    },
+                    "serviceCount": {
+                      "type": "integer"
+                    },
+                    "fileSizeKb": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input (empty list, too many services, unknown template)"
+          },
+          "404": {
+            "description": "No catalog snapshot available"
+          }
+        }
+      }
+    },
+    "/api/pptx/download/{fileId}": {
+      "get": {
+        "operationId": "downloadPptx",
+        "summary": "Download a previously generated PPTX file",
+        "parameters": [
+          {
+            "name": "fileId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PPTX binary",
+            "content": {
+              "application/vnd.openxmlformats-officedocument.presentationml.presentation": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "File not found or expired"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ServiceSummary": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shortDescription": {
+            "type": "string"
+          },
+          "longDescription": {
+            "type": "string"
+          },
+          "engagementType": {
+            "type": "string"
+          },
+          "businessScenarioNaming": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "parentCode": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

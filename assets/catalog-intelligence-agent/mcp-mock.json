@@ -1,0 +1,247 @@
+{
+  "servers": {
+    "cap-backend": {
+      "mcp_server_name": "sap.mcp/ssc_catalog_cap_backend",
+      "description": "MCP server for the SSC Catalog CAP backend — catalog snapshot, search, filter, Excel file store, sync, and PPTX generation.",
+      "tools": {
+        "publishSnapshot": {
+          "description": "Publish or update the catalog snapshot (token-protected)",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "body": {
+                "type": "object",
+                "properties": {
+                  "payload": { "type": "string", "description": "JSON string of the full master_data catalog" },
+                  "lastFullBuild": { "type": "string", "description": "ISO timestamp of the last full build" }
+                },
+                "required": ["payload"]
+              }
+            }
+          },
+          "mock_response": {
+            "status": "published",
+            "serviceCount": 1250,
+            "lastUpdated": "2026-09-25T02:00:00.000Z"
+          }
+        },
+        "getSnapshot": {
+          "description": "Retrieve the latest catalog snapshot",
+          "input_schema": { "type": "object", "properties": {} },
+          "mock_response": {
+            "lastUpdated": "2026-09-25T02:00:00.000Z",
+            "lastFullBuild": "2026-09-20T02:00:00.000Z",
+            "serviceCount": 1250,
+            "payload": "{\"last_full_build\":\"2026-09-20T02:00:00.000Z\",\"last_updated\":\"2026-09-25T02:00:00.000Z\",\"flat_index\":{},\"business_scenarios\":[]}"
+          }
+        },
+        "searchServices": {
+          "description": "Search catalog services by keyword and optional attribute filters",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "query": { "type": "string", "description": "Natural language search query" },
+              "engagementtype": { "type": "string", "description": "Filter by engagement type (e.g. Max Success Plan)" },
+              "businessscenario": { "type": "string", "description": "Filter by business scenario code or name" },
+              "module": { "type": "string", "description": "Filter by module code" }
+            }
+          },
+          "mock_response": {
+            "count": 3,
+            "services": [
+              {
+                "code": "000000000009506207",
+                "name": "SAP IBP Planning Excellence Service",
+                "shortDescription": "Helps customers optimize their integrated business planning setup for maximum performance and value.",
+                "longDescription": "This service provides expert guidance on SAP Integrated Business Planning configuration, data modeling, and process optimization to achieve planning excellence.",
+                "engagementType": "Max Success Plan",
+                "businessScenarioNaming": { "MAX00001": "Planning & Supply Chain Services" },
+                "parentCode": "MAX00001-01"
+              },
+              {
+                "code": "000000000009506208",
+                "name": "SAP IBP Data Model Review",
+                "shortDescription": "Review and optimize the IBP data model to ensure alignment with business requirements.",
+                "longDescription": "Expert review of current IBP data model configuration with actionable recommendations for improvement.",
+                "engagementType": "Max Success Plan",
+                "businessScenarioNaming": { "MAX00001": "Planning & Supply Chain Services" },
+                "parentCode": "MAX00001-01"
+              },
+              {
+                "code": "000000000009506209",
+                "name": "SAP IBP Integration Health Check",
+                "shortDescription": "Assess and validate integration between SAP IBP and connected systems.",
+                "longDescription": "Comprehensive health check of all integration points for SAP IBP.",
+                "engagementType": "Advanced Success Plan",
+                "businessScenarioNaming": { "MAX00002": "Integration Services" },
+                "parentCode": "MAX00002-02"
+              }
+            ]
+          }
+        },
+        "filterServices": {
+          "description": "Filter catalog services by one or more attributes (intersection)",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "engagementtype": { "type": "string" },
+              "businessscenario": { "type": "string" },
+              "module": { "type": "string" }
+            }
+          },
+          "mock_response": {
+            "count": 2,
+            "services": [
+              {
+                "code": "000000000009506207",
+                "name": "SAP IBP Planning Excellence Service",
+                "shortDescription": "Helps customers optimize their integrated business planning setup.",
+                "engagementType": "Max Success Plan",
+                "businessScenarioNaming": { "MAX00001": "Planning & Supply Chain Services" },
+                "parentCode": "MAX00001-01"
+              },
+              {
+                "code": "000000000009506208",
+                "name": "SAP IBP Data Model Review",
+                "shortDescription": "Review and optimize the IBP data model.",
+                "engagementType": "Max Success Plan",
+                "businessScenarioNaming": { "MAX00001": "Planning & Supply Chain Services" },
+                "parentCode": "MAX00001-01"
+              }
+            ]
+          }
+        },
+        "listExcelFiles": {
+          "description": "List all staged Business Scenario Excel mapping files",
+          "input_schema": { "type": "object", "properties": {} },
+          "mock_response": {
+            "bsCodes": ["MAX00001", "MAX00002", "MAX00005"],
+            "count": 3
+          }
+        },
+        "downloadExcelFile": {
+          "description": "Download the staged Excel file for a Business Scenario",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "bscode": { "type": "string", "description": "Business Scenario code" }
+            },
+            "required": ["bscode"]
+          },
+          "mock_response": "[binary xlsx content]"
+        },
+        "uploadExcelFile": {
+          "description": "Upload an Excel mapping file for a Business Scenario (token-protected)",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "bscode": { "type": "string", "description": "Business Scenario code" },
+              "body": { "type": "string", "description": "Binary Excel file content" }
+            },
+            "required": ["bscode"]
+          },
+          "mock_response": {
+            "status": "stored",
+            "bsCode": "MAX00001",
+            "sizeBytes": 45678
+          }
+        },
+        "syncFull": {
+          "description": "Trigger a full catalog rebuild from SSC API + Excel enrichment (token-protected)",
+          "input_schema": { "type": "object", "properties": {} },
+          "mock_response": {
+            "status": "completed",
+            "mode": "full",
+            "serviceCount": 1250,
+            "businessScenarioCount": 24,
+            "enrichedServices": 890
+          }
+        },
+        "syncIncremental": {
+          "description": "Check for changed Business Scenarios and update only those (token-protected)",
+          "input_schema": { "type": "object", "properties": {} },
+          "mock_response": {
+            "status": "completed",
+            "mode": "incremental",
+            "changedBsCount": 2,
+            "changedBsCodes": ["MAX00001", "MAX00005"],
+            "serviceCount": 1252
+          }
+        },
+        "syncExcelEnrich": {
+          "description": "Re-enrich from staged Excel files. Optional bsCode limits to one BS.",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "body": {
+                "type": "object",
+                "properties": {
+                  "bsCode": { "type": "string", "description": "Optional: limit to this BS code" }
+                }
+              }
+            }
+          },
+          "mock_response": {
+            "status": "completed",
+            "mode": "excel-enrich",
+            "processed": 1,
+            "totalEnriched": 45,
+            "notFound": [],
+            "serviceCount": 1250
+          }
+        },
+        "generatePptx": {
+          "description": "Generate a PowerPoint file from selected catalog services",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "body": {
+                "type": "object",
+                "properties": {
+                  "serviceCodes": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "List of catalog service codes"
+                  },
+                  "template": {
+                    "type": "string",
+                    "enum": ["short-description", "one-pager"],
+                    "description": "Template choice"
+                  }
+                },
+                "required": ["serviceCodes", "template"]
+              }
+            }
+          },
+          "mock_response": {
+            "downloadUrl": "/api/pptx/download/mock-file-id-12345",
+            "filename": "catalog-export-short-description-1727222400000.pptx",
+            "serviceCount": 3,
+            "fileSizeKb": 128
+          }
+        },
+        "downloadPptx": {
+          "description": "Download a previously generated PPTX file",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "fileid": { "type": "string", "description": "UUID of the generated file" }
+            },
+            "required": ["fileid"]
+          },
+          "mock_response": "[binary pptx content]"
+        }
+      }
+    }
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "created_for_agent": "catalog-intelligence-agent",
+    "mock_mode": true,
+    "deterministic": true,
+    "total_servers": 1,
+    "total_tools": 12,
+    "generated_from": ["translation.json"],
+    "generation_date": "2026-09-25"
+  }
+}

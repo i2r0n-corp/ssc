@@ -1,0 +1,63 @@
+apiVersion: asset.sap/v1
+kind: Asset
+
+metadata:
+  name: catalog-intelligence-agent
+  version: 1.0.0
+  description: >
+    AI agent (A2A protocol) that enables Solutioning Leads and SPMs to query the SSC
+    Services Catalog in natural language, analyze uploaded customer incident files,
+    filter catalog services by attributes, and generate PowerPoint positioning slides.
+
+type: agent
+
+container:
+  buildPath: .
+  port: 5000
+
+provides:
+  apis:
+    - name: catalog-intelligence-agent
+      kind: a2a
+      ordId: customer.build:apiResource:ssc-catalog-intelligence-c3b74.catalog-intelligence-agent:v1
+      description: SSC Catalog Intelligence conversational agent
+
+agentCard:
+  name: SSC Catalog Intelligence Agent
+  version: 1.0.0
+  description: >
+    Helps Solutioning Leads and SPMs at SAP Solution Centers quickly find services
+    from the SSC Services Catalog, analyze customer incidents, and export PowerPoint
+    positioning slides. Answers natural-language questions about Business Scenarios,
+    engagement types, and service offerings.
+  capabilities:
+    skills:
+      - name: query_catalog
+        description: Search and filter the SSC Services Catalog by natural language query or structured attributes
+      - name: analyze_incidents
+        description: Parse uploaded customer incident files and recommend matching catalog services
+      - name: generate_pptx
+        description: Generate a PowerPoint file from selected services using short-description or one-pager template
+      - name: filter_catalog
+        description: Apply multi-attribute filters to return matching services from the catalog
+  streaming:
+    enabled: true
+
+probes:
+  startup:
+    path: /.well-known/agent.json
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 18
+  liveness:
+    path: /.well-known/agent.json
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    path: /.well-known/agent.json
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
