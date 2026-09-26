@@ -1,0 +1,31 @@
+name: Deploy UI to CF
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'assets/catalog-ui/**'
+  workflow_dispatch: # allows manual trigger from GitHub UI
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install CF CLI
+        run: |
+          wget -q -O - https://packages.cloudfoundry.org/debian/cli.cloudfoundry.org.key | sudo apt-key add -
+          echo "deb https://packages.cloudfoundry.org/debian stable main" | sudo tee /etc/apt/sources.list.d/cloudfoundry-cli.list
+          sudo apt-get update && sudo apt-get install -y cf8-cli
+
+      - name: Login to Cloud Foundry
+        run: |
+          cf api https://api.cf.us10-001.hana.ondemand.com
+          cf auth "${{ secrets.CF_USERNAME }}" "${{ secrets.CF_PASSWORD }}"
+          cf target -o d980443atrial -s dev
+
+      - name: Deploy UI
+        working-directory: assets/catalog-ui
+        run: cf push

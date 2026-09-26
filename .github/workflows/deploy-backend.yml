@@ -1,0 +1,39 @@
+name: Deploy CAP Backend to CF
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'assets/catalog-cap-backend/**'
+  workflow_dispatch: # allows manual trigger from GitHub UI
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install CF CLI
+        run: |
+          wget -q -O - https://packages.cloudfoundry.org/debian/cli.cloudfoundry.org.key | sudo apt-key add -
+          echo "deb https://packages.cloudfoundry.org/debian stable main" | sudo tee /etc/apt/sources.list.d/cloudfoundry-cli.list
+          sudo apt-get update && sudo apt-get install -y cf8-cli
+
+      - name: Login to Cloud Foundry
+        run: |
+          cf api https://api.cf.us10-001.hana.ondemand.com
+          cf auth "${{ secrets.CF_USERNAME }}" "${{ secrets.CF_PASSWORD }}"
+          cf target -o d980443atrial -s dev
+
+      - name: Deploy backend
+        working-directory: assets/catalog-cap-backend
+        run: cf push
+
+      - name: Set env vars
+        run: |
+          cf set-env ssc-catalog-cap-backend SSC_AUTH_URL "${{ secrets.SSC_AUTH_URL }}"
+          cf set-env ssc-catalog-cap-backend SSC_CLIENT_ID "${{ secrets.SSC_CLIENT_ID }}"
+          cf set-env ssc-catalog-cap-backend SSC_CLIENT_SECRET "${{ secrets.SSC_CLIENT_SECRET }}"
+          cf set-env ssc-catalog-cap-backend SSC_CATALOG_BASE_URL "${{ secrets.SSC_CATALOG_BASE_URL }}"
+          cf restart ssc-catalog-cap-backend
