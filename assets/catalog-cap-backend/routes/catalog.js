@@ -232,6 +232,100 @@ router.put('/excel/:bsCode', requirePublishToken, (req, res) => {
   res.json({ status: 'stored', bsCode, sizeBytes: buf.length });
 });
 
+// ── Excel Upload + Immediate Enrichment ──────────────────────────────────────
+// PUT /api/catalog/excel/upload — receives Excel bytes, extracts BS code from
+// X-BS-Code header (or from filename), parses service codes, enriches snapshot.
+
+router.put('/excel/upload', (req, res) => {
+  try {
+    const filename = req.headers['x-filename'] || '';
+    const bsCodeHeader = req.headers['x-bs-code'] || '';
+
+    // Extract BS code: prefer header, fallback to filename prefix
+    const bsCode = bsCodeHeader || (filename.split('_')[0] || '').toUpperCase();
+    if (!bsCode) {
+      return res.status(400).json({ error: 'X-BS-Code header or X-Filename header required' });
+    }
+
+    const buf = req.body;
+    if (!buf || buf.length === 0) {
+      return res.status(400).json({ error: 'Empty body — send raw .xlsx binary' });
+    }
+
+    console.log(`[excel-upload] Received ${filename} (${buf.length} bytes) for BS: ${bsCode}`);
+
+    // Parse Excel in-memory using xlsx
+    let xlsx;
+    try { xlsx = require('xlsx'); } catch(e) {
+      return res.status(500).json({ error: 'xlsx package not available. Run npm install xlsx' });
+    }
+
+    const workbook = xlsx.read(buf, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = xlsx.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+    // Extract service codes (CRM codes) from Excel
+    // Typically in column A or B — look for rows with service-like codes
+    const serviceCodes = new Set();
+    for (const row of rows) {
+      for (const cell of row) {
+        const val = String(cell || '').trim();
+        // Service codes are typically numeric (e.g. 9500313) or alphanumeric like MAX00001-1
+        if (/^\d{7,10}$/.test(val) || /^[A-Z]{2,}\d{4,}/.test(val)) {
+          serviceCodes.add(val);
+        }
+      }
+    }
+
+    console.log(`[excel-upload] ${bsCode}: found ${serviceCodes.size} service codes in Excel`);
+
+    // Enrich snapshot — add deck names to matching services
+    const data = snapshot.load();
+    if (!data) {
+      return res.status(404).json({ error: 'No snapshot available. Run full sync first.' });
+    }
+
+    const parsed = JSON.parse(data.payload);
+    const flatIndex = parsed.flat_index || {};
+    let enriched = 0;
+
+    for (const [code, svc] of Object.entries(flatIndex)) {
+      if (serviceCodes.has(code) || serviceCodes.has(svc.serviceNumber)) {
+        if (!svc.business_scenario_naming) svc.business_scenario_naming = {};
+        // Find BS name from flat index
+        const bsSvc = flatIndex[bsCode];
+        const bsName = bsSvc ? bsSvc.name : bsCode;
+        svc.business_scenario_naming[bsCode] = bsName;
+        enriched++;
+      }
+    }
+
+    // Save enriched snapshot
+    const updatedPayload = JSON.stringify(parsed);
+    snapshot.save({ ...data, payload: updatedPayload, lastUpdated: new Date().toISOString() });
+
+    // Update lastProcessed in manifest
+    const MANIFEST_FILE = process.env.EXCEL_MANIFEST_PATH || path.join(__dirname, '..', 'data', 'excel-manifest.json');
+    if (fs.existsSync(MANIFEST_FILE)) {
+      try {
+        const manifest = JSON.parse(fs.readFileSync(MANIFEST_FILE, 'utf8'));
+        const entry = manifest.entries.find(e => e.bsCode === bsCode);
+        if (entry) {
+          entry.lastProcessed = new Date().toISOString();
+          fs.writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2));
+        }
+      } catch(e) { /* non-critical */ }
+    }
+
+    console.log(`[excel-upload] ${bsCode}: enriched ${enriched} services`);
+    res.json({ status: 'enriched', bsCode, filename, servicesEnriched: enriched, codesFound: serviceCodes.size });
+
+  } catch (err) {
+    console.error(`[excel-upload] Error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Download Excel for a BS code
 router.get('/excel/:bsCode', (req, res) => {
   const { bsCode } = req.params;
