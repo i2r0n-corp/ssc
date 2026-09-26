@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'assets/catalog-cap-backend/**'
-  workflow_dispatch: # allows manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Install CF CLI
         run: |
@@ -26,14 +28,37 @@ jobs:
           cf auth "${{ secrets.CF_USERNAME }}" "${{ secrets.CF_PASSWORD }}"
           cf target -o d980443atrial -s dev
 
-      - name: Deploy backend
-        working-directory: assets/catalog-cap-backend
-        run: cf push
-
-      - name: Set env vars
+      - name: Check what changed
+        id: changes
         run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD -- assets/catalog-cap-backend/)
+          echo "changed files: $CHANGED"
+
+          # Full redeploy needed if package.json, manifest.yml or server.js changed
+          if echo "$CHANGED" | grep -qE "(package\.json|manifest\.yml|server\.js|Procfile)"; then
+            echo "mode=full" >> $GITHUB_OUTPUT
+          else
+            echo "mode=restart" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Full deploy (package.json or manifest changed)
+        if: steps.changes.outputs.mode == 'full'
+        working-directory: assets/catalog-cap-backend
+        run: |
+          cf push
           cf set-env ssc-catalog-cap-backend SSC_AUTH_URL "${{ secrets.SSC_AUTH_URL }}"
           cf set-env ssc-catalog-cap-backend SSC_CLIENT_ID "${{ secrets.SSC_CLIENT_ID }}"
           cf set-env ssc-catalog-cap-backend SSC_CLIENT_SECRET "${{ secrets.SSC_CLIENT_SECRET }}"
           cf set-env ssc-catalog-cap-backend SSC_CATALOG_BASE_URL "${{ secrets.SSC_CATALOG_BASE_URL }}"
+          cf restart ssc-catalog-cap-backend
+
+      - name: Quick restart (only logic files changed)
+        if: steps.changes.outputs.mode == 'restart'
+        run: |
+          APP_GUID=$(cf app ssc-catalog-cap-backend --guid)
+          # Copy changed files via CF SSH
+          for FILE in $(git diff --name-only HEAD~1 HEAD -- assets/catalog-cap-backend/ | sed 's|assets/catalog-cap-backend/||'); do
+            echo "Uploading $FILE..."
+            cf ssh ssc-catalog-cap-backend -c "cat > /home/vcap/app/$FILE" < assets/catalog-cap-backend/$FILE
+          done
           cf restart ssc-catalog-cap-backend
