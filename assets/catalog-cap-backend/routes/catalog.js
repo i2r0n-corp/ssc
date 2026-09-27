@@ -198,9 +198,21 @@ router.put('/excel/:bsCode', requirePublishToken, async (req, res) => {
     if (cached) {
       const syncModule = require('./sync');
       const flatIndex = JSON.parse(cached.payload).flat_index || {};
-      const enriched = await syncModule.applyExcelEnrichment(flatIndex, bsCode, buf);
+      const injectionLog = {};
+      const enriched = await syncModule.applyExcelEnrichment(flatIndex, bsCode, buf, injectionLog);
       const businessScenarios = syncModule.buildHierarchy(flatIndex);
       snapshot.save({ ...cached, payload: JSON.stringify({ ...JSON.parse(cached.payload), flat_index: flatIndex, business_scenarios: businessScenarios }), lastUpdated: new Date().toISOString() });
+
+      // Save/merge injection log
+      const logPath = require('path').join(__dirname, '..', 'data', 'injection-log.json');
+      let existingLog = {};
+      try { existingLog = JSON.parse(fs.readFileSync(logPath, 'utf8')); } catch(e) {}
+      existingLog.generatedAt = new Date().toISOString();
+      existingLog.details = existingLog.details || {};
+      existingLog.details[bsCode] = injectionLog[bsCode] || {};
+      fs.mkdirSync(require('path').dirname(logPath), { recursive: true });
+      fs.writeFileSync(logPath, JSON.stringify(existingLog, null, 2));
+
       console.log(`[M1.achieved]: excel-enrich published — bs_processed=1 enriched_services=${enriched}`);
       return res.json({ status: 'stored_and_enriched', bsCode, sizeBytes: buf.length, enrichedServices: enriched });
     }
