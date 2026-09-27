@@ -183,7 +183,7 @@ router.get('/excel', (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.put('/excel/:bsCode', requirePublishToken, async (req, res) => {
+router.put('/excel/:bsCode', requirePublishToken, (req, res) => {
   const { bsCode } = req.params;
   if (!/^[A-Z0-9]{5,10}$/.test(bsCode)) return res.status(400).json({ error: `Invalid bsCode: ${bsCode}` });
   const buf = req.body;
@@ -192,10 +192,14 @@ router.put('/excel/:bsCode', requirePublishToken, async (req, res) => {
   // Store file
   fs.writeFileSync(path.join(EXCEL_DIR, `${bsCode}.xlsx`), buf);
 
-  // Enrich inline — fast (no fuzzy), just hash lookups
-  try {
-    const cached = snapshot.load();
-    if (cached) {
+  // Respond immediately — enrichment runs in background
+  res.json({ status: 'stored', bsCode, sizeBytes: buf.length, enrichedServices: 'pending' });
+
+  // Background enrichment — never blocks health check
+  setImmediate(async () => {
+    try {
+      const cached = snapshot.load();
+      if (!cached) return;
       const syncModule = require('./sync');
       const flatIndex = JSON.parse(cached.payload).flat_index || {};
       const injectionLog = {};
@@ -212,15 +216,20 @@ router.put('/excel/:bsCode', requirePublishToken, async (req, res) => {
       existingLog.details[bsCode] = injectionLog[bsCode] || {};
       fs.mkdirSync(require('path').dirname(logPath), { recursive: true });
       fs.writeFileSync(logPath, JSON.stringify(existingLog, null, 2));
-
       console.log(`[M1.achieved]: excel-enrich published — bs_processed=1 enriched_services=${enriched}`);
-      return res.json({ status: 'stored_and_enriched', bsCode, sizeBytes: buf.length, enrichedServices: enriched });
+    } catch(e) {
+      console.error(`[excel-enrich background] ${bsCode}: ${e.message}`);
+      // Save partial log even on failure so we can diagnose
+      try {
+        const logPath = require('path').join(__dirname, '..', 'data', 'injection-log.json');
+        let existingLog = {};
+        try { existingLog = JSON.parse(fs.readFileSync(logPath, 'utf8')); } catch(e2) {}
+        existingLog.details = existingLog.details || {};
+        existingLog.details[bsCode] = { error: e.message, timestamp: new Date().toISOString() };
+        fs.writeFileSync(logPath, JSON.stringify(existingLog, null, 2));
+      } catch(e2) { /* ignore log write failure */ }
     }
-  } catch(e) {
-    console.error(`[excel-enrich inline] ${bsCode}: ${e.message}`);
-  }
-
-  res.json({ status: 'stored', bsCode, sizeBytes: buf.length });
+  });
 });
 
 router.get('/excel/:bsCode', (req, res) => {

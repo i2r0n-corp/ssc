@@ -33,9 +33,9 @@ function load() {
 }
 
 function save(data) {
-  _snapshot = data;
   _ensureDir();
   fs.writeFileSync(_snapshotFile(), JSON.stringify(data), 'utf8');
+  _snapshot = null; // force reload from disk on next load() — prevents stale cache
 }
 
 function _reset() {

@@ -149,7 +149,8 @@ def main():
 
             result = put_resp.json()
             enriched = result.get("enrichedServices", "?")
-            msg = f"✅ {bs_code}: stored & enriched — {enriched} services updated"
+            status = "stored & enriching in background" if enriched == "pending" else f"stored & enriched — {enriched} services updated"
+            msg = f"✅ {bs_code}: {status}"
             log_entry(log, msg)
             uploaded += 1
 
