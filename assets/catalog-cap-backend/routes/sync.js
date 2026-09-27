@@ -231,13 +231,25 @@ function parseBsNameMapping(excelBuffer, bsCode) {
   return combined;
 }
 
-function applyExcelEnrichment(flatIndex, bsCode, excelBuffer) {
+function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog) {
   try {
     const { byCode, byName } = parseBsNameMapping(excelBuffer, bsCode);
 
+    const totalMappings = Object.keys(byCode).length + Object.keys(byName).length;
+    if (totalMappings === 0) {
+      console.log(`    ⚠️  ${bsCode}: no mappings extracted from Excel — skipping`);
+      return 0;
+    }
+
     let matched = 0;
+    let unmatched = 0;
     const bsSvc = flatIndex[bsCode];
-    if (!bsSvc) return matched;
+    if (!bsSvc) {
+      console.log(`    ⚠️  ${bsCode}: not found in flat_index`);
+      return 0;
+    }
+
+    const logRows = [];
 
     for (const modCode of bsSvc.childServices || []) {
       const mod = flatIndex[modCode];
@@ -252,30 +264,48 @@ function applyExcelEnrichment(flatIndex, bsCode, excelBuffer) {
         const svcNumP  = svcNum.padStart(18, '0');
         const svcName  = _clean(child.name || '');
 
-        // Match priority (mirrors original Python script):
+        // Match priority:
         // 1. CRM code exact
         // 2. serviceNumber exact
         // 3. Zero-padded 18-digit variants
-        // 4. Catalog name (clean match)
-        const deckName =
-          byCode[svcCode]  ||
-          byCode[svcNum]   ||
-          byCode[svcCodeP] ||
-          byCode[svcNumP]  ||
-          byName[svcName]  ||
-          null;
+        // 4. Catalog name clean match
+        let deckName = null;
+        let matchMethod = null;
+
+        if (byCode[svcCode])  { deckName = byCode[svcCode];  matchMethod = `code:${svcCode}`; }
+        else if (byCode[svcNum])   { deckName = byCode[svcNum];   matchMethod = `serviceNumber:${svcNum}`; }
+        else if (byCode[svcCodeP]) { deckName = byCode[svcCodeP]; matchMethod = `padded:${svcCodeP}`; }
+        else if (byCode[svcNumP])  { deckName = byCode[svcNumP];  matchMethod = `paddedNum:${svcNumP}`; }
+        else if (byName[svcName])  { deckName = byName[svcName];  matchMethod = `name:${svcName}`; }
 
         if (!child.business_scenario_naming) child.business_scenario_naming = {};
+
         if (deckName) {
           child.business_scenario_naming[bsCode] = deckName;
           matched++;
+          logRows.push({ svcCode, svcNum, svcName: child.name, module: modCode, deckName, method: matchMethod, status: 'matched' });
         } else {
           delete child.business_scenario_naming[bsCode];
+          unmatched++;
+          logRows.push({ svcCode, svcNum, svcName: child.name, module: modCode, deckName: null, method: null, status: 'no_match' });
         }
       }
     }
 
-    console.log(`    Enriched ${bsCode}: ${matched} services matched`);
+    console.log(`    ✅ ${bsCode}: ${matched} matched, ${unmatched} unmatched out of ${matched + unmatched} services`);
+    console.log(`       Excel had ${Object.keys(byCode).length} CRM codes + ${Object.keys(byName).length} name mappings`);
+
+    // Sample unmatched for diagnosis
+    const unmatchedSamples = logRows.filter(r => r.status === 'no_match').slice(0, 3);
+    if (unmatchedSamples.length > 0) {
+      console.log(`       Sample unmatched: ${unmatchedSamples.map(r => `"${r.svcName}" (code:${r.svcCode}, num:${r.svcNum})`).join(' | ')}`);
+    }
+
+    // Store in injection log if provided
+    if (injectionLog) {
+      injectionLog[bsCode] = { matched, unmatched, rows: logRows };
+    }
+
     return matched;
   } catch (e) {
     console.error(`    Excel enrichment failed for ${bsCode}: ${e.message}`);
@@ -446,12 +476,12 @@ router.post('/excel-enrich', requirePublishToken, async (req, res) => {
       : Object.keys(flatIndex).filter(c => flatIndex[c].serviceObject === 'Business Scenario');
 
     let processed = 0, totalEnriched = 0, notFound = [];
+    const injectionLog = {};
 
     for (const code of targetCodes) {
       const excelPath = path.join(EXCEL_DIR, `${code}.xlsx`);
       if (!fs.existsSync(excelPath)) {
         notFound.push(code);
-        // Clear stale enrichment for this BS if no Excel available
         for (const modCode of (flatIndex[code] || {}).childServices || []) {
           for (const childCode of (flatIndex[modCode] || {}).childServices || []) {
             const child = flatIndex[childCode];
@@ -463,9 +493,21 @@ router.post('/excel-enrich', requirePublishToken, async (req, res) => {
         continue;
       }
       const buf = fs.readFileSync(excelPath);
-      totalEnriched += applyExcelEnrichment(flatIndex, code, buf);
+      totalEnriched += applyExcelEnrichment(flatIndex, code, buf, injectionLog);
       processed++;
     }
+
+    // Save injection log as JSON data product
+    const logPath = path.join(__dirname, '..', 'data', 'injection-log.json');
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    fs.writeFileSync(logPath, JSON.stringify({
+      generatedAt: new Date().toISOString(),
+      totalMatched: totalEnriched,
+      bsProcessed: processed,
+      bsNotFound: notFound,
+      details: injectionLog
+    }, null, 2));
+    console.log(`    Injection log saved → data/injection-log.json`);
 
     const result = publishSnapshot(flatIndex, cached.lastFullBuild);
     console.log(`[M1.achieved]: excel-enrich published — bs_processed=${processed} enriched_services=${totalEnriched}`);
@@ -474,6 +516,14 @@ router.post('/excel-enrich', requirePublishToken, async (req, res) => {
     console.error(`[M1.missed]: excel-enrich failed — error=${err.message}`);
     res.status(500).json({ status: 'failed', error: err.message });
   }
+});
+
+// Get injection log
+router.get('/injection-log', (req, res) => {
+  const logPath = path.join(__dirname, '..', 'data', 'injection-log.json');
+  if (!fs.existsSync(logPath)) return res.status(404).json({ error: 'No injection log yet. Run excel-enrich first.' });
+  try { res.json(JSON.parse(fs.readFileSync(logPath, 'utf8'))); }
+  catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;
