@@ -683,63 +683,58 @@ router.post('/incremental', requirePublishToken, async (req, res) => {
   }
 });
 
-// Excel-only enrichment
-router.post('/excel-enrich', requirePublishToken, async (req, res) => {
+// Excel-only enrichment — returns 202 immediately, processes in background
+router.post('/excel-enrich', requirePublishToken, (req, res) => {
   console.log('=== SYNC: EXCEL ENRICH ===');
-  try {
-    const { bsCode } = req.body || {};
-    const cached = snapshot.load();
-    if (!cached) {
-      return res.status(400).json({ error: 'No cached snapshot found. Run /sync/full first.' });
-    }
+  const { bsCode } = req.body || {};
+  const cached = snapshot.load();
+  if (!cached) return res.status(400).json({ error: 'No cached snapshot found. Run /sync/full first.' });
 
-    const flatIndex = JSON.parse(cached.payload).flat_index || {};
+  // Respond immediately so health check is never blocked
+  res.status(202).json({ status: 'accepted', bsCode: bsCode || 'all' });
 
-    const targetCodes = bsCode
-      ? [bsCode]
-      : Object.keys(flatIndex).filter(c => flatIndex[c].serviceObject === 'Business Scenario');
+  // Process in background
+  setImmediate(async () => {
+    try {
+      const flatIndex = JSON.parse(cached.payload).flat_index || {};
+      const targetCodes = bsCode
+        ? [bsCode]
+        : Object.keys(flatIndex).filter(c => flatIndex[c].serviceObject === 'Business Scenario');
 
-    let processed = 0, totalEnriched = 0, notFound = [];
-    const injectionLog = {};
+      let processed = 0, totalEnriched = 0;
+      const notFound = [];
+      const injectionLog = {};
 
-    for (const code of targetCodes) {
-      const excelPath = path.join(EXCEL_DIR, `${code}.xlsx`);
-      if (!fs.existsSync(excelPath)) {
-        notFound.push(code);
-        for (const modCode of (flatIndex[code] || {}).childServices || []) {
-          for (const childCode of (flatIndex[modCode] || {}).childServices || []) {
-            const child = flatIndex[childCode];
-            if (child && child.business_scenario_naming) {
-              delete child.business_scenario_naming[code];
-            }
-          }
+      for (const code of targetCodes) {
+        const excelPath = path.join(EXCEL_DIR, `${code}.xlsx`);
+        if (!fs.existsSync(excelPath)) {
+          notFound.push(code);
+          continue;
         }
-        continue;
+        const buf = fs.readFileSync(excelPath);
+        totalEnriched += applyExcelEnrichment(flatIndex, code, buf, injectionLog);
+        processed++;
+
+        // Save snapshot after each BS so progress is never lost on restart
+        publishSnapshot(flatIndex, cached.lastFullBuild);
       }
-      const buf = fs.readFileSync(excelPath);
-      totalEnriched += applyExcelEnrichment(flatIndex, code, buf, injectionLog);
-      processed++;
+
+      // Save injection log
+      const logPath = path.join(__dirname, '..', 'data', 'injection-log.json');
+      fs.mkdirSync(path.dirname(logPath), { recursive: true });
+      fs.writeFileSync(logPath, JSON.stringify({
+        generatedAt: new Date().toISOString(),
+        totalMatched: totalEnriched,
+        bsProcessed: processed,
+        bsNotFound: notFound,
+        details: injectionLog
+      }, null, 2));
+      console.log(`    Injection log saved → data/injection-log.json`);
+      console.log(`[M1.achieved]: excel-enrich published — bs_processed=${processed} enriched_services=${totalEnriched}`);
+    } catch (err) {
+      console.error(`[M1.missed]: excel-enrich background failed — error=${err.message}`);
     }
-
-    // Save injection log as JSON data product
-    const logPath = path.join(__dirname, '..', 'data', 'injection-log.json');
-    fs.mkdirSync(path.dirname(logPath), { recursive: true });
-    fs.writeFileSync(logPath, JSON.stringify({
-      generatedAt: new Date().toISOString(),
-      totalMatched: totalEnriched,
-      bsProcessed: processed,
-      bsNotFound: notFound,
-      details: injectionLog
-    }, null, 2));
-    console.log(`    Injection log saved → data/injection-log.json`);
-
-    const result = publishSnapshot(flatIndex, cached.lastFullBuild);
-    console.log(`[M1.achieved]: excel-enrich published — bs_processed=${processed} enriched_services=${totalEnriched}`);
-    res.json({ status: 'completed', mode: 'excel-enrich', processed, totalEnriched, notFound, ...result });
-  } catch (err) {
-    console.error(`[M1.missed]: excel-enrich failed — error=${err.message}`);
-    res.status(500).json({ status: 'failed', error: err.message });
-  }
+  });
 });
 
 // Get injection log

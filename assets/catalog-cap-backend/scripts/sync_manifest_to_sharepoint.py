@@ -51,6 +51,7 @@ def log_entry(log, message):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"  {message}")
     log.setdefault("history", []).append({"time": ts, "message": message})
+    return message
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
@@ -155,14 +156,12 @@ def main():
             enrich_resp.raise_for_status()
             result = enrich_resp.json()
 
-            msg = f"✅ {bs_code}: enriched — {result.get('totalEnriched', '?')} services updated"
-            print(f"  {msg}")
+            msg = f"✅ {bs_code}: accepted for enrichment"
             log_entry(log, msg)
             uploaded += 1
 
         except Exception as e:
             msg = f"❌ {bs_code}: failed — {e}"
-            print(f"  {msg}")
             log_entry(log, msg)
             errors += 1
 
