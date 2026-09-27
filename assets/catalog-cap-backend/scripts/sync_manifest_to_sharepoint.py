@@ -147,15 +147,9 @@ def main():
             )
             put_resp.raise_for_status()
 
-            # Trigger real enrichment
-            enrich_resp = requests.post(
-                f"{CAP_BACKEND_URL}/api/catalog/sync/excel-enrich",
-                json={"bsCode": bs_code},
-                timeout=60
-            )
-            enrich_resp.raise_for_status()
-
-            msg = f"✅ {bs_code}: accepted for enrichment (background)"
+            result = put_resp.json()
+            enriched = result.get("enrichedServices", "?")
+            msg = f"✅ {bs_code}: stored & enriched — {enriched} services updated"
             log_entry(log, msg)
             uploaded += 1
 

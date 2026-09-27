@@ -183,12 +183,31 @@ router.get('/excel', (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.put('/excel/:bsCode', requirePublishToken, (req, res) => {
+router.put('/excel/:bsCode', requirePublishToken, async (req, res) => {
   const { bsCode } = req.params;
   if (!/^[A-Z0-9]{5,10}$/.test(bsCode)) return res.status(400).json({ error: `Invalid bsCode: ${bsCode}` });
   const buf = req.body;
   if (!buf || buf.length === 0) return res.status(400).json({ error: 'Empty body' });
+
+  // Store file
   fs.writeFileSync(path.join(EXCEL_DIR, `${bsCode}.xlsx`), buf);
+
+  // Enrich inline — fast (no fuzzy), just hash lookups
+  try {
+    const cached = snapshot.load();
+    if (cached) {
+      const syncModule = require('./sync');
+      const flatIndex = JSON.parse(cached.payload).flat_index || {};
+      const enriched = await syncModule.applyExcelEnrichment(flatIndex, bsCode, buf);
+      const businessScenarios = syncModule.buildHierarchy(flatIndex);
+      snapshot.save({ ...cached, payload: JSON.stringify({ ...JSON.parse(cached.payload), flat_index: flatIndex, business_scenarios: businessScenarios }), lastUpdated: new Date().toISOString() });
+      console.log(`[M1.achieved]: excel-enrich published — bs_processed=1 enriched_services=${enriched}`);
+      return res.json({ status: 'stored_and_enriched', bsCode, sizeBytes: buf.length, enrichedServices: enriched });
+    }
+  } catch(e) {
+    console.error(`[excel-enrich inline] ${bsCode}: ${e.message}`);
+  }
+
   res.json({ status: 'stored', bsCode, sizeBytes: buf.length });
 });
 

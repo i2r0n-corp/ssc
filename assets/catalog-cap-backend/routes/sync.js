@@ -329,8 +329,14 @@ function _resolveModuleCode(moduleRaw, flatIndex, bsCode) {
     if (normed === nFull || normed === normLabel) return [code, 'norm exact'];
     if (normed.includes(normLabel) || normLabel.includes(normed)) return [code, 'norm substring'];
   }
-  // NOTE: fuzzy matching omitted — too slow for CF health check
-  return [null, 'no match'];
+  // 5. Fuzzy (threshold 0.60)
+  let bestCode = null, bestRatio = 0, bestLabel = '';
+  for (const [code, { label, normLabel }] of Object.entries(candidates)) {
+    const ratio = _similarity(normed, normLabel);
+    if (ratio > bestRatio) { bestRatio = ratio; bestCode = code; bestLabel = label; }
+  }
+  if (bestCode && bestRatio >= 0.60) return [bestCode, `fuzzy ${Math.round(bestRatio*100)}% → "${bestLabel}"`];
+  return [null, `no match`];
 }
 
 // ── Service code resolution ───────────────────────────────────────────────────
@@ -404,8 +410,21 @@ function _resolveServiceCode(assignment, flatIndex) {
       }
     }
 
-    // NOTE: fuzzy matching intentionally omitted — too slow for CF health check timeout
-    // Fuzzy matching is handled by the local Python script (JWD agent) which has no timeout
+    // 6b. Fuzzy (threshold 0.77) — process in batches to avoid blocking event loop
+    const normedEntries = Object.entries(normedMap);
+    let bestCode = null, bestRatio = 0, bestField = '';
+    const BATCH = 100;
+    for (let i = 0; i < normedEntries.length; i += BATCH) {
+      const batch = normedEntries.slice(i, i + BATCH);
+      for (const [term, field] of searchTerms) {
+        for (const [code, normedName] of batch) {
+          if (!normedName || _isBlockedMatch(term, normedName)) continue;
+          const ratio = _similarity(term, normedName);
+          if (ratio > bestRatio) { bestRatio = ratio; bestCode = code; bestField = field; }
+        }
+      }
+    }
+    if (bestCode && bestRatio >= 0.77) return [bestCode, `${bestField} fuzzy ${Math.round(bestRatio*100)}%`];
   }
 
   return [null, ''];
@@ -413,7 +432,7 @@ function _resolveServiceCode(assignment, flatIndex) {
 
 // ── Main enrichment ───────────────────────────────────────────────────────────
 
-function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog) {
+async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog) {
   try {
     const { byCode, byName, moduleAssignments } = parseBsNameMapping(excelBuffer, bsCode);
 
@@ -467,7 +486,10 @@ function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog) {
     // ── Step 2: module membership injection from Excel ────────────────────────
     let injected = 0, alreadyLinked = 0, unresolvedMod = 0, unresolvedSvc = 0;
 
+    let asgnCount = 0;
     for (const asgn of moduleAssignments) {
+      // Yield to event loop every 10 assignments so health check never times out
+      if (++asgnCount % 10 === 0) await new Promise(r => setTimeout(r, 0));
       const [modCode, modNote] = _resolveModuleCode(asgn.moduleRaw, flatIndex, bsCode);
       if (!modCode) {
         unresolvedMod++;
@@ -588,7 +610,7 @@ router.post('/full', requirePublishToken, async (req, res) => {
       const excelPath = path.join(EXCEL_DIR, `${bsCode}.xlsx`);
       if (fs.existsSync(excelPath)) {
         const buf = fs.readFileSync(excelPath);
-        totalEnriched += applyExcelEnrichment(flatIndex, bsCode, buf);
+        totalEnriched += await applyExcelEnrichment(flatIndex, bsCode, buf);
       }
     }
     console.log(`Excel enrichment: ${totalEnriched} services enriched across ${bsCodes.length} BS`);
@@ -657,7 +679,7 @@ router.post('/incremental', requirePublishToken, async (req, res) => {
       // Re-enrich from staged Excel
       const excelPath = path.join(EXCEL_DIR, `${bsCode}.xlsx`);
       if (fs.existsSync(excelPath)) {
-        applyExcelEnrichment(cachedFlatIndex, bsCode, fs.readFileSync(excelPath));
+        await applyExcelEnrichment(cachedFlatIndex, bsCode, fs.readFileSync(excelPath));
       }
     }
 
@@ -698,7 +720,7 @@ router.post('/excel-enrich', requirePublishToken, (req, res) => {
           continue;
         }
         const buf = fs.readFileSync(excelPath);
-        totalEnriched += applyExcelEnrichment(flatIndex, code, buf, injectionLog);
+        totalEnriched += await applyExcelEnrichment(flatIndex, code, buf, injectionLog);
         processed++;
 
         // Save snapshot after each BS so progress is never lost on restart
@@ -732,3 +754,5 @@ router.get('/injection-log', (req, res) => {
 });
 
 module.exports = router;
+module.exports.applyExcelEnrichment = applyExcelEnrichment;
+module.exports.buildHierarchy = buildHierarchy;
