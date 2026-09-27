@@ -237,16 +237,60 @@ router.put('/excel/:bsCode', requirePublishToken, (req, res) => {
   if (!/^[A-Z0-9]{5,10}$/.test(bsCode)) return res.status(400).json({ error: `Invalid bsCode: ${bsCode}` });
   const buf = req.body;
   if (!buf || buf.length === 0) return res.status(400).json({ error: 'Empty body' });
-
-  // Store file
   fs.writeFileSync(path.join(EXCEL_DIR, `${bsCode}.xlsx`), buf);
-
-  // Add to serial queue — one BS at a time, no race conditions
+  // Add to serial enrichment queue — processes one at a time, no race conditions
   enrichQueue.push({ bsCode, buf });
-  res.json({ status: 'queued', bsCode, sizeBytes: buf.length, queueLength: enrichQueue.length });
+  processEnrichQueue();
+  res.json({ status: 'queued', bsCode, sizeBytes: buf.length });
+});
 
-  // Start queue processor if not already running
-  setImmediate(() => processEnrichQueue());
+// ── Apply enrichment results from Python ──────────────────────────────────────
+// Python does all heavy matching locally, sends only the results map here
+// Body: { deckNames: { "serviceCode": "deckName", ... }, injectionLog: {...} }
+router.post('/excel/:bsCode/enrich', requirePublishToken, (req, res) => {
+  const { bsCode } = req.params;
+  const { deckNames = {}, injectionLog = {} } = req.body;
+
+  const cached = snapshot.load();
+  if (!cached) return res.status(404).json({ error: 'No snapshot available' });
+
+  try {
+    const parsed = JSON.parse(cached.payload);
+    const flatIndex = parsed.flat_index || {};
+    let enriched = 0;
+
+    // Apply deck names — simple hash lookup, milliseconds
+    for (const [svcCode, deckName] of Object.entries(deckNames)) {
+      const svc = flatIndex[svcCode];
+      if (svc) {
+        if (!svc.business_scenario_naming) svc.business_scenario_naming = {};
+        svc.business_scenario_naming[bsCode] = deckName;
+        enriched++;
+      }
+    }
+
+    // Rebuild hierarchy and save
+    const syncModule = require('./sync');
+    parsed.flat_index = flatIndex;
+    parsed.business_scenarios = syncModule.buildHierarchy(flatIndex);
+    snapshot.save({ ...cached, payload: JSON.stringify(parsed), lastUpdated: new Date().toISOString() });
+
+    // Save injection log
+    const logPath = path.join(__dirname, '..', 'data', 'injection-log.json');
+    let existingLog = {};
+    try { existingLog = JSON.parse(fs.readFileSync(logPath, 'utf8')); } catch(e) {}
+    existingLog.generatedAt = new Date().toISOString();
+    existingLog.details = existingLog.details || {};
+    existingLog.details[bsCode] = { enriched, ...injectionLog };
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    fs.writeFileSync(logPath, JSON.stringify(existingLog, null, 2));
+
+    console.log(`[M1.achieved]: excel-enrich published — bs_processed=1 enriched_services=${enriched}`);
+    res.json({ status: 'enriched', bsCode, enrichedServices: enriched });
+  } catch(e) {
+    console.error(`[enrich] ${bsCode}: ${e.message}`);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 router.get('/excel/:bsCode', (req, res) => {
