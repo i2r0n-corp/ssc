@@ -104,41 +104,136 @@ async function fetchFullService(code, token) {
 
 // ── Excel enrichment ──────────────────────────────────────────────────────────
 
-function applyExcelEnrichment(flatIndex, bsCode, excelBuffer) {
-  try {
-    const XLSX = require('xlsx');
-    const wb = XLSX.read(excelBuffer, { type: 'buffer' });
-    const byCode = {};
-    const byName = {};
+function _clean(val) {
+  return val ? String(val).trim().toLowerCase().replace(/\s+/g, ' ') : '';
+}
 
-    for (const sheetName of wb.SheetNames) {
-      const ws = wb.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-      if (!rows.length) continue;
+function _parseStandardSheet(rows) {
+  // Column layout (consistent across most files):
+  //   Col 0 = Deck name (CARRY-FORWARD — only filled on first row of each group)
+  //   Col 1 = CRM ID (may contain multiple IDs separated by , / ;)
+  //   Col 2 = Name as per service catalog
+  const byCode = {};
+  const byName = {};
+  let currentDeck = '';
+  const skipVals = new Set(['none', 'n/a', '', 'service name as per', 'crm id']);
 
-      let currentDeck = '';
-      for (const row of rows.slice(1)) {
-        const col0 = row[0] ? String(row[0]).trim() : '';
-        const col1 = row[1] ? String(row[1]).trim() : '';
-        const col2 = row[2] ? String(row[2]).trim() : '';
-        if (col0 && !['none', 'n/a', 'service name as per'].includes(col0.toLowerCase())) {
-          currentDeck = col0;
+  for (const row of rows.slice(1)) { // skip header row
+    if (!row || !row.some(c => c != null && c !== '')) continue;
+
+    const col0 = row[0] != null ? String(row[0]).trim() : '';
+    const col1 = row[1] != null ? String(row[1]).trim() : '';
+    const col2 = row[2] != null ? String(row[2]).trim() : '';
+
+    // Carry-forward: update current deck only when col0 has a real value
+    if (col0 && !skipVals.has(col0.toLowerCase())) {
+      currentDeck = col0;
+    }
+    if (!currentDeck) continue;
+
+    // CRM ID mapping — may have multiple IDs per cell
+    if (col1 && !skipVals.has(col1.toLowerCase())) {
+      col1.split(/[,/;\s]+/).forEach(id => {
+        id = id.trim();
+        if (id && /[0-9]{6,}/.test(id)) {
+          byCode[id] = currentDeck;
+          // Also store zero-padded 18-digit version
+          const padded = id.padStart(18, '0');
+          if (padded !== id) byCode[padded] = currentDeck;
         }
-        if (!currentDeck) continue;
-        // CRM ID mapping
-        if (col1 && !['none', 'n/a', 'crm id'].includes(col1.toLowerCase())) {
-          col1.split(/[,/;\s]+/).forEach(id => {
-            id = id.trim();
-            if (id && /[0-9]{6,}/.test(id)) byCode[id] = currentDeck;
-          });
-        }
-        // Catalog name mapping
-        if (col2 && !['none', 'n/a'].includes(col2.toLowerCase())) {
-          byName[col2.toLowerCase().replace(/\s+/g, ' ')] = currentDeck;
-        }
-        byName[currentDeck.toLowerCase().replace(/\s+/g, ' ')] = currentDeck;
+      });
+    }
+
+    // Catalog name mapping
+    if (col2 && !skipVals.has(col2.toLowerCase())) {
+      byName[_clean(col2)] = currentDeck;
+    }
+
+    // Deck name self-mapping (fallback for name-based lookup)
+    byName[_clean(currentDeck)] = currentDeck;
+  }
+
+  return { byCode, byName };
+}
+
+function _detectSheetLayout(rows) {
+  // Auto-detect column layout by scanning the first 10 rows for header signals.
+  // Returns: 'standard' | 'skip'
+  //
+  // Standard layout signals (must find at least 2 of these):
+  //   - A column header containing 'crm' or 'id'
+  //   - A column header containing 'service' or 'catalog' or 'name'
+  //   - A column header containing 'deck' or 'scenario' or 'success pack' or 'module'
+  //   - OR: col0 has non-numeric, non-header text values that carry forward (deck names)
+  //     AND col1 has 6+ digit numeric values (CRM IDs)
+  //
+  // Skip if: no recognisable structure found
+
+  const headerKeywords = [
+    [/crm|id/i, 'id'],
+    [/service|catalog|name/i, 'name'],
+    [/deck|scenario|success.?pack|module/i, 'deck'],
+  ];
+
+  // Check header row signals (first 5 rows)
+  let headerSignals = new Set();
+  for (const row of rows.slice(0, 5)) {
+    if (!row) continue;
+    for (const cell of row) {
+      if (!cell) continue;
+      const s = String(cell).toLowerCase().trim();
+      for (const [re, label] of headerKeywords) {
+        if (re.test(s)) headerSignals.add(label);
       }
     }
+  }
+  if (headerSignals.size >= 2) return 'standard';
+
+  // Check data rows: col0 = text deck names, col1 = numeric CRM IDs
+  let deckLike = 0, crmLike = 0;
+  for (const row of rows.slice(1, 20)) {
+    if (!row) continue;
+    const col0 = row[0] != null ? String(row[0]).trim() : '';
+    const col1 = row[1] != null ? String(row[1]).trim() : '';
+    if (col0 && col0.length > 3 && !/^\d+$/.test(col0)) deckLike++;
+    if (col1 && /^\d{6,}$/.test(col1)) crmLike++;
+  }
+  if (deckLike >= 2 && crmLike >= 1) return 'standard';
+
+  return 'skip';
+}
+
+function parseBsNameMapping(excelBuffer, bsCode) {
+  const XLSX = require('xlsx');
+  const wb = XLSX.read(excelBuffer, { type: 'buffer' });
+  const combined = { byCode: {}, byName: {} };
+
+  for (const sheetName of wb.SheetNames) {
+    // Skip reference/example/info sheets
+    if (/reference|example|readme|info/i.test(sheetName)) continue;
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+    if (!rows.length) continue;
+
+    // Auto-detect layout — skip sheets with unrecognised structure
+    const layout = _detectSheetLayout(rows);
+    if (layout === 'skip') {
+      console.log(`    Skipping sheet "${sheetName}" in ${bsCode} — unrecognised column structure`);
+      continue;
+    }
+
+    const { byCode, byName } = _parseStandardSheet(rows);
+    Object.assign(combined.byCode, byCode);
+    Object.assign(combined.byName, byName);
+  }
+
+  console.log(`    Parsed Excel for ${bsCode}: ${Object.keys(combined.byCode).length} code mappings, ${Object.keys(combined.byName).length} name mappings`);
+  return combined;
+}
+
+function applyExcelEnrichment(flatIndex, bsCode, excelBuffer) {
+  try {
+    const { byCode, byName } = parseBsNameMapping(excelBuffer, bsCode);
 
     let matched = 0;
     const bsSvc = flatIndex[bsCode];
@@ -150,10 +245,26 @@ function applyExcelEnrichment(flatIndex, bsCode, excelBuffer) {
       for (const childCode of mod.childServices || []) {
         const child = flatIndex[childCode];
         if (!child) continue;
-        const svcCode = String(child.code || '').trim();
-        const svcNum = String(child.serviceNumber || '').trim();
-        const svcName = (child.name || '').toLowerCase().replace(/\s+/g, ' ');
-        const deckName = byCode[svcCode] || byCode[svcNum] || byName[svcName] || null;
+
+        const svcCode  = String(child.code || '').trim();
+        const svcNum   = String(child.serviceNumber || '').trim();
+        const svcCodeP = svcCode.padStart(18, '0');
+        const svcNumP  = svcNum.padStart(18, '0');
+        const svcName  = _clean(child.name || '');
+
+        // Match priority (mirrors original Python script):
+        // 1. CRM code exact
+        // 2. serviceNumber exact
+        // 3. Zero-padded 18-digit variants
+        // 4. Catalog name (clean match)
+        const deckName =
+          byCode[svcCode]  ||
+          byCode[svcNum]   ||
+          byCode[svcCodeP] ||
+          byCode[svcNumP]  ||
+          byName[svcName]  ||
+          null;
+
         if (!child.business_scenario_naming) child.business_scenario_naming = {};
         if (deckName) {
           child.business_scenario_naming[bsCode] = deckName;
@@ -163,6 +274,7 @@ function applyExcelEnrichment(flatIndex, bsCode, excelBuffer) {
         }
       }
     }
+
     console.log(`    Enriched ${bsCode}: ${matched} services matched`);
     return matched;
   } catch (e) {

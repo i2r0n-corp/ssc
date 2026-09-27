@@ -4,12 +4,14 @@ SSC Catalog — Excel Enrichment Sync (Local Folder)
 Runs hourly via Windows Task Scheduler.
 
 What it does:
-  1. Reads last-check timestamp from log file
-  2. If more than 1 hour passed since last check:
-     → scans local SharePoint-synced folder for .xlsx files
-     → if file was modified between last-check and now → uploads to CAP backend
-     → backend enriches that BS immediately
-  3. Updates last-check timestamp in log
+  1. Fetches excel-manifest from CAP backend
+     (manifest is built from data product — contains exact {bsCode, fileName} pairs)
+  2. Reads last-check timestamp from log file
+  3. For each manifest entry:
+     - looks for exact fileName in local SharePoint-synced folder
+     - if file was modified since last check → uploads to CAP backend
+     - triggers proper Excel enrichment for that BS
+  4. Updates last-check timestamp in log
 
 Requirements:
   pip install requests
@@ -42,32 +44,13 @@ def read_log():
         return {"lastCheck": None, "history": []}
 
 def write_log(log):
-    # Keep only last 100 history entries
     log["history"] = log.get("history", [])[-100:]
     Path(LOG_FILE).write_text(json.dumps(log, indent=2))
 
 def log_entry(log, message):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{ts}] {message}")
+    print(f"  {message}")
     log.setdefault("history", []).append({"time": ts, "message": message})
-
-# ── UPLOAD ────────────────────────────────────────────────────────────────────
-
-def upload_excel(filepath, filename, bs_code):
-    with open(filepath, "rb") as f:
-        content = f.read()
-    resp = requests.put(
-        f"{CAP_BACKEND_URL}/api/catalog/excel/upload",
-        headers={
-            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "X-Filename": filename,
-            "X-BS-Code": bs_code
-        },
-        data=content,
-        timeout=60
-    )
-    resp.raise_for_status()
-    return resp.json()
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
@@ -90,57 +73,95 @@ def main():
             return
         print(f"⏱️  Last check: {last_check.strftime('%Y-%m-%d %H:%M:%S')} UTC ({minutes_since:.0f} min ago)")
     else:
-        print("⚡ First run — uploading all Excel files found.")
+        print("⚡ First run — uploading all Excel files found in manifest.")
         last_check = None
 
-    # Check if local folder exists
-    if not os.path.isdir(EXCEL_FOLDER):
-        log_entry(log, f"❌ Folder not found: {EXCEL_FOLDER}")
+    # Step 1 — fetch manifest from CAP backend
+    print(f"\n📋 Fetching manifest from CAP backend...")
+    try:
+        resp = requests.get(f"{CAP_BACKEND_URL}/api/catalog/excel-manifest", timeout=15)
+        if resp.status_code == 404:
+            print("⚠️  No manifest on CAP backend yet — nothing to do.")
+            log["lastCheck"] = now.isoformat()
+            write_log(log)
+            return
+        resp.raise_for_status()
+        manifest = resp.json()
+    except Exception as e:
+        print(f"❌ Could not fetch manifest: {e}")
         log["lastCheck"] = now.isoformat()
         write_log(log)
         sys.exit(1)
 
-    # Scan folder for Excel files
-    excel_files = [f for f in os.listdir(EXCEL_FOLDER) if f.endswith(".xlsx")]
-    if not excel_files:
-        log_entry(log, f"⚠️  No .xlsx files found in folder")
+    entries = manifest.get("entries", [])
+    print(f"✅ Manifest loaded — {len(entries)} Business Scenarios\n")
+
+    # Step 2 — check local folder exists
+    if not os.path.isdir(EXCEL_FOLDER):
+        log_entry(log, f"❌ Local folder not found: {EXCEL_FOLDER}")
         log["lastCheck"] = now.isoformat()
         write_log(log)
-        return
-
-    print(f"📁 Found {len(excel_files)} Excel files in folder\n")
+        sys.exit(1)
 
     uploaded = 0
     skipped  = 0
     errors   = 0
+    missing  = 0
 
-    for filename in sorted(excel_files):
-        filepath = os.path.join(EXCEL_FOLDER, filename)
+    # Step 3 — for each manifest entry find exact file and check modification time
+    for entry in entries:
+        bs_code  = entry.get("bsCode", "")
+        filename = entry.get("fileName", "")
 
-        # Extract BS code from filename — everything before first underscore
-        bs_code = filename.split("_")[0].strip().upper()
-        if not bs_code:
-            print(f"  ⚠️  {filename}: could not extract BS code — skipping")
-            skipped += 1
+        if not bs_code or not filename:
             continue
 
-        # Check file modification time
+        filepath = os.path.join(EXCEL_FOLDER, filename)
+
+        # Check if file exists locally
+        if not os.path.exists(filepath):
+            print(f"  ⚠️  {bs_code}: file not found locally ({filename})")
+            missing += 1
+            continue
+
+        # Check modification time
         mtime = datetime.fromtimestamp(os.path.getmtime(filepath), tz=timezone.utc)
 
         if last_check and mtime <= last_check:
-            print(f"  ⏭️  {bs_code}: not modified since last check ({mtime.strftime('%Y-%m-%d %H:%M')} UTC) — skipping")
+            print(f"  ⏭️  {bs_code}: not modified since last check — skipping")
             skipped += 1
             continue
 
         print(f"  📤 {bs_code}: modified {mtime.strftime('%Y-%m-%d %H:%M')} UTC — uploading...")
+
         try:
-            result = upload_excel(filepath, filename, bs_code)
-            msg = f"✅ {bs_code}: enriched — {result.get('servicesEnriched', '?')} services updated"
+            # Upload Excel file
+            with open(filepath, "rb") as f:
+                content = f.read()
+            put_resp = requests.put(
+                f"{CAP_BACKEND_URL}/api/catalog/excel/{bs_code}",
+                headers={"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+                data=content,
+                timeout=60
+            )
+            put_resp.raise_for_status()
+
+            # Trigger real enrichment
+            enrich_resp = requests.post(
+                f"{CAP_BACKEND_URL}/api/catalog/sync/excel-enrich",
+                json={"bsCode": bs_code},
+                timeout=60
+            )
+            enrich_resp.raise_for_status()
+            result = enrich_resp.json()
+
+            msg = f"✅ {bs_code}: enriched — {result.get('totalEnriched', '?')} services updated"
             print(f"  {msg}")
             log_entry(log, msg)
             uploaded += 1
+
         except Exception as e:
-            msg = f"❌ {bs_code}: upload failed — {e}"
+            msg = f"❌ {bs_code}: failed — {e}"
             print(f"  {msg}")
             log_entry(log, msg)
             errors += 1
@@ -151,10 +172,11 @@ def main():
 
     # Summary
     print(f"\n{'='*55}")
-    print(f"✅ Uploaded & enriched : {uploaded}")
-    print(f"⏭️  Skipped (no change) : {skipped}")
-    print(f"❌ Errors              : {errors}")
-    print(f"Last check saved      : {now.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    print(f"✅ Uploaded & enriched  : {uploaded}")
+    print(f"⏭️  Skipped (no change)  : {skipped}")
+    print(f"⚠️  Missing locally      : {missing}")
+    print(f"❌ Errors               : {errors}")
+    print(f"Last check saved       : {now.strftime('%Y-%m-%d %H:%M:%S')} UTC")
     print(f"{'='*55}\n")
 
     if errors > 0:

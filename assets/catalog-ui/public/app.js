@@ -12,7 +12,7 @@ const AGENT_BASE_URL  = window.AGENT_BASE_URL  || 'http://localhost:5000';
 let state = {
   currentPage: 'catalog',
   catalog: { services: [], lastUpdated: null, loading: false, error: null },
-  filters: { query: '', engagementType: '', businessScenario: '', module: '', deckName: '' },
+  filters: { query: '', engagementType: '', businessScenario: '', module: '', deckName: '', namingType: '' },
   filteredServices: [],
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
   selectedServices: new Set(),
@@ -197,16 +197,8 @@ function renderCatalogPage() {
     uniqueMods = Object.entries(moduleMap).sort((a, b) => a[1].localeCompare(b[1]));
   }
 
-  // Deck names: show when BS is selected, optionally narrowed by module
-  let uniqueDeckNames = [];
-  if (state.filters.businessScenario) {
-    const { bsToDeckNames = {}, modToDeckNames = {} } = state.catalog;
-    if (state.filters.module && modToDeckNames[state.filters.module]) {
-      uniqueDeckNames = [...modToDeckNames[state.filters.module]].sort();
-    } else if (bsToDeckNames[state.filters.businessScenario]) {
-      uniqueDeckNames = [...bsToDeckNames[state.filters.businessScenario]].sort();
-    }
-  }
+  // Naming type selector — only shown when BS is selected
+  const showNamingFilter = !!state.filters.businessScenario;
 
   return `
     <h2>Catalog Browser</h2>
@@ -238,13 +230,13 @@ function renderCatalogPage() {
           ${uniqueMods.map(([code, name]) => `<option value="${code}" ${state.filters.module===code?'selected':''}>${name}</option>`).join('')}
         </select>
       </div>
-      ${uniqueDeckNames.length > 0 ? `
+      ${showNamingFilter ? `
       <div class="filter-group">
-        <label>Deck / Catalog Naming</label>
-        <select id="filter-deck" onchange="updateFilter('deckName', this.value)">
-          <option value="">All decks</option>
-          ${uniqueDeckNames.map(d => `<option value="${d}" ${state.filters.deckName===d?'selected':''}>${d}</option>`).join('')}
-        </select>
+        <label>Service Name</label>
+        <div class="toggle-group">
+          <button class="toggle-btn ${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'catalog')">Catalog Name</button>
+          <button class="toggle-btn ${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
+        </div>
       </div>` : ''}
       <button class="btn btn-secondary btn-sm" onclick="clearFilters()">Clear</button>
       ${lastUpdated ? `<span class="last-updated">Last updated: ${new Date(lastUpdated).toLocaleString()}</span>` : ''}
@@ -282,15 +274,20 @@ function renderCatalogPage() {
         </tr>
       </thead>
       <tbody>
-        ${state.filteredServices.slice(0, 200).map(svc => `
+        ${state.filteredServices.slice(0, 200).map(svc => {
+          const useDeck = state.filters.namingType === 'deck' && state.filters.businessScenario;
+          const bsNaming = svc.business_scenario_naming || svc.businessScenarioNaming || {};
+          const deckName = useDeck ? (bsNaming[state.filters.businessScenario] || svc.name) : svc.name;
+          return `
           <tr class="${state.selectedServices.has(svc.code) ? 'selected' : ''}">
             <td><input type="checkbox" ${state.selectedServices.has(svc.code)?'checked':''} onchange="toggleSelect('${svc.code}')" /></td>
-            <td><strong>${svc.name}</strong></td>
+            <td><strong>${deckName}</strong>${useDeck && bsNaming[state.filters.businessScenario] ? `<div style="font-size:0.75rem;color:#6a6a6a">${svc.name}</div>` : ''}</td>
             <td style="max-width:300px;font-size:0.8rem">${(svc.shortDescription||'').substring(0,120)}${(svc.shortDescription||'').length>120?'…':''}</td>
             <td>${engagementBadge(svc.engagementType)}</td>
             <td style="font-size:0.8rem">${moduleMap[svc.parentCode] || svc.parentCode || '—'}</td>
             <td style="font-size:0.75rem;color:#6a6a6a">${svc.code}</td>
-          </tr>`).join('')}
+          </tr>`;
+        }).join('')}
       </tbody>
     </table>` : ''}`;
 }
@@ -438,14 +435,14 @@ window.navigate = function(page) {
 window.updateFilter = function(key, value) {
   state.filters[key] = value;
   // Reset cascading filters downstream
-  if (key === 'businessScenario') { state.filters.module = ''; state.filters.deckName = ''; }
+  if (key === 'businessScenario') { state.filters.module = ''; state.filters.deckName = ''; state.filters.namingType = ''; }
   if (key === 'module') { state.filters.deckName = ''; }
   clearTimeout(window._filterDebounce);
   window._filterDebounce = setTimeout(applyFilters, 300);
 };
 
 window.clearFilters = function() {
-  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', deckName: '' };
+  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', deckName: '', namingType: '' };
   state.filteredServices = [];
   state.catalog.hasSearched = false;
   render();
