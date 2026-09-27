@@ -498,7 +498,7 @@ window.analyzeIncidents = async function() {
       message: `Analyze these customer incidents and recommend relevant SSC catalog services. Here is the file content:\n\n${text.substring(0, 50000)}`,
       contextId: 'incident-analysis-' + Date.now()
     });
-    const res = await fetch(`${AGENT_BASE_URL}/run`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    const res = await fetch(`${CAP_BACKEND_URL}/api/agent/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: `Analyze these customer incidents and recommend relevant SSC catalog services. Here is the file content:\n\n${text.substring(0, 50000)}`, contextId: 'incident-analysis-' + Date.now() }) });
     if (!res.ok) throw new Error(`Agent API error ${res.status}`);
     const data = await res.json();
     const content = data.message || data.content || JSON.stringify(data);
@@ -557,7 +557,7 @@ window.sendMessage = async function() {
   state.chat.input = ''; state.chat.loading = true; render();
   scrollChatToBottom();
   try {
-    const res = await fetch(`${AGENT_BASE_URL}/run`, {
+    const res = await fetch(`${CAP_BACKEND_URL}/api/agent/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: input, contextId: 'chat-session' })

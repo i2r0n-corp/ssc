@@ -25,6 +25,7 @@ app.use(express.raw({ type: 'application/vnd.openxmlformats-officedocument.sprea
 app.use('/api/catalog', require('./routes/catalog'));
 app.use('/api/catalog/sync', require('./routes/sync'));
 app.use('/api/pptx', require('./routes/pptx'));
+app.use('/api/agent', require('./routes/agent'));
 
 // Health probe
 app.get('/health', (req, res) => {
