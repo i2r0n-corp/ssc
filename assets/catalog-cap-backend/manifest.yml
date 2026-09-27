@@ -9,6 +9,7 @@ applications:
     command: npm start
     health-check-type: http
     health-check-http-endpoint: /health
+    health-check-invocation-timeout: 10
     env:
       NODE_ENV: production
       # Add your SSC credentials here:
