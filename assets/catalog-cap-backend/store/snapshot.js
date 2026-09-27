@@ -34,8 +34,16 @@ function load() {
 
 function save(data) {
   _ensureDir();
-  fs.writeFileSync(_snapshotFile(), JSON.stringify(data), 'utf8');
-  _snapshot = null; // force reload from disk on next load() — prevents stale cache
+  _snapshot = data; // update in-memory immediately — instant, no blocking
+  // Serialize + write to disk synchronously but only after yielding to event loop
+  // so health check can respond first
+  setImmediate(() => {
+    try {
+      fs.writeFileSync(_snapshotFile(), JSON.stringify(data), 'utf8');
+    } catch(e) {
+      console.error('Failed to save snapshot to disk:', e.message);
+    }
+  });
 }
 
 function _reset() {
