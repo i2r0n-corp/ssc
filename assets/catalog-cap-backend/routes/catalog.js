@@ -84,14 +84,79 @@ router.get('/filterServices', (req, res) => {
       if (svc.serviceObject === 'Business Scenario' || svc.serviceObject === 'Business Scenario module') return false;
       if (!svc.name) return false;
       const etArr = Array.isArray(svc.engagementType) ? svc.engagementType : (svc.engagementType ? [svc.engagementType] : []);
-      const etMatch = !engagementType || etArr.some(e => e.toLowerCase().includes(engagementType.toLowerCase()));
-      const bsNaming = svc.business_scenario_naming || {};
-      const bsMatch = !businessScenario || Object.keys(bsNaming).some(k => k === businessScenario) || (svc.parentServices||[]).some(p => p === businessScenario);
-      const modMatch = !moduleName || svc.parentCode === moduleName;
+      const etMatch = !engagementType || etArr.some(e => e === engagementType);
+      // BS match — check if service is in the BS via the hierarchy
+      const bsMatch = !businessScenario || (() => {
+        // Walk BS → modules → childServices
+        const bs = flatIndex[businessScenario];
+        if (!bs) return false;
+        for (const modCode of bs.childServices || []) {
+          const mod = flatIndex[modCode];
+          if (!mod) continue;
+          if ((mod.childServices || []).includes(svc.code)) return true;
+        }
+        return false;
+      })();
+      const modMatch = !moduleName || (() => {
+        const mod = flatIndex[moduleName];
+        return mod && (mod.childServices || []).includes(svc.code);
+      })();
       return etMatch && bsMatch && modMatch;
     }).slice(0, 200);
     res.json({ count: results.length, services: results });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Metadata endpoint — lightweight, no full snapshot download ────────────────
+router.get('/metadata', (req, res) => {
+  try {
+    const data = snapshot.load();
+    if (!data) return res.status(404).json({ error: 'No snapshot available' });
+    const flatIndex = JSON.parse(data.payload).flat_index || {};
+
+    const bsMap = {}, moduleMap = {}, bsToMods = {};
+    const etSet = new Set();
+
+    for (const [code, svc] of Object.entries(flatIndex)) {
+      if (svc.serviceObject === 'Business Scenario') {
+        bsMap[code] = svc.name;
+        bsToMods[code] = [];
+        for (const modCode of svc.childServices || []) {
+          const mod = flatIndex[modCode];
+          if (!mod) continue;
+          moduleMap[modCode] = mod.name;
+          bsToMods[code].push(modCode);
+        }
+      }
+      const ets = Array.isArray(svc.engagementType) ? svc.engagementType : (svc.engagementType ? [svc.engagementType] : []);
+      ets.forEach(et => etSet.add(et));
+    }
+
+    res.json({
+      lastUpdated: data.lastUpdated,
+      serviceCount: data.serviceCount,
+      bsMap,
+      moduleMap,
+      bsToMods,
+      engagementTypes: [...etSet].sort()
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Debug: get childServices of a module ─────────────────────────────────────
+router.get('/module/:code/children', (req, res) => {
+  try {
+    const data = snapshot.load();
+    if (!data) return res.status(404).json({ error: 'No snapshot' });
+    const flatIndex = JSON.parse(data.payload).flat_index || {};
+    const mod = flatIndex[req.params.code];
+    if (!mod) return res.status(404).json({ error: 'Module not found' });
+    const children = (mod.childServices || []).map(c => {
+      const svc = flatIndex[c] || {};
+      return { code: c, name: svc.name, engagementType: svc.engagementType, bsNaming: svc.business_scenario_naming };
+    });
+    res.json({ moduleCode: req.params.code, moduleName: mod.name, childCount: children.length, children });
+  } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── Get single service full object ───────────────────────────────────────────

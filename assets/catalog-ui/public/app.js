@@ -35,82 +35,22 @@ async function apiFetch(url, options = {}) {
 async function loadCatalog() {
   state.catalog.loading = true; render();
   try {
-    const data = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/getSnapshot`);
-    const payload = typeof data.payload === 'string' ? JSON.parse(data.payload) : data.payload;
-    const flatIndex = payload.flat_index || {};
+    // Load only metadata — BS list, module list, engagement types
+    // Do NOT download full snapshot to browser
+    const data = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/metadata`);
 
-    const all = Object.values(flatIndex).filter(s => s.name);
-
-    // Keep all entries for cascading lookups
-    state.catalog._allEntries = all;
-
-    // Build lookups by walking the real hierarchy:
-    // BS.childServices → module codes → module.childServices → service codes
-    state.catalog.bsMap = {};       // bsCode → bsName
-    state.catalog.moduleMap = {};   // moduleCode → moduleName
-    state.catalog.svcToBs = {};     // serviceCode → [bsCode, ...]
-    state.catalog.svcToMod = {};    // serviceCode → moduleCode
-    state.catalog.bsToMods = {};    // bsCode → [moduleCode, ...]
-
-    const byCode = {};
-    all.forEach(s => { byCode[s.code] = s; });
-
-    // bsCode → Set of deck names available in that BS
-    state.catalog.bsToDeckNames = {};
-    // modCode → Set of deck names available in that module
-    state.catalog.modToDeckNames = {};
-
-    all.filter(s => s.serviceObject === 'Business Scenario').forEach(bs => {
-      state.catalog.bsMap[bs.code] = bs.name;
-      state.catalog.bsToMods[bs.code] = [];
-      state.catalog.bsToDeckNames[bs.code] = new Set();
-
-      (bs.childServices || []).forEach(modCode => {
-        const mod = byCode[modCode];
-        if (!mod) return;
-        state.catalog.moduleMap[modCode] = mod.name;
-        state.catalog.bsToMods[bs.code].push(modCode);
-        if (!state.catalog.modToDeckNames[modCode]) state.catalog.modToDeckNames[modCode] = new Set();
-
-        (mod.childServices || []).forEach(svcCode => {
-          // map service → BS
-          if (!state.catalog.svcToBs[svcCode]) state.catalog.svcToBs[svcCode] = [];
-          if (!state.catalog.svcToBs[svcCode].includes(bs.code))
-            state.catalog.svcToBs[svcCode].push(bs.code);
-          // map service → module
-          state.catalog.svcToMod[svcCode] = modCode;
-
-          // collect deck names from business_scenario_naming
-          const svc = byCode[svcCode];
-          if (!svc) return;
-          const bsNaming = svc.business_scenario_naming || svc.businessScenarioNaming || {};
-          const deckName = bsNaming[bs.code];
-          if (deckName) {
-            state.catalog.bsToDeckNames[bs.code].add(deckName);
-            state.catalog.modToDeckNames[modCode].add(deckName);
-          }
-        });
-      });
-    });
-
-    // Leaf services only
-    state.catalog.services = all.filter(s =>
-      s.serviceObject !== 'Business Scenario' && s.serviceObject !== 'Business Scenario module'
-    );
-
-    // All unique engagement types (engagementType is an array per service)
-    state.catalog.engagementTypes = [...new Set(
-      all.flatMap(s => Array.isArray(s.engagementType) ? s.engagementType : (s.engagementType ? [s.engagementType] : []))
-    )].sort();
-
+    state.catalog.bsMap = data.bsMap || {};
+    state.catalog.moduleMap = data.moduleMap || {};
+    state.catalog.bsToMods = data.bsToMods || {};
+    state.catalog.engagementTypes = data.engagementTypes || [];
     state.catalog.lastUpdated = data.lastUpdated;
+    state.catalog.serviceCount = data.serviceCount;
+    state.catalog.services = []; // not loaded upfront
     state.filteredServices = [];
     state.catalog.hasSearched = false;
     state.catalog.error = null;
   } catch (e) {
     state.catalog.error = e.message;
-    state.catalog.services = [];
-    state.filteredServices = [];
   }
   state.catalog.loading = false; render();
 }
@@ -129,38 +69,19 @@ async function applyFilters() {
   state.catalog.loading = true; render();
 
   try {
-    // Filter client-side using pre-built hierarchy lookups
-    const { services, svcToBs = {}, svcToMod = {} } = state.catalog;
-    const q = (query || '').toLowerCase();
+    // Build query params for server-side filtering
+    const params = new URLSearchParams();
+    if (query) params.set('query', query);
+    if (engagementType) params.set('engagementType', engagementType);
+    if (businessScenario) params.set('businessScenario', businessScenario);
+    if (mod) params.set('module', mod);
 
-    state.filteredServices = services.filter(svc => {
-      // Text search
-      const textMatch = !q || (
-        (svc.name || '').toLowerCase().includes(q) ||
-        (svc.summary || '').toLowerCase().includes(q)
-      );
+    const url = query
+      ? `${CAP_BACKEND_URL}/api/catalog/searchServices?${params}`
+      : `${CAP_BACKEND_URL}/api/catalog/filterServices?${params}`;
 
-      // Engagement type — array in real data
-      const etArr = Array.isArray(svc.engagementType) ? svc.engagementType : (svc.engagementType ? [svc.engagementType] : []);
-      const etMatch = !engagementType || etArr.includes(engagementType);
-
-      // Business scenario — use pre-built svcToBs map (walked from BS.childServices)
-      const bsMatch = !businessScenario || (svcToBs[svc.code] || []).includes(businessScenario);
-
-      // Module — use pre-built svcToMod map
-      const modMatch = !mod || svcToMod[svc.code] === mod;
-
-      // Deck name — from business_scenario_naming for the selected BS
-      const deckName = state.filters.deckName;
-      let deckMatch = true;
-      if (deckName && businessScenario) {
-        const bsNaming = svc.business_scenario_naming || svc.businessScenarioNaming || {};
-        deckMatch = bsNaming[businessScenario] === deckName;
-      }
-
-      return textMatch && etMatch && bsMatch && modMatch && deckMatch;
-    }).slice(0, 200);
-
+    const data = await apiFetch(url);
+    state.filteredServices = data.services || [];
   } catch (e) {
     state.filteredServices = [];
   }
