@@ -86,7 +86,7 @@ async function fetchAllCatalogPages(token) {
   let page = 0;
   let totalPages = 1;
   do {
-    const data = await sscGet(`/${siteId}/services?facets=${encodeURIComponent(facets)}&pageSize=100&currentPage=${page}`, token);
+    const data = await sscGet(`/${siteId}/services?facets=${encodeURIComponent(facets)}&pageSize=100&currentPage=${page}&fields=FULL`, token);
     results.push(...(data.services || []));
     const p = data.pagination || {};
     totalPages = p.totalPages || 1;
@@ -205,8 +205,11 @@ function _parseStandardSheet(rows) {
   // Detect "business module" column from header row
   const header = rows[0] || [];
   let bmCol = null;
+  let layerCol = null; // "success plan layer" column — contains "Foundational", "Advanced" etc.
   for (let i = 0; i < header.length; i++) {
-    if (header[i] && /business.?module/i.test(String(header[i]))) { bmCol = i; break; }
+    const h = header[i] ? String(header[i]).toLowerCase().trim() : '';
+    if (/business.?module/i.test(h)) bmCol = i;
+    if (/success.?plan.?layer|engagement.?layer|plan.?layer|sp.?layer/i.test(h)) layerCol = i;
   }
 
   const _cell = (row, idx) => (idx != null && row && row[idx] != null) ? String(row[idx]).trim() : '';
@@ -217,10 +220,17 @@ function _parseStandardSheet(rows) {
     const col1 = _cell(row, 1);
     const col2 = _cell(row, 2);
     const moduleRaw = _cell(row, bmCol);
+    const layerVal = _cell(row, layerCol);
 
-    // Carry-forward deck name
+    // Col 0 carry-forward — used for matching (byName, byCode)
     if (col0 && !SKIP_VALS.has(col0.toLowerCase())) currentDeck = col0;
     if (!currentDeck) continue;
+
+    // Layer name — what gets stored in business_scenario_naming (e.g. "Foundational", "Advanced")
+    // Use col H "success plan layer" if present, otherwise fall back to col 0
+    const storeDeck = (layerCol !== null && layerVal && !SKIP_VALS.has(layerVal.toLowerCase()))
+      ? layerVal
+      : currentDeck;
 
     // CRM ID mapping — may contain multiple IDs per cell
     const crmIds = [];
@@ -228,9 +238,9 @@ function _parseStandardSheet(rows) {
       col1.split(/[,/;\s]+/).forEach(id => {
         id = id.trim();
         if (id && /\d{6,}/.test(id)) {
-          byCode[id] = currentDeck;
+          byCode[id] = storeDeck;
           const padded = id.padStart(18, '0');
-          if (padded !== id) byCode[padded] = currentDeck;
+          if (padded !== id) byCode[padded] = storeDeck;
           crmIds.push(id);
         }
       });
@@ -238,17 +248,17 @@ function _parseStandardSheet(rows) {
 
     // Catalog name mapping
     const catName = col2 && !SKIP_VALS.has(col2.toLowerCase()) ? col2 : '';
-    if (catName) byName[_clean(catName)] = currentDeck;
+    if (catName) byName[_clean(catName)] = storeDeck;
 
     // Deck name self-mapping
-    byName[_clean(currentDeck)] = currentDeck;
+    byName[_clean(currentDeck)] = storeDeck;
 
     // Module assignment record (when business module column exists)
     if (moduleRaw && !SKIP_VALS.has(moduleRaw.toLowerCase())) {
       moduleAssignments.push({
         crmIds,
         catalogName: catName,
-        deckName: currentDeck,
+        deckName: storeDeck,
         moduleRaw,
         rawRow: row.map(c => c != null ? String(c) : ''),
         sheetHeaders: header.map(c => c != null ? String(c) : ''),

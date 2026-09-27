@@ -67,7 +67,7 @@ router.get('/searchServices', (req, res) => {
       const modMatch = !moduleName || svc.parentCode === moduleName;
       return textMatch && etMatch && bsMatch && modMatch;
     }).slice(0, 100);
-    res.json({ count: results.length, services: results.map(s => ({ code: s.code, name: s.name, shortDescription: s.shortDescription||'', engagementType: s.engagementType||'', businessScenarioNaming: s.business_scenario_naming||{}, parentCode: s.parentCode||'' })) });
+    res.json({ count: results.length, services: results });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -90,7 +90,19 @@ router.get('/filterServices', (req, res) => {
       const modMatch = !moduleName || svc.parentCode === moduleName;
       return etMatch && bsMatch && modMatch;
     }).slice(0, 200);
-    res.json({ count: results.length, services: results.map(s => ({ code: s.code, name: s.name, shortDescription: s.shortDescription||'', engagementType: s.engagementType||'', businessScenarioNaming: s.business_scenario_naming||{}, parentCode: s.parentCode||'' })) });
+    res.json({ count: results.length, services: results });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Get single service full object ───────────────────────────────────────────
+router.get('/service/:code', (req, res) => {
+  try {
+    const data = snapshot.load();
+    if (!data) return res.status(404).json({ error: 'No snapshot available' });
+    const flatIndex = JSON.parse(data.payload).flat_index || {};
+    const svc = flatIndex[req.params.code];
+    if (!svc) return res.status(404).json({ error: `Service not found: ${req.params.code}` });
+    res.json(svc);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
