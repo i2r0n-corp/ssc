@@ -1,36 +1,25 @@
 name: Sync Excel Enrichment
+# ⚠️ This workflow is DISABLED — the sync script reads from a local
+# OneDrive-synced folder on the user's machine and MUST run locally
+# via Windows Task Scheduler, not on GitHub Actions runners.
+# Schedule it locally using the instructions in:
+# assets/catalog-cap-backend/scripts/MANIFEST-SYNC-SETUP.md
 
 on:
-  schedule:
-    - cron: '0 * * * *'  # every hour
   workflow_dispatch:
     inputs:
-      force:
-        description: 'Force upload all files (ignore modified date)'
-        required: false
-        default: 'false'
+      confirm:
+        description: 'Type SKIP to acknowledge this runs locally only'
+        required: true
+        default: 'SKIP'
 
 jobs:
-  sync:
+  skip:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: pip install msal requests
-
-      - name: Run Excel enrichment sync
-        env:
-          CAP_BACKEND_URL: https://ssc-catalog-cap-backend.cfapps.us10-001.hana.ondemand.com
-          SP_TENANT_ID: ${{ secrets.SP_TENANT_ID }}
-          SP_CLIENT_ID: ${{ secrets.SP_CLIENT_ID }}
-          SP_CLIENT_SECRET: ${{ secrets.SP_CLIENT_SECRET }}
-          CHECK_HOURS: 2
-          FORCE: ${{ github.event.inputs.force || 'false' }}
-        run: python assets/catalog-cap-backend/scripts/sync_manifest_to_sharepoint.py
+      - name: Notice
+        run: |
+          echo "⚠️  This sync reads from a local OneDrive folder on your machine."
+          echo "⚠️  It cannot run on GitHub Actions."
+          echo "✅  Schedule it via Windows Task Scheduler instead."
+          echo "✅  See: assets/catalog-cap-backend/scripts/MANIFEST-SYNC-SETUP.md"
