@@ -81,9 +81,10 @@ function buildManifestOnStartup() {
     if (!data) return;
     const payload = JSON.parse(data.payload);
     const flatIndex = payload.flat_index || {};
-    const entries = [];
+    const entriesMap = new Map(); // deduplicate by bsCode
     for (const [code, svc] of Object.entries(flatIndex)) {
       if (svc.serviceObject !== 'Business Scenario') continue;
+      if (entriesMap.has(code)) continue; // already processed this BS
       const text = svc.serviceTeaserText || svc.serviceMainContentText || svc.description || '';
       const idx = text.toLowerCase().indexOf('entitlements service list');
       if (idx === -1) continue;
@@ -92,8 +93,9 @@ function buildManifestOnStartup() {
       if (!match) continue;
       const excelUrl = match[1].replace(/&amp;/g, '&');
       const fileName = decodeURIComponent(excelUrl.split('/').find(p => p.includes('.xlsx')) || '').split('?')[0];
-      entries.push({ bsCode: code, bsName: svc.name, excelUrl, fileName });
+      entriesMap.set(code, { bsCode: code, bsName: svc.name, excelUrl, fileName });
     }
+    const entries = Array.from(entriesMap.values());
     const MANIFEST_FILE = process.env.EXCEL_MANIFEST_PATH || path.join(__dirname, 'data', 'excel-manifest.json');
     fs.mkdirSync(path.dirname(MANIFEST_FILE), { recursive: true });
     fs.writeFileSync(MANIFEST_FILE, JSON.stringify({ updatedAt: new Date().toISOString(), count: entries.length, entries }, null, 2));

@@ -329,14 +329,8 @@ function _resolveModuleCode(moduleRaw, flatIndex, bsCode) {
     if (normed === nFull || normed === normLabel) return [code, 'norm exact'];
     if (normed.includes(normLabel) || normLabel.includes(normed)) return [code, 'norm substring'];
   }
-  // 5. Fuzzy (threshold 0.60)
-  let bestCode = null, bestRatio = 0, bestLabel = '';
-  for (const [code, { label, normLabel }] of Object.entries(candidates)) {
-    const ratio = _similarity(normed, normLabel);
-    if (ratio > bestRatio) { bestRatio = ratio; bestCode = code; bestLabel = label; }
-  }
-  if (bestCode && bestRatio >= 0.60) return [bestCode, `fuzzy ${Math.round(bestRatio*100)}% → "${bestLabel}"`];
-  return [null, `no match (best fuzzy ${Math.round(bestRatio*100)}%)`];
+  // NOTE: fuzzy matching omitted — too slow for CF health check
+  return [null, 'no match'];
 }
 
 // ── Service code resolution ───────────────────────────────────────────────────
@@ -410,16 +404,8 @@ function _resolveServiceCode(assignment, flatIndex) {
       }
     }
 
-    // 6b. Fuzzy (threshold 0.77)
-    let bestCode = null, bestRatio = 0, bestField = '';
-    for (const [term, field] of searchTerms) {
-      for (const [code, normedName] of Object.entries(normedMap)) {
-        if (!normedName || _isBlockedMatch(term, normedName)) continue;
-        const ratio = _similarity(term, normedName);
-        if (ratio > bestRatio) { bestRatio = ratio; bestCode = code; bestField = field; }
-      }
-    }
-    if (bestCode && bestRatio >= 0.77) return [bestCode, `${bestField} fuzzy ${Math.round(bestRatio*100)}%`];
+    // NOTE: fuzzy matching intentionally omitted — too slow for CF health check timeout
+    // Fuzzy matching is handled by the local Python script (JWD agent) which has no timeout
   }
 
   return [null, ''];

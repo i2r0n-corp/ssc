@@ -154,9 +154,8 @@ def main():
                 timeout=60
             )
             enrich_resp.raise_for_status()
-            result = enrich_resp.json()
 
-            msg = f"✅ {bs_code}: accepted for enrichment"
+            msg = f"✅ {bs_code}: accepted for enrichment (background)"
             log_entry(log, msg)
             uploaded += 1
 
