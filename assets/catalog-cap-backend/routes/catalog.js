@@ -175,6 +175,55 @@ router.put('/excel/upload', (req, res) => {
   }
 });
 
+// ── Serial enrichment queue — processes ONE BS at a time, no race conditions ──
+const enrichQueue = [];
+let enrichRunning = false;
+
+async function processEnrichQueue() {
+  if (enrichRunning) return;
+  enrichRunning = true;
+  while (enrichQueue.length > 0) {
+    const { bsCode, buf } = enrichQueue.shift();
+    try {
+      console.log(`[enrich-queue] Processing ${bsCode} (${enrichQueue.length} remaining)`);
+      const cached = snapshot.load();
+      if (!cached) { console.warn(`[enrich-queue] No snapshot for ${bsCode}`); continue; }
+      const syncModule = require('./sync');
+      const parsed = JSON.parse(cached.payload);
+      const flatIndex = parsed.flat_index || {};
+      const injectionLog = {};
+      const enriched = await syncModule.applyExcelEnrichment(flatIndex, bsCode, buf, injectionLog);
+      const businessScenarios = syncModule.buildHierarchy(flatIndex);
+      parsed.flat_index = flatIndex;
+      parsed.business_scenarios = businessScenarios;
+      snapshot.save({ ...cached, payload: JSON.stringify(parsed), lastUpdated: new Date().toISOString() });
+
+      // Save injection log
+      const logPath = path.join(__dirname, '..', 'data', 'injection-log.json');
+      let existingLog = {};
+      try { existingLog = JSON.parse(fs.readFileSync(logPath, 'utf8')); } catch(e) {}
+      existingLog.generatedAt = new Date().toISOString();
+      existingLog.details = existingLog.details || {};
+      existingLog.details[bsCode] = injectionLog[bsCode] || {};
+      fs.mkdirSync(path.dirname(logPath), { recursive: true });
+      fs.writeFileSync(logPath, JSON.stringify(existingLog, null, 2));
+      console.log(`[enrich-queue] ✅ ${bsCode}: ${enriched} services enriched`);
+    } catch(e) {
+      console.error(`[enrich-queue] ❌ ${bsCode}: ${e.message}`);
+      // Save error to log
+      try {
+        const logPath = path.join(__dirname, '..', 'data', 'injection-log.json');
+        let existingLog = {};
+        try { existingLog = JSON.parse(fs.readFileSync(logPath, 'utf8')); } catch(e2) {}
+        existingLog.details = existingLog.details || {};
+        existingLog.details[bsCode] = { error: e.message, timestamp: new Date().toISOString() };
+        fs.writeFileSync(logPath, JSON.stringify(existingLog, null, 2));
+      } catch(e2) {}
+    }
+  }
+  enrichRunning = false;
+}
+
 // ── Excel File Store ──────────────────────────────────────────────────────────
 router.get('/excel', (req, res) => {
   try {
@@ -192,44 +241,12 @@ router.put('/excel/:bsCode', requirePublishToken, (req, res) => {
   // Store file
   fs.writeFileSync(path.join(EXCEL_DIR, `${bsCode}.xlsx`), buf);
 
-  // Respond immediately — enrichment runs in background
-  res.json({ status: 'stored', bsCode, sizeBytes: buf.length, enrichedServices: 'pending' });
+  // Add to serial queue — one BS at a time, no race conditions
+  enrichQueue.push({ bsCode, buf });
+  res.json({ status: 'queued', bsCode, sizeBytes: buf.length, queueLength: enrichQueue.length });
 
-  // Background enrichment — never blocks health check
-  setImmediate(async () => {
-    try {
-      const cached = snapshot.load();
-      if (!cached) return;
-      const syncModule = require('./sync');
-      const flatIndex = JSON.parse(cached.payload).flat_index || {};
-      const injectionLog = {};
-      const enriched = await syncModule.applyExcelEnrichment(flatIndex, bsCode, buf, injectionLog);
-      const businessScenarios = syncModule.buildHierarchy(flatIndex);
-      snapshot.save({ ...cached, payload: JSON.stringify({ ...JSON.parse(cached.payload), flat_index: flatIndex, business_scenarios: businessScenarios }), lastUpdated: new Date().toISOString() });
-
-      // Save/merge injection log
-      const logPath = require('path').join(__dirname, '..', 'data', 'injection-log.json');
-      let existingLog = {};
-      try { existingLog = JSON.parse(fs.readFileSync(logPath, 'utf8')); } catch(e) {}
-      existingLog.generatedAt = new Date().toISOString();
-      existingLog.details = existingLog.details || {};
-      existingLog.details[bsCode] = injectionLog[bsCode] || {};
-      fs.mkdirSync(require('path').dirname(logPath), { recursive: true });
-      fs.writeFileSync(logPath, JSON.stringify(existingLog, null, 2));
-      console.log(`[M1.achieved]: excel-enrich published — bs_processed=1 enriched_services=${enriched}`);
-    } catch(e) {
-      console.error(`[excel-enrich background] ${bsCode}: ${e.message}`);
-      // Save partial log even on failure so we can diagnose
-      try {
-        const logPath = require('path').join(__dirname, '..', 'data', 'injection-log.json');
-        let existingLog = {};
-        try { existingLog = JSON.parse(fs.readFileSync(logPath, 'utf8')); } catch(e2) {}
-        existingLog.details = existingLog.details || {};
-        existingLog.details[bsCode] = { error: e.message, timestamp: new Date().toISOString() };
-        fs.writeFileSync(logPath, JSON.stringify(existingLog, null, 2));
-      } catch(e2) { /* ignore log write failure */ }
-    }
-  });
+  // Start queue processor if not already running
+  setImmediate(() => processEnrichQueue());
 });
 
 router.get('/excel/:bsCode', (req, res) => {
