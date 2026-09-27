@@ -1,8 +1,8 @@
 ---
 applications:
   - name: ssc-catalog-cap-backend
-    memory: 512M
-    disk_quota: 512M
+    memory: 1024M
+    disk_quota: 1024M
     instances: 1
     buildpacks:
       - nodejs_buildpack

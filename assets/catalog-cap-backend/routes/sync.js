@@ -86,7 +86,7 @@ async function fetchAllCatalogPages(token) {
   let page = 0;
   let totalPages = 1;
   do {
-    const data = await sscGet(`/${siteId}/services?facets=${encodeURIComponent(facets)}&pageSize=100&currentPage=${page}&fields=FULL`, token);
+    const data = await sscGet(`/${siteId}/services?facets=${encodeURIComponent(facets)}&pageSize=100&currentPage=${page}`, token);
     results.push(...(data.services || []));
     const p = data.pagination || {};
     totalPages = p.totalPages || 1;
