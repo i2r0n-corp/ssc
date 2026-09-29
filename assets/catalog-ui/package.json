@@ -1,6 +1,6 @@
 {
   "name": "catalog-ui",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "SSC Catalog Intelligence UI — React + SAP UI5 Web Components visual interface",
   "private": true,
   "scripts": {
