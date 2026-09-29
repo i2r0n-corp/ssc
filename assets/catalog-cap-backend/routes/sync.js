@@ -763,6 +763,54 @@ router.get('/injection-log', (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Fetch all services with fields=FULL (for Excel export) ───────────────────
+async function fetchAllServicesFull() {
+  const token = await fetchOAuthToken();
+  const siteId = process.env.SSC_SITE_ID || 'servicescatalog';
+  const ENGAGEMENT_TYPES = [
+    'Max Success Plan', 'Advanced Success Plan', 'Enterprise Support',
+    'Embedded Launch Activities', 'Cloud Prepackaged Services'
+  ];
+  const facets = ENGAGEMENT_TYPES.map(et => `engagementType:${et}`).join(',');
+
+  // Step 1: get all service codes from paginated endpoint
+  const codes = [];
+  let page = 0, totalPages = 1;
+  do {
+    const data = await sscGet(`/${siteId}/services?facets=${encodeURIComponent(facets)}&pageSize=100&currentPage=${page}&fields=services(code,serviceObject),pagination`, token);
+    for (const svc of data.services || []) {
+      // Only leaf services (not BS or modules)
+      if (svc.serviceObject !== 'Business Scenario' && svc.serviceObject !== 'Business Scenario module') {
+        codes.push(svc.code);
+      }
+    }
+    totalPages = (data.pagination || {}).totalPages || 1;
+    console.log(`[export-full] Page ${page + 1}/${totalPages} — ${codes.length} service codes collected`);
+    page++;
+    await new Promise(r => setTimeout(r, 100));
+  } while (page < totalPages);
+
+  console.log(`[export-full] Fetching ${codes.length} services individually with fields=FULL...`);
+
+  // Step 2: fetch each service individually in batches of 10
+  const results = [];
+  const BATCH = 10;
+  for (let i = 0; i < codes.length; i += BATCH) {
+    const batch = codes.slice(i, i + BATCH);
+    const fetched = await Promise.all(batch.map(async code => {
+      try { return await sscGet(`/${siteId}/scservices/${code}?fields=FULL`, token); }
+      catch(e) { console.warn(`[export-full] Failed to fetch ${code}: ${e.message}`); return null; }
+    }));
+    results.push(...fetched.filter(Boolean));
+    if (i % 100 === 0) console.log(`[export-full] Progress: ${results.length}/${codes.length}`);
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  console.log(`[export-full] Done — ${results.length} services with full fields`);
+  return results;
+}
+
 module.exports = router;
 module.exports.applyExcelEnrichment = applyExcelEnrichment;
 module.exports.buildHierarchy = buildHierarchy;
+module.exports.fetchAllServicesFull = fetchAllServicesFull;

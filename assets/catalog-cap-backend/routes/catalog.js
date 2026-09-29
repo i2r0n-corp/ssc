@@ -159,6 +159,20 @@ router.get('/module/:code/children', (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Export full services list with all fields (for Excel export) ─────────────
+router.get('/export-full', async (req, res) => {
+  try {
+    const syncModule = require('./sync');
+    console.log('[export-full] Fetching all services with fields=FULL from SSC API...');
+    const services = await syncModule.fetchAllServicesFull();
+    console.log(`[export-full] Fetched ${services.length} services`);
+    res.json({ count: services.length, services });
+  } catch(e) {
+    console.error(`[export-full] Error: ${e.message}`);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Get single service full object ───────────────────────────────────────────
 router.get('/service/:code', (req, res) => {
   try {
