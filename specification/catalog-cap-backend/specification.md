@@ -38,7 +38,182 @@ serviceTeaserText,description,keyBenefits,deliveryApproach,businessNeeds,modifie
 
 ---
 
-## Data Model
+## ⚠️ PENDING MIGRATION — PostgreSQL Persistent Storage
+
+**Current state (BROKEN):** All catalog data is stored in `data/snapshot.json` on the CF container ephemeral filesystem. This file is lost on every app restart, causing:
+- Full rebuild from scratch on every restart (~3-5 min downtime)
+- OOM crashes during enrichment (17.6MB JSON in memory)
+- Excel files lost on restart (re-upload required every time)
+- `classificationFeatures` and `supercategories` missing from snapshot (paginated API returns incomplete data)
+
+**Required migration: PostgreSQL (`postgresql-db` service, trial plan)**
+
+### PostgreSQL Schema
+
+```sql
+-- Sync metadata
+CREATE TABLE catalog_sync (
+  id              SERIAL PRIMARY KEY,
+  last_full_build TIMESTAMPTZ,
+  last_updated    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  service_count   INTEGER,
+  status          TEXT  -- 'completed' | 'running' | 'failed'
+);
+
+-- All service objects: Business Scenarios, Modules, and Leaf Services
+CREATE TABLE catalog_services (
+  code                TEXT PRIMARY KEY,
+  service_number      TEXT,
+  name                TEXT NOT NULL,
+  service_object      TEXT NOT NULL,  -- 'Business Scenario' | 'Business Scenario module' | leaf
+  short_description   TEXT,
+  summary             TEXT,           -- HTML
+  description         TEXT,           -- HTML
+  service_teaser_text TEXT,           -- HTML
+  business_needs      TEXT,           -- HTML
+  key_benefits        TEXT,           -- HTML
+  delivery_approach   TEXT,           -- HTML
+  engagement_type     TEXT,           -- top-level ET string from API
+  parent_code         TEXT,
+  modified_time       TEXT,
+  approval_status     TEXT,
+  booking_method      JSONB,
+  contacts            JSONB,
+  sc_keywords         JSONB,
+  raw_data            JSONB NOT NULL  -- full API response, future-proof
+);
+CREATE INDEX idx_services_service_object   ON catalog_services(service_object);
+CREATE INDEX idx_services_engagement_type  ON catalog_services(engagement_type);
+CREATE INDEX idx_services_parent_code      ON catalog_services(parent_code);
+
+-- BS→Module and Module→Service relationships
+-- source distinguishes API-sourced vs Excel-injected relationships
+CREATE TABLE catalog_hierarchy (
+  parent_code  TEXT NOT NULL REFERENCES catalog_services(code),
+  child_code   TEXT NOT NULL REFERENCES catalog_services(code),
+  position     INTEGER,
+  source       TEXT NOT NULL DEFAULT 'api',  -- 'api' | 'excel_injection'
+  bs_code      TEXT REFERENCES catalog_services(code),  -- BS that caused Excel injection
+  PRIMARY KEY (parent_code, child_code)
+);
+CREATE INDEX idx_hierarchy_parent ON catalog_hierarchy(parent_code);
+CREATE INDEX idx_hierarchy_child  ON catalog_hierarchy(child_code);
+
+-- classificationFeatures array — one row per service × key × value
+-- Keys: engagementType, sapActivateProjectPhase, effortEstimateDays, crmBaseCategory, delivery
+CREATE TABLE catalog_classification (
+  service_code  TEXT NOT NULL REFERENCES catalog_services(code),
+  feature_key   TEXT NOT NULL,
+  feature_value TEXT NOT NULL,
+  PRIMARY KEY (service_code, feature_key, feature_value)
+);
+CREATE INDEX idx_classification_key_val ON catalog_classification(feature_key, feature_value);
+CREATE INDEX idx_classification_service ON catalog_classification(service_code);
+
+-- supercategories array — one row per service × category
+CREATE TABLE catalog_supercategories (
+  service_code         TEXT NOT NULL REFERENCES catalog_services(code),
+  category_code        TEXT NOT NULL,
+  category_name        TEXT NOT NULL,
+  parent_category_name TEXT,
+  PRIMARY KEY (service_code, category_code)
+);
+CREATE INDEX idx_supercat_name    ON catalog_supercategories(category_name);
+CREATE INDEX idx_supercat_service ON catalog_supercategories(service_code);
+
+-- Excel enrichment results — deck name per service per BS
+-- deck_name = col 0 carry-forward from Excel (e.g. "Going live support")
+-- engagement_layer = col H from Excel ("Foundational" | "Advanced" | "Max Success Plan")
+-- match_method = how service was matched ('code' | 'svcNum' | 'paddedCode' | 'catalogName')
+CREATE TABLE catalog_bs_naming (
+  service_code     TEXT NOT NULL REFERENCES catalog_services(code),
+  bs_code          TEXT NOT NULL REFERENCES catalog_services(code),
+  deck_name        TEXT NOT NULL,
+  engagement_layer TEXT,
+  match_method     TEXT,
+  PRIMARY KEY (service_code, bs_code)
+);
+CREATE INDEX idx_bs_naming_bs      ON catalog_bs_naming(bs_code);
+CREATE INDEX idx_bs_naming_service ON catalog_bs_naming(service_code);
+
+-- Excel files stored in DB — replaces ephemeral filesystem
+-- file_data = raw .xlsx binary (BYTEA)
+CREATE TABLE catalog_excel_files (
+  bs_code         TEXT PRIMARY KEY REFERENCES catalog_services(code),
+  file_name       TEXT,
+  file_data       BYTEA NOT NULL,
+  file_size       INTEGER,
+  uploaded_at     TIMESTAMPTZ DEFAULT NOW(),
+  processed_at    TIMESTAMPTZ,
+  matched_count   INTEGER,
+  unmatched_count INTEGER,
+  injected_count  INTEGER
+);
+
+-- Injection log per BS enrichment run
+CREATE TABLE catalog_injection_log (
+  bs_code        TEXT PRIMARY KEY REFERENCES catalog_services(code),
+  generated_at   TIMESTAMPTZ DEFAULT NOW(),
+  matched        INTEGER,
+  unmatched      INTEGER,
+  injected       INTEGER,
+  already_linked INTEGER,
+  unresolved_mod INTEGER,
+  unresolved_svc INTEGER,
+  log_rows       JSONB  -- full row-level detail (too granular for relational)
+);
+```
+
+### Dependencies Summary
+
+```
+catalog_hierarchy.parent_code      → catalog_services.code
+catalog_hierarchy.child_code       → catalog_services.code
+catalog_hierarchy.bs_code          → catalog_services.code
+catalog_classification.service_code → catalog_services.code
+catalog_supercategories.service_code → catalog_services.code
+catalog_bs_naming.service_code     → catalog_services.code
+catalog_bs_naming.bs_code          → catalog_services.code
+catalog_excel_files.bs_code        → catalog_services.code
+catalog_injection_log.bs_code      → catalog_services.code
+```
+
+### Full Build Flow (post-migration)
+
+```
+1. SSC API paginated fetch → basic service list (code, name, serviceObject, hierarchy)
+2. For each service → fetch ?fields=FULL individually (batches of 20, ~5 min total)
+   → stores classificationFeatures → catalog_classification
+   → stores supercategories → catalog_supercategories
+   → stores all text fields → catalog_services
+3. Hierarchy → catalog_hierarchy (source='api')
+4. Excel enrichment → catalog_bs_naming + catalog_hierarchy (source='excel_injection')
+5. Update catalog_sync metadata
+```
+
+### On Restart (post-migration)
+
+```
+1. Connect to PostgreSQL
+2. Check catalog_sync.service_count — if > 100, skip rebuild entirely
+3. Serve all queries directly from PostgreSQL — no JSON parsing, no memory issues
+```
+
+### Implementation Steps (TODO)
+
+- [ ] Create PostgreSQL service instance: `cf create-service postgresql-db trial ssc-catalog-db`
+- [ ] Bind to app: `cf bind-service ssc-catalog-cap-backend ssc-catalog-db`
+- [ ] Add `pg` npm dependency
+- [ ] Implement `store/db.js` — connection pool, schema init on first connect
+- [ ] Rewrite `store/snapshot.js` to use PostgreSQL instead of file
+- [ ] Update `routes/catalog.js` — all filters run as SQL queries
+- [ ] Update `routes/sync.js` — full build writes to PostgreSQL, reads Excel from `catalog_excel_files`
+- [ ] Update `assets/catalog-cap-backend/manifest.yml` — remove `EXCEL_STORE_PATH`, add DB binding
+- [ ] Update Python sync script — `appStartTime` check still works, no other changes needed
+
+---
+
+## Data Model (Legacy — to be replaced by PostgreSQL schema above)
 
 - [ ] Define `db/schema.cds`:
   - Entity `CatalogSnapshot`:
