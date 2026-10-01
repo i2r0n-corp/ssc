@@ -39,23 +39,30 @@ app.get('/health', (req, res) => {
 // If snapshot is missing (e.g. after CF restart), trigger full sync + manifest build automatically.
 async function startupSync() {
   const snapshot = require('./store/snapshot');
-  const existing = snapshot.load();
+
+  // Try to load from PostgreSQL first
+  const existing = await snapshot.loadAsync();
   if (existing && existing.serviceCount > 100) {
-    console.log(`[startup] Snapshot already available (${existing.serviceCount} services) — skipping auto-sync.`);
+    console.log(`[startup] Snapshot available (${existing.serviceCount} services) — skipping auto-sync.`);
+    // Restore Excel files from PostgreSQL to filesystem
+    await _restoreExcelFiles();
     return;
   }
+
   if (!process.env.SSC_AUTH_URL || !process.env.SSC_CLIENT_ID || !process.env.SSC_CLIENT_SECRET) {
     console.warn('[startup] SSC credentials not configured — skipping auto-sync.');
     return;
   }
-  console.log(`[startup] Snapshot missing or incomplete (serviceCount=${existing ? existing.serviceCount : 0}) — triggering full sync automatically...`);
+  console.log(`[startup] Snapshot missing or incomplete — triggering full sync automatically...`);
   try {
     const http = require('http');
     const port = process.env.PORT || 4004;
     // Small delay to ensure server is fully listening
     await new Promise(r => setTimeout(r, 3000));
+    const syncHeaders = { 'Content-Type': 'application/json', 'Content-Length': 0 };
+    if (process.env.CAP_PUBLISH_TOKEN) syncHeaders['Authorization'] = `Bearer ${process.env.CAP_PUBLISH_TOKEN}`;
     const req = http.request({ hostname: 'localhost', port, path: '/api/catalog/sync/full', method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': 0 }
+      headers: syncHeaders
     }, res => {
       let d = '';
       res.on('data', c => d += c);
@@ -104,6 +111,23 @@ function buildManifestOnStartup() {
     console.log(`[startup] Excel manifest built — ${entries.length} Business Scenarios.`);
   } catch(e) {
     console.error('[startup] Manifest build error:', e.message);
+  }
+}
+
+async function _restoreExcelFiles() {
+  try {
+    const db = require('./store/db');
+    db.getPool();
+    const res = await db.query(`SELECT bs_code, file_data, file_name FROM catalog_excel_files`);
+    if (!res.rows.length) return;
+    const EXCEL_DIR = process.env.EXCEL_STORE_PATH || path.join(__dirname, 'data', 'excels');
+    fs.mkdirSync(EXCEL_DIR, { recursive: true });
+    for (const row of res.rows) {
+      fs.writeFileSync(path.join(EXCEL_DIR, `${row.bs_code}.xlsx`), row.file_data);
+    }
+    console.log(`[startup] Restored ${res.rows.length} Excel files from PostgreSQL.`);
+  } catch(e) {
+    if (!e.message.includes('No PostgreSQL')) console.warn('[startup] Excel restore failed:', e.message);
   }
 }
 

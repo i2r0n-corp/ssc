@@ -573,16 +573,162 @@ function buildHierarchy(flatIndex) {
   return hierarchy;
 }
 
-function publishSnapshot(flatIndex, lastFullBuild) {
-  const businessScenarios = buildHierarchy(flatIndex);
+// ── Write flat_index to PostgreSQL ───────────────────────────────────────────
+async function _writeToDb(flatIndex, lastFullBuild) {
+  const db = require('../store/db');
+  await db.initSchema();
+
   const serviceCount = Object.keys(flatIndex).length;
+  console.log(`[db] Writing ${serviceCount} services to PostgreSQL...`);
+
+  await db.transaction(async (client) => {
+    // Clear existing data
+    await client.query('DELETE FROM catalog_injection_log');
+    await client.query('DELETE FROM catalog_bs_naming');
+    await client.query('DELETE FROM catalog_supercategories');
+    await client.query('DELETE FROM catalog_classification');
+    await client.query('DELETE FROM catalog_hierarchy');
+    await client.query('DELETE FROM catalog_services');
+    await client.query('DELETE FROM catalog_sync');
+
+    // Insert all services
+    for (const [code, svc] of Object.entries(flatIndex)) {
+      const et = Array.isArray(svc.engagementType)
+        ? svc.engagementType[0]
+        : (svc.engagementType || null);
+
+      await client.query(`
+        INSERT INTO catalog_services
+          (code, service_number, name, service_object, short_description, summary,
+           description, service_teaser_text, business_needs, key_benefits,
+           delivery_approach, engagement_type, parent_code, modified_time,
+           approval_status, booking_method, contacts, sc_keywords, raw_data)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+        ON CONFLICT (code) DO UPDATE SET
+          name=EXCLUDED.name, service_object=EXCLUDED.service_object,
+          short_description=EXCLUDED.short_description, summary=EXCLUDED.summary,
+          description=EXCLUDED.description, service_teaser_text=EXCLUDED.service_teaser_text,
+          business_needs=EXCLUDED.business_needs, key_benefits=EXCLUDED.key_benefits,
+          delivery_approach=EXCLUDED.delivery_approach, engagement_type=EXCLUDED.engagement_type,
+          parent_code=EXCLUDED.parent_code, modified_time=EXCLUDED.modified_time,
+          raw_data=EXCLUDED.raw_data
+      `, [
+        code,
+        svc.serviceNumber || svc.number || null,
+        svc.name || '',
+        svc.serviceObject || 'Service',
+        svc.shortDescription || null,
+        svc.summary || null,
+        svc.description || null,
+        svc.serviceTeaserText || svc.teaserText || null,
+        svc.businessNeeds || null,
+        svc.keyBenefits || null,
+        svc.deliveryApproach || null,
+        et,
+        svc.parentCode || null,
+        svc.modifiedTime || null,
+        svc.approvalStatus || null,
+        svc.bookingMethod ? JSON.stringify(svc.bookingMethod) : null,
+        svc.contacts ? JSON.stringify(svc.contacts) : null,
+        svc.scKeywords ? JSON.stringify(svc.scKeywords) : null,
+        JSON.stringify(svc)
+      ]);
+
+      // Hierarchy rows
+      let pos = 0;
+      for (const childCode of svc.childServices || []) {
+        const source = (svc._injectedChildren || new Set()).has(childCode) ? 'excel_injection' : 'api';
+        await client.query(`
+          INSERT INTO catalog_hierarchy (parent_code, child_code, position, source)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (parent_code, child_code) DO NOTHING
+        `, [code, childCode, pos++, source]);
+      }
+
+      // classificationFeatures
+      const cf = svc.classificationFeatures;
+      if (Array.isArray(cf)) {
+        for (const item of cf) {
+          if (!item || !item.key) continue;
+          const vals = Array.isArray(item.value) ? item.value : [item.value];
+          for (const val of vals) {
+            if (!val) continue;
+            await client.query(`
+              INSERT INTO catalog_classification (service_code, feature_key, feature_value)
+              VALUES ($1, $2, $3)
+              ON CONFLICT DO NOTHING
+            `, [code, item.key, String(val)]);
+          }
+        }
+      }
+
+      // supercategories
+      const cats = svc.supercategories;
+      if (Array.isArray(cats)) {
+        for (const cat of cats) {
+          if (!cat || !cat.code) continue;
+          await client.query(`
+            INSERT INTO catalog_supercategories (service_code, category_code, category_name, parent_category_name)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT DO NOTHING
+          `, [code, cat.code, cat.name || '', cat.parentCategoryName || null]);
+        }
+      }
+
+      // business_scenario_naming (from Excel enrichment)
+      const bsNaming = svc.business_scenario_naming || {};
+      for (const [bsCode, deckName] of Object.entries(bsNaming)) {
+        if (!deckName) continue;
+        await client.query(`
+          INSERT INTO catalog_bs_naming (service_code, bs_code, deck_name)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (service_code, bs_code) DO UPDATE SET deck_name=EXCLUDED.deck_name
+        `, [code, bsCode, deckName]);
+      }
+    }
+
+    // catalog_sync metadata
+    await client.query(`
+      INSERT INTO catalog_sync (last_full_build, last_updated, service_count, status)
+      VALUES ($1, NOW(), $2, 'completed')
+    `, [lastFullBuild || new Date().toISOString(), serviceCount]);
+  });
+
+  console.log(`[db] ✅ Written ${serviceCount} services to PostgreSQL`);
+}
+
+async function publishSnapshot(flatIndex, lastFullBuild) {
+  const serviceCount = Object.keys(flatIndex).length;
+  if (serviceCount < 100) {
+    console.error(`[publishSnapshot] Refusing to save corrupt snapshot — only ${serviceCount} services. Aborting.`);
+    return { serviceCount: 0, businessScenarioCount: 0 };
+  }
+  const businessScenarios = buildHierarchy(flatIndex);
+  const now = new Date().toISOString();
+
+  // Always write to file (fallback + compatibility)
   const data = {
-    lastFullBuild: lastFullBuild || new Date().toISOString(),
-    lastUpdated: new Date().toISOString(),
+    lastFullBuild: lastFullBuild || now,
+    lastUpdated: now,
     serviceCount,
-    payload: JSON.stringify({ last_full_build: lastFullBuild, last_updated: new Date().toISOString(), flat_index: flatIndex, business_scenarios: businessScenarios })
+    payload: JSON.stringify({ last_full_build: lastFullBuild, last_updated: now, flat_index: flatIndex, business_scenarios: businessScenarios })
   };
   snapshot.save(data);
+
+  // Write to PostgreSQL if available
+  try {
+    const db = require('../store/db');
+    // Check if DB is configured by trying to get pool
+    db.getPool();
+    await _writeToDb(flatIndex, lastFullBuild || now);
+  } catch(e) {
+    if (e.message.includes('No PostgreSQL credentials')) {
+      console.log('[db] No PostgreSQL configured — using file storage only');
+    } else {
+      console.error('[db] PostgreSQL write failed (non-fatal):', e.message);
+    }
+  }
+
   console.log(`[M1.achieved]: catalog data product published — service_count=${serviceCount}`);
   return { serviceCount, businessScenarioCount: businessScenarios.length };
 }

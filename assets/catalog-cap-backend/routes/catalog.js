@@ -136,7 +136,7 @@ router.get('/searchServices', (req, res) => {
 });
 
 // ── Filter Services ───────────────────────────────────────────────────────────
-router.get('/filterServices', (req, res) => {
+router.get('/filterServices', async (req, res) => {
   try {
     const { engagementType, businessScenario } = req.query;
     const moduleNames = Array.isArray(req.query.module)
@@ -152,6 +152,82 @@ router.get('/filterServices', (req, res) => {
     if (!engagementType && !businessScenario && moduleNames.length === 0 && phases.length === 0 && supercats.length === 0)
       return res.status(400).json({ error: 'At least one filter required' });
 
+    // ── PostgreSQL path ───────────────────────────────────────────────────────
+    try {
+      const db = require('../store/db');
+      db.getPool();
+
+      let sql = `
+        SELECT DISTINCT s.*, bn.deck_name, bn.bs_code AS bn_bs_code
+        FROM catalog_services s
+        LEFT JOIN catalog_bs_naming bn ON bn.service_code = s.code AND bn.bs_code = $1
+        WHERE s.service_object NOT IN ('Business Scenario', 'Business Scenario module')
+          AND s.name IS NOT NULL
+      `;
+      const params = [businessScenario || null];
+      let pIdx = 2;
+
+      if (engagementType) {
+        sql += ` AND EXISTS (
+          SELECT 1 FROM catalog_classification cc
+          WHERE cc.service_code = s.code AND cc.feature_key = 'engagementType' AND cc.feature_value = ${pIdx}
+        )`;
+        params.push(engagementType); pIdx++;
+      }
+
+      if (businessScenario) {
+        sql += ` AND EXISTS (
+          SELECT 1 FROM catalog_hierarchy h1
+          JOIN catalog_hierarchy h2 ON h2.parent_code = h1.child_code
+          WHERE h1.parent_code = ${pIdx} AND h2.child_code = s.code
+        )`;
+        params.push(businessScenario); pIdx++;
+      }
+
+      if (moduleNames.length > 0) {
+        sql += ` AND EXISTS (
+          SELECT 1 FROM catalog_hierarchy hm
+          WHERE hm.parent_code = ANY(${pIdx}::text[]) AND hm.child_code = s.code
+        )`;
+        params.push(moduleNames); pIdx++;
+      }
+
+      if (phases.length > 0) {
+        sql += ` AND EXISTS (
+          SELECT 1 FROM catalog_classification cp
+          WHERE cp.service_code = s.code AND cp.feature_key = 'sapActivateProjectPhase' AND cp.feature_value = ANY(${pIdx}::text[])
+        )`;
+        params.push(phases); pIdx++;
+      }
+
+      if (supercats.length > 0) {
+        sql += ` AND EXISTS (
+          SELECT 1 FROM catalog_supercategories cs
+          WHERE cs.service_code = s.code AND cs.category_name = ANY(${pIdx}::text[])
+        )`;
+        params.push(supercats); pIdx++;
+      }
+
+      sql += ` ORDER BY s.name LIMIT 500`;
+
+      const result = await db.query(sql, params);
+      const services = result.rows.map(row => {
+        const svc = row.raw_data || {};
+        // Attach deck name from DB
+        if (row.deck_name && row.bn_bs_code) {
+          if (!svc.business_scenario_naming) svc.business_scenario_naming = {};
+          svc.business_scenario_naming[row.bn_bs_code] = row.deck_name;
+        }
+        return svc;
+      });
+      return res.json({ count: services.length, services });
+    } catch(dbErr) {
+      if (!dbErr.message.includes('No PostgreSQL')) {
+        console.warn('[filterServices] DB failed, falling back to file:', dbErr.message);
+      }
+    }
+
+    // ── File fallback ─────────────────────────────────────────────────────────
     const data = snapshot.load();
     if (!data) return res.status(404).json({ error: 'No snapshot available' });
     const flatIndex = JSON.parse(data.payload).flat_index || {};
@@ -226,16 +302,59 @@ router.get('/filterServices', (req, res) => {
 });
 
 // ── Metadata endpoint — lightweight, no full snapshot download ────────────────
-router.get('/metadata', (req, res) => {
+router.get('/metadata', async (req, res) => {
   try {
+    // Try PostgreSQL first
+    let fromDb = false;
+    try {
+      const db = require('../store/db');
+      db.getPool(); // throws if not configured
+
+      const [syncRes, bsRes, modRes, etRes, phaseRes, supercatRes] = await Promise.all([
+        db.query(`SELECT last_updated, service_count FROM catalog_sync ORDER BY id DESC LIMIT 1`),
+        db.query(`SELECT code, name FROM catalog_services WHERE service_object='Business Scenario' ORDER BY name`),
+        db.query(`
+          SELECT h.parent_code AS bs_code, s.code AS mod_code, s.name AS mod_name
+          FROM catalog_hierarchy h
+          JOIN catalog_services s ON s.code = h.child_code
+          WHERE s.service_object = 'Business Scenario module'
+          ORDER BY s.name
+        `),
+        db.query(`SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key='engagementType' ORDER BY feature_value`),
+        db.query(`SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key='sapActivateProjectPhase' ORDER BY feature_value`),
+        db.query(`SELECT DISTINCT category_name FROM catalog_supercategories ORDER BY category_name`)
+      ]);
+
+      if (syncRes.rows.length) {
+        const bsMap = {}, moduleMap = {}, bsToMods = {};
+        for (const row of bsRes.rows) bsMap[row.code] = row.name;
+        for (const row of modRes.rows) {
+          moduleMap[row.mod_code] = row.mod_name;
+          if (!bsToMods[row.bs_code]) bsToMods[row.bs_code] = [];
+          if (!bsToMods[row.bs_code].includes(row.mod_code)) bsToMods[row.bs_code].push(row.mod_code);
+        }
+        return res.json({
+          lastUpdated: syncRes.rows[0].last_updated,
+          serviceCount: syncRes.rows[0].service_count,
+          bsMap, moduleMap, bsToMods,
+          engagementTypes: etRes.rows.map(r => r.feature_value),
+          phases: phaseRes.rows.map(r => r.feature_value),
+          supercategories: supercatRes.rows.map(r => r.category_name)
+        });
+      }
+    } catch(dbErr) {
+      if (!dbErr.message.includes('No PostgreSQL')) {
+        console.warn('[metadata] DB query failed, falling back to file:', dbErr.message);
+      }
+    }
+
+    // Fallback to file-based snapshot
     const data = snapshot.load();
     if (!data) return res.status(404).json({ error: 'No snapshot available' });
     const flatIndex = JSON.parse(data.payload).flat_index || {};
 
     const bsMap = {}, moduleMap = {}, bsToMods = {};
-    const etSet = new Set();
-    const phaseSet = new Set();
-    const supercatMap = {}; // key = "code - name", value = true
+    const etSet = new Set(), phaseSet = new Set(), supercatMap = {};
 
     for (const [code, svc] of Object.entries(flatIndex)) {
       if (svc.serviceObject === 'Business Scenario') {
@@ -248,11 +367,8 @@ router.get('/metadata', (req, res) => {
           bsToMods[code].push(modCode);
         }
       }
-      // Engagement types
       const ets = Array.isArray(svc.engagementType) ? svc.engagementType : (svc.engagementType ? [svc.engagementType] : []);
       ets.forEach(et => etSet.add(et));
-
-      // SAP Activate project phases from classificationFeatures
       const cf = svc.classificationFeatures;
       if (Array.isArray(cf)) {
         for (const item of cf) {
@@ -262,25 +378,15 @@ router.get('/metadata', (req, res) => {
           }
         }
       }
-
-      // Supercategories
       const cats = svc.supercategories;
       if (Array.isArray(cats)) {
-        for (const c of cats) {
-          if (c && c.name) {
-            const key = c.name;
-            supercatMap[key] = true;
-          }
-        }
+        for (const c of cats) { if (c && c.name) supercatMap[c.name] = true; }
       }
     }
 
     res.json({
-      lastUpdated: data.lastUpdated,
-      serviceCount: data.serviceCount,
-      bsMap,
-      moduleMap,
-      bsToMods,
+      lastUpdated: data.lastUpdated, serviceCount: data.serviceCount,
+      bsMap, moduleMap, bsToMods,
       engagementTypes: [...etSet].sort(),
       phases: [...phaseSet].sort(),
       supercategories: Object.keys(supercatMap).sort()
@@ -468,13 +574,29 @@ router.get('/excel', (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.put('/excel/:bsCode', requirePublishToken, (req, res) => {
+router.put('/excel/:bsCode', requirePublishToken, async (req, res) => {
   const { bsCode } = req.params;
   if (!/^[A-Z0-9]{5,10}$/.test(bsCode)) return res.status(400).json({ error: `Invalid bsCode: ${bsCode}` });
   const buf = req.body;
   if (!buf || buf.length === 0) return res.status(400).json({ error: 'Empty body' });
+
+  // Save to filesystem (primary for enrichment queue)
   fs.writeFileSync(path.join(EXCEL_DIR, `${bsCode}.xlsx`), buf);
-  // Add to serial enrichment queue — processes one at a time, no race conditions
+
+  // Also save to PostgreSQL for persistence across restarts
+  try {
+    const db = require('../store/db');
+    db.getPool();
+    await db.query(`
+      INSERT INTO catalog_excel_files (bs_code, file_data, file_size, uploaded_at)
+      VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (bs_code) DO UPDATE SET file_data=EXCLUDED.file_data, file_size=EXCLUDED.file_size, uploaded_at=NOW()
+    `, [bsCode, buf, buf.length]);
+  } catch(e) {
+    if (!e.message.includes('No PostgreSQL')) console.warn('[excel] DB save failed:', e.message);
+  }
+
+  // Add to serial enrichment queue
   enrichQueue.push({ bsCode, buf });
   processEnrichQueue();
   res.json({ status: 'queued', bsCode, sizeBytes: buf.length });
