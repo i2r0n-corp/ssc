@@ -28,10 +28,11 @@ app.use('/api/pptx', require('./routes/pptx'));
 app.use('/api/agent', require('./routes/agent'));
 
 // Health probe
+const APP_START_TIME = new Date().toISOString();
 app.get('/health', (req, res) => {
   const snapshot = require('./store/snapshot');
   const data = snapshot.load();
-  res.json({ status: 'ok', snapshotAvailable: !!data, serviceCount: data ? data.serviceCount : 0 });
+  res.json({ status: 'ok', snapshotAvailable: !!data, serviceCount: data ? data.serviceCount : 0, appStartTime: APP_START_TIME });
 });
 
 // ── Auto-sync on startup ──────────────────────────────────────────────────────

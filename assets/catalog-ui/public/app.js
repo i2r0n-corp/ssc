@@ -12,7 +12,7 @@ const AGENT_BASE_URL  = window.AGENT_BASE_URL  || 'http://localhost:5000';
 let state = {
   currentPage: 'catalog',
   catalog: { services: [], lastUpdated: null, loading: false, error: null },
-  filters: { query: '', engagementType: '', businessScenario: '', module: '', deckName: '', namingType: '' },
+  filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], deckName: '', namingType: '' },
   filteredServices: [],
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
   selectedServices: new Set(),
@@ -74,7 +74,10 @@ async function applyFilters() {
     if (query) params.set('query', query);
     if (engagementType) params.set('engagementType', engagementType);
     if (businessScenario) params.set('businessScenario', businessScenario);
-    if (mod) params.set('module', mod);
+    // multi-module support
+    const mods = state.filters.modules || [];
+    if (mods.length > 0) mods.forEach(m => params.append('module', m));
+    else if (mod) params.set('module', mod);
 
     const url = query
       ? `${CAP_BACKEND_URL}/api/catalog/searchServices?${params}`
@@ -102,21 +105,29 @@ function renderCatalogPage() {
   const { services, loading, error, lastUpdated, moduleMap = {}, bsMap = {}, engagementTypes = [], hasSearched } = state.catalog;
   const cartCount = state.exportCart.length;
 
-  const uniqueETs = engagementTypes;
+  // Fixed engagement type options
+  const ET_OPTIONS = [
+    { value: 'Max Success Plan',      label: 'Max Success Plan' },
+    { value: 'Advanced Success Plan', label: 'Advanced Success Plan' },
+    { value: 'Enterprise Support',    label: 'Foundational Success Plan' },
+  ];
+
   const uniqueBS = Object.entries(bsMap).sort((a, b) => a[1].localeCompare(b[1]));
 
-  // Cascading modules: if BS selected show only its modules
-  let uniqueMods;
-  if (state.filters.businessScenario) {
+  // Modules — only shown when BS is selected, multiselect
+  const showModuleFilter = !!state.filters.businessScenario;
+  let uniqueMods = [];
+  if (showModuleFilter) {
     const bsToMods = state.catalog.bsToMods || {};
     const modCodes = bsToMods[state.filters.businessScenario] || [];
     uniqueMods = modCodes
       .filter(code => moduleMap[code])
       .map(code => [code, moduleMap[code]])
       .sort((a, b) => a[1].localeCompare(b[1]));
-  } else {
-    uniqueMods = Object.entries(moduleMap).sort((a, b) => a[1].localeCompare(b[1]));
   }
+
+  // Selected modules as array
+  const selectedMods = state.filters.modules || [];
 
   // Naming type selector — only shown when BS is selected
   const showNamingFilter = !!state.filters.businessScenario;
@@ -134,7 +145,7 @@ function renderCatalogPage() {
         <label>Engagement Type</label>
         <select id="filter-et" onchange="updateFilter('engagementType', this.value)">
           <option value="">All</option>
-          ${uniqueETs.map(et => `<option value="${et}" ${state.filters.engagementType===et?'selected':''}>${et}</option>`).join('')}
+          ${ET_OPTIONS.map(o => `<option value="${o.value}" ${state.filters.engagementType===o.value?'selected':''}>${o.label}</option>`).join('')}
         </select>
       </div>
       <div class="filter-group">
@@ -144,13 +155,15 @@ function renderCatalogPage() {
           ${uniqueBS.map(([code, name]) => `<option value="${code}" ${state.filters.businessScenario===code?'selected':''}>${name}</option>`).join('')}
         </select>
       </div>
+      ${showModuleFilter ? `
       <div class="filter-group">
-        <label>Module</label>
-        <select id="filter-mod" onchange="updateFilter('module', this.value)">
-          <option value="">All</option>
-          ${uniqueMods.map(([code, name]) => `<option value="${code}" ${state.filters.module===code?'selected':''}>${name}</option>`).join('')}
+        <label>Module (multi-select)</label>
+        <select id="filter-mod" multiple size="${Math.min(uniqueMods.length, 6)}"
+          style="min-width:220px"
+          onchange="updateModuleFilter(this)">
+          ${uniqueMods.map(([code, name]) => `<option value="${code}" ${selectedMods.includes(code)?'selected':''}>${name}</option>`).join('')}
         </select>
-      </div>
+      </div>` : ''}
       ${showNamingFilter ? `
       <div class="filter-group">
         <label>Service Name</label>
@@ -198,12 +211,16 @@ function renderCatalogPage() {
         ${state.filteredServices.slice(0, 200).map(svc => {
           const useDeck = state.filters.namingType === 'deck' && state.filters.businessScenario;
           const bsNaming = svc.business_scenario_naming || svc.businessScenarioNaming || {};
-          const deckName = useDeck ? (bsNaming[state.filters.businessScenario] || svc.name) : svc.name;
+          const bsCode = state.filters.businessScenario;
+          // deck name = the name used in the PowerPoint deck for this BS
+          const deckNameVal = bsNaming[bsCode];
+          const displayName = useDeck ? (deckNameVal || svc.name) : svc.name;
+          const subName     = useDeck && deckNameVal && deckNameVal !== svc.name ? svc.name : null;
           return `
           <tr class="${state.selectedServices.has(svc.code) ? 'selected' : ''}">
             <td><input type="checkbox" ${state.selectedServices.has(svc.code)?'checked':''} onchange="toggleSelect('${svc.code}')" /></td>
-            <td><strong>${deckName}</strong>${useDeck && bsNaming[state.filters.businessScenario] ? `<div style="font-size:0.75rem;color:#6a6a6a">${svc.name}</div>` : ''}</td>
-            <td style="max-width:300px;font-size:0.8rem">${(svc.shortDescription||'').substring(0,120)}${(svc.shortDescription||'').length>120?'…':''}</td>
+            <td><strong>${displayName}</strong>${subName ? `<div style="font-size:0.75rem;color:#6a6a6a">${subName}</div>` : ''}</td>
+            <td style="max-width:300px;font-size:0.8rem">${(svc.shortDescription||svc.shortDescription||'').substring(0,120)}${(svc.shortDescription||'').length>120?'…':''}</td>
             <td>${engagementBadge(svc.engagementType)}</td>
             <td style="font-size:0.8rem">${moduleMap[svc.parentCode] || svc.parentCode || '—'}</td>
             <td style="font-size:0.75rem;color:#6a6a6a">${svc.code}</td>
@@ -356,14 +373,21 @@ window.navigate = function(page) {
 window.updateFilter = function(key, value) {
   state.filters[key] = value;
   // Reset cascading filters downstream
-  if (key === 'businessScenario') { state.filters.module = ''; state.filters.deckName = ''; state.filters.namingType = ''; }
-  if (key === 'module') { state.filters.deckName = ''; }
+  if (key === 'businessScenario') { state.filters.modules = []; state.filters.module = ''; state.filters.deckName = ''; state.filters.namingType = ''; }
+  clearTimeout(window._filterDebounce);
+  window._filterDebounce = setTimeout(applyFilters, 300);
+};
+
+window.updateModuleFilter = function(selectEl) {
+  const selected = Array.from(selectEl.selectedOptions).map(o => o.value);
+  state.filters.modules = selected;
+  state.filters.module = selected.length === 1 ? selected[0] : '';
   clearTimeout(window._filterDebounce);
   window._filterDebounce = setTimeout(applyFilters, 300);
 };
 
 window.clearFilters = function() {
-  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', deckName: '', namingType: '' };
+  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], deckName: '', namingType: '' };
   state.filteredServices = [];
   state.catalog.hasSearched = false;
   render();

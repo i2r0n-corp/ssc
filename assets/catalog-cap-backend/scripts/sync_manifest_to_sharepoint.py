@@ -50,16 +50,36 @@ def main():
     print(f"  {now.strftime('%Y-%m-%d %H:%M:%S')} UTC")
     print(f"{'='*55}")
 
+    # Check if app restarted since last sync
+    force_reupload = False
     last_check_str = log.get("lastCheck")
-    if last_check_str:
+    try:
+        health_resp = requests.get(f"{CAP_BACKEND_URL}/health", timeout=10)
+        health_resp.raise_for_status()
+        app_start_time_str = health_resp.json().get("appStartTime")
+        if app_start_time_str and last_check_str:
+            app_start_time = datetime.fromisoformat(app_start_time_str.replace('Z', '+00:00'))
+            last_check_dt  = datetime.fromisoformat(last_check_str)
+            if last_check_dt.tzinfo is None:
+                last_check_dt = last_check_dt.replace(tzinfo=timezone.utc)
+            if app_start_time > last_check_dt:
+                print(f"🔄 App restarted at {app_start_time.strftime('%Y-%m-%d %H:%M:%S')} UTC — forcing full re-upload.")
+                force_reupload = True
+    except Exception as e:
+        print(f"⚠️  Could not check app start time: {e}")
+
+    if last_check_str and not force_reupload:
         last_check = datetime.fromisoformat(last_check_str)
+        if last_check.tzinfo is None:
+            last_check = last_check.replace(tzinfo=timezone.utc)
         minutes_since = (now - last_check).total_seconds() / 60
         if minutes_since < CHECK_INTERVAL:
             print(f"⏭️  Last check was {minutes_since:.0f} min ago — minimum is {CHECK_INTERVAL} min. Skipping.")
             return
         print(f"⏱️  Last check: {last_check.strftime('%Y-%m-%d %H:%M:%S')} UTC ({minutes_since:.0f} min ago)")
     else:
-        print("⚡ First run — uploading all Excel files found in manifest.")
+        if not last_check_str:
+            print("⚡ First run — uploading all Excel files found in manifest.")
         last_check = None
 
     # Fetch manifest
