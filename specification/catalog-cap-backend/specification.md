@@ -15,6 +15,29 @@ This CAP (Cloud Application Programming Model) backend serves the enriched catal
 
 ---
 
+## ⚠️ CRITICAL RULE — SSC API Field Fetching
+
+**ALWAYS fetch ALL fields from the SSC Catalog API.** Never use partial field sets.
+
+The SSC Catalog paginated endpoint (`/services`) must ALWAYS request all required fields explicitly. The default response omits `classificationFeatures`, `supercategories`, `summary`, `businessNeeds`, `keyBenefits`, `deliveryApproach`, `description`, `serviceTeaserText` and other rich fields.
+
+**Required `fields` parameter for all paginated fetches:**
+```
+services(code,name,serviceObject,serviceNumber,shortDescription,summary,engagementType,
+childServices,parentCode,classificationFeatures,supercategories,businessScenarioNaming,
+serviceTeaserText,description,keyBenefits,deliveryApproach,businessNeeds,modifiedTime),pagination
+```
+
+**Why this matters:**
+- `classificationFeatures` contains `engagementType`, `sapActivateProjectPhase`, `effortEstimateDays`, `crmBaseCategory` — needed for all UI filters
+- `supercategories` contains product category assignments — needed for supercategory filter
+- `summary`, `keyBenefits`, `description` — needed for tooltip/alt text and PPTX generation
+- Fetching without these fields causes filters to silently return 0 results
+
+**Rule:** If you ever touch `fetchAllCatalogPages` or any function that calls the SSC paginated API — verify the `fields` parameter includes ALL fields listed above. No exceptions.
+
+---
+
 ## Data Model
 
 - [ ] Define `db/schema.cds`:
