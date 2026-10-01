@@ -181,25 +181,33 @@ function renderCatalogPage() {
         <div style="font-size:2.5rem">🔍</div>
         <p style="font-size:1rem;font-weight:600">Use the filters above to explore the catalog</p>
         <p style="font-size:0.875rem">Search by keyword, select an Engagement Type, Business Scenario, or Module to get started.</p>
-        <p style="font-size:0.8rem;color:#999">${services.length > 0 ? `${services.length} services loaded` : ''}</p>
       </div>` : !loading && state.filteredServices.length === 0 ? `
       <div class="empty-state">
         <div style="font-size:2rem">😕</div>
         <p>No services found. Try adjusting your filters.</p>
       </div>` : !loading ? `
-    <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center">
-      <span class="results-info" style="margin:0;flex:1">${state.filteredServices.length} service(s) found</span>
-      <button class="btn btn-primary btn-sm" onclick="addSelectedToCart()">
-        Add to Export Cart ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : ''}
+    <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center;flex-wrap:wrap">
+      <span class="results-info" style="margin:0;flex:1">${state.filteredServices.length} service(s) found
+        ${state.selectedServices.size > 0 ? ` — <strong>${state.selectedServices.size} selected</strong>` : ''}
+      </span>
+      <button class="btn btn-secondary btn-sm" onclick="exportExcel()" title="Export selected (or all) to Excel">
+        📊 Export Excel ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
-      <button class="btn btn-secondary btn-sm" onclick="navigate('export')">
-        View Cart <span class="cart-count">${cartCount}</span>
+      <button class="btn btn-secondary btn-sm" onclick="generatePptx('short-description')" title="Short description list PPTX">
+        📋 PPTX List ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
+      </button>
+      <button class="btn btn-primary btn-sm" onclick="generatePptx('one-pager')" title="One-pager per service PPTX">
+        📄 PPTX One-Pagers ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
     </div>
+    ${state.pptx.error ? `<div class="error-strip" style="margin-bottom:0.5rem">⚠ ${state.pptx.error}</div>` : ''}
+    ${state.pptx.downloadUrl ? `<div class="success-strip" style="margin-bottom:0.5rem">
+      ✅ Ready! <a href="${CAP_BACKEND_URL}${state.pptx.downloadUrl}" download class="btn btn-primary btn-sm" style="margin-left:1rem">⬇ Download PPTX</a>
+    </div>` : ''}
     <table class="service-table">
       <thead>
         <tr>
-          <th style="width:2.5rem"></th>
+          <th style="width:2.5rem"><input type="checkbox" title="Select all" onchange="toggleSelectAll(this.checked)" /></th>
           <th>Service Name</th>
           <th>Short Description</th>
           <th>Engagement Type</th>
@@ -208,19 +216,24 @@ function renderCatalogPage() {
         </tr>
       </thead>
       <tbody>
-        ${state.filteredServices.slice(0, 200).map(svc => {
+        ${state.filteredServices.slice(0, 300).map(svc => {
           const useDeck = state.filters.namingType === 'deck' && state.filters.businessScenario;
           const bsNaming = svc.business_scenario_naming || svc.businessScenarioNaming || {};
           const bsCode = state.filters.businessScenario;
-          // deck name = the name used in the PowerPoint deck for this BS
-          const deckNameVal = bsNaming[bsCode];
-          const displayName = useDeck ? (deckNameVal || svc.name) : svc.name;
-          const subName     = useDeck && deckNameVal && deckNameVal !== svc.name ? svc.name : null;
+          // deck name stored by enrichment = actual name used in customer deck from Excel col 0
+          // it is NOT "Foundational"/"Advanced" — those come from col H (engagementType label)
+          // col 0 carry-forward deck name is stored as-is from the Excel
+          const deckNameVal = useDeck ? (bsNaming[bsCode] || null) : null;
+          const displayName = deckNameVal || svc.name;
+          const subName     = deckNameVal && deckNameVal !== svc.name ? svc.name : null;
           return `
           <tr class="${state.selectedServices.has(svc.code) ? 'selected' : ''}">
             <td><input type="checkbox" ${state.selectedServices.has(svc.code)?'checked':''} onchange="toggleSelect('${svc.code}')" /></td>
-            <td><strong>${displayName}</strong>${subName ? `<div style="font-size:0.75rem;color:#6a6a6a">${subName}</div>` : ''}</td>
-            <td style="max-width:300px;font-size:0.8rem">${(svc.shortDescription||svc.shortDescription||'').substring(0,120)}${(svc.shortDescription||'').length>120?'…':''}</td>
+            <td>
+              <strong>${displayName}</strong>
+              ${subName ? `<div style="font-size:0.75rem;color:#6a6a6a">${subName}</div>` : ''}
+            </td>
+            <td style="max-width:300px;font-size:0.8rem">${(svc.shortDescription||'').substring(0,120)}${(svc.shortDescription||'').length>120?'…':''}</td>
             <td>${engagementBadge(svc.engagementType)}</td>
             <td style="font-size:0.8rem">${moduleMap[svc.parentCode] || svc.parentCode || '—'}</td>
             <td style="font-size:0.75rem;color:#6a6a6a">${svc.code}</td>
@@ -475,24 +488,63 @@ window.addIncidentResultsToCart = function() {
   render();
 };
 
-window.selectTemplate = function(t) { state.pptx.template = t; render(); };
+window.toggleSelectAll = function(checked) {
+  if (checked) state.filteredServices.forEach(s => state.selectedServices.add(s.code));
+  else state.selectedServices.clear();
+  render();
+};
 
-window.generatePptx = async function() {
-  if (state.exportCart.length === 0 || state.exportCart.length > 50) return;
+window.generatePptx = async function(template) {
+  const codes = state.selectedServices.size > 0
+    ? [...state.selectedServices]
+    : state.filteredServices.map(s => s.code);
+  if (codes.length === 0) { alert('No services to export.'); return; }
+  if (codes.length > 50) { alert(`Too many services (${codes.length}). Max 50 for PPTX. Please select fewer.`); return; }
   state.pptx.generating = true; state.pptx.error = null; state.pptx.downloadUrl = null; render();
   try {
     const data = await apiFetch(`${CAP_BACKEND_URL}/api/pptx/generatePptx`, {
       method: 'POST',
-      body: JSON.stringify({ serviceCodes: state.exportCart, template: state.pptx.template })
+      body: JSON.stringify({ serviceCodes: codes, template: template || 'short-description' })
     });
     state.pptx.downloadUrl = data.downloadUrl;
-    // Auto-trigger download
     const a = document.createElement('a');
     a.href = `${CAP_BACKEND_URL}${data.downloadUrl}`;
     a.download = data.filename;
     a.click();
   } catch (e) { state.pptx.error = e.message; }
   state.pptx.generating = false; render();
+};
+
+window.exportExcel = function() {
+  const svcs = state.selectedServices.size > 0
+    ? state.filteredServices.filter(s => state.selectedServices.has(s.code))
+    : state.filteredServices;
+  if (svcs.length === 0) { alert('No services to export.'); return; }
+
+  // Build CSV
+  const strip = html => (html||'').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const esc = v => `"${String(v||'').replace(/"/g,'""')}"`;
+
+  const headers = ['Code','ServiceNumber','Name','ShortDescription','EngagementType','BusinessScenarioNaming','Summary','TeaserText','BusinessNeeds','KeyBenefits','DeliveryApproach','Description'];
+  const rows = [headers.join(',')];
+  for (const s of svcs) {
+    const bsNaming = s.business_scenario_naming || s.businessScenarioNaming || {};
+    const bsNamingStr = Object.entries(bsNaming).map(([k,v]) => `${k}:${v}`).join('; ');
+    const et = Array.isArray(s.engagementType) ? s.engagementType.join('; ') : (s.engagementType||'');
+    rows.push([
+      esc(s.code), esc(s.serviceNumber||s.number||''), esc(s.name), esc(strip(s.shortDescription)),
+      esc(et), esc(bsNamingStr),
+      esc(strip(s.summary)), esc(strip(s.serviceTeaserText||s.teaserText)),
+      esc(strip(s.businessNeeds)), esc(strip(s.keyBenefits)),
+      esc(strip(s.deliveryApproach)), esc(strip(s.description))
+    ].join(','));
+  }
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `ssc_services_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 };
 
 window.sendMessage = async function() {
@@ -537,17 +589,15 @@ function render() {
   if (!app) return;
 
   const pages = [
-    { id: 'catalog', label: 'Catalog' },
+    { id: 'catalog',   label: 'Catalog' },
     { id: 'incidents', label: 'Incidents' },
-    { id: 'export', label: `Export (${state.exportCart.length})` },
-    { id: 'chat', label: 'Chat' }
+    { id: 'chat',      label: 'Chat' }
   ];
 
   let content = '';
   switch (state.currentPage) {
     case 'catalog':   content = renderCatalogPage(); break;
     case 'incidents': content = renderIncidentsPage(); break;
-    case 'export':    content = renderExportPage(); break;
     case 'chat':      content = renderChatPage(); break;
   }
 

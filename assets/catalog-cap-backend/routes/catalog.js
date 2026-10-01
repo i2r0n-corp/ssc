@@ -51,22 +51,53 @@ router.get('/getSnapshot', (req, res) => {
 // ── Search Services ───────────────────────────────────────────────────────────
 router.get('/searchServices', (req, res) => {
   try {
-    const { query = '', engagementType, businessScenario, module: moduleName } = req.query;
+    const { query = '', engagementType, businessScenario } = req.query;
+    const moduleNames = Array.isArray(req.query.module)
+      ? req.query.module
+      : (req.query.module ? [req.query.module] : []);
+
     const data = snapshot.load();
     if (!data) return res.status(404).json({ error: 'No snapshot available' });
     const flatIndex = JSON.parse(data.payload).flat_index || {};
     const q = query.toLowerCase();
-    let results = Object.values(flatIndex).filter(svc => {
-      if (svc.serviceObject === 'Business Scenario') return false;
+
+    // Build union of service codes for selected modules
+    let moduleServiceCodes = null;
+    if (moduleNames.length > 0) {
+      moduleServiceCodes = new Set();
+      for (const modCode of moduleNames) {
+        const mod = flatIndex[modCode];
+        if (mod) (mod.childServices || []).forEach(c => moduleServiceCodes.add(c));
+      }
+    }
+
+    // Build BS service codes
+    let bsServiceCodes = null;
+    if (businessScenario) {
+      bsServiceCodes = new Set();
+      const bs = flatIndex[businessScenario];
+      if (bs) {
+        for (const modCode of bs.childServices || []) {
+          const mod = flatIndex[modCode];
+          if (mod) (mod.childServices || []).forEach(c => bsServiceCodes.add(c));
+        }
+      }
+    }
+
+    const seen = new Set();
+    const results = Object.values(flatIndex).filter(svc => {
+      if (svc.serviceObject === 'Business Scenario' || svc.serviceObject === 'Business Scenario module') return false;
       if (!svc.name) return false;
+      if (seen.has(svc.code)) return false;
       const textMatch = !q || svc.name.toLowerCase().includes(q) || (svc.shortDescription||'').toLowerCase().includes(q);
       const etArr = Array.isArray(svc.engagementType) ? svc.engagementType : (svc.engagementType ? [svc.engagementType] : []);
-      const etMatch = !engagementType || etArr.some(e => e.toLowerCase().includes(engagementType.toLowerCase()));
-      const bsNaming = svc.business_scenario_naming || {};
-      const bsMatch = !businessScenario || Object.keys(bsNaming).some(k => k === businessScenario) || (svc.parentServices||[]).some(p => p === businessScenario);
-      const modMatch = !moduleName || svc.parentCode === moduleName;
-      return textMatch && etMatch && bsMatch && modMatch;
-    }).slice(0, 100);
+      const etMatch = !engagementType || etArr.some(e => e === engagementType);
+      const bsMatch = !bsServiceCodes || bsServiceCodes.has(svc.code);
+      const modMatch = !moduleServiceCodes || moduleServiceCodes.has(svc.code);
+      if (textMatch && etMatch && bsMatch && modMatch) { seen.add(svc.code); return true; }
+      return false;
+    }).slice(0, 200);
+
     res.json({ count: results.length, services: results });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -74,35 +105,57 @@ router.get('/searchServices', (req, res) => {
 // ── Filter Services ───────────────────────────────────────────────────────────
 router.get('/filterServices', (req, res) => {
   try {
-    const { engagementType, businessScenario, module: moduleName } = req.query;
-    if (!engagementType && !businessScenario && !moduleName)
+    const { engagementType, businessScenario } = req.query;
+    // module can be single string or array
+    const moduleNames = Array.isArray(req.query.module)
+      ? req.query.module
+      : (req.query.module ? [req.query.module] : []);
+
+    if (!engagementType && !businessScenario && moduleNames.length === 0)
       return res.status(400).json({ error: 'At least one filter required' });
+
     const data = snapshot.load();
     if (!data) return res.status(404).json({ error: 'No snapshot available' });
     const flatIndex = JSON.parse(data.payload).flat_index || {};
+
+    // Build set of service codes per module (union across all selected modules)
+    let moduleServiceCodes = null;
+    if (moduleNames.length > 0) {
+      moduleServiceCodes = new Set();
+      for (const modCode of moduleNames) {
+        const mod = flatIndex[modCode];
+        if (mod) (mod.childServices || []).forEach(c => moduleServiceCodes.add(c));
+      }
+    }
+
+    // Build set of service codes in the BS (walk BS → modules → childServices)
+    let bsServiceCodes = null;
+    if (businessScenario) {
+      bsServiceCodes = new Set();
+      const bs = flatIndex[businessScenario];
+      if (bs) {
+        for (const modCode of bs.childServices || []) {
+          const mod = flatIndex[modCode];
+          if (mod) (mod.childServices || []).forEach(c => bsServiceCodes.add(c));
+        }
+      }
+    }
+
+    const seen = new Set();
     const results = Object.values(flatIndex).filter(svc => {
       if (svc.serviceObject === 'Business Scenario' || svc.serviceObject === 'Business Scenario module') return false;
       if (!svc.name) return false;
+      if (seen.has(svc.code)) return false;
+
       const etArr = Array.isArray(svc.engagementType) ? svc.engagementType : (svc.engagementType ? [svc.engagementType] : []);
       const etMatch = !engagementType || etArr.some(e => e === engagementType);
-      // BS match — check if service is in the BS via the hierarchy
-      const bsMatch = !businessScenario || (() => {
-        // Walk BS → modules → childServices
-        const bs = flatIndex[businessScenario];
-        if (!bs) return false;
-        for (const modCode of bs.childServices || []) {
-          const mod = flatIndex[modCode];
-          if (!mod) continue;
-          if ((mod.childServices || []).includes(svc.code)) return true;
-        }
-        return false;
-      })();
-      const modMatch = !moduleName || (() => {
-        const mod = flatIndex[moduleName];
-        return mod && (mod.childServices || []).includes(svc.code);
-      })();
-      return etMatch && bsMatch && modMatch;
-    }).slice(0, 200);
+      const bsMatch = !bsServiceCodes || bsServiceCodes.has(svc.code);
+      const modMatch = !moduleServiceCodes || moduleServiceCodes.has(svc.code);
+
+      if (etMatch && bsMatch && modMatch) { seen.add(svc.code); return true; }
+      return false;
+    }).slice(0, 500);
+
     res.json({ count: results.length, services: results });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
