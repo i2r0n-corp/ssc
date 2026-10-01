@@ -12,7 +12,7 @@ const AGENT_BASE_URL  = window.AGENT_BASE_URL  || 'http://localhost:5000';
 let state = {
   currentPage: 'catalog',
   catalog: { services: [], lastUpdated: null, loading: false, error: null },
-  filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], deckName: '', namingType: '' },
+  filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], supercats: [], deckName: '', namingType: '' },
   filteredServices: [],
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
   selectedServices: new Set(),
@@ -43,6 +43,8 @@ async function loadCatalog() {
     state.catalog.moduleMap = data.moduleMap || {};
     state.catalog.bsToMods = data.bsToMods || {};
     state.catalog.engagementTypes = data.engagementTypes || [];
+    state.catalog.phases = data.phases || [];
+    state.catalog.supercategories = data.supercategories || [];
     state.catalog.lastUpdated = data.lastUpdated;
     state.catalog.serviceCount = data.serviceCount;
     state.catalog.services = []; // not loaded upfront
@@ -57,9 +59,12 @@ async function loadCatalog() {
 
 async function applyFilters() {
   const { query, engagementType, businessScenario, module: mod } = state.filters;
+  const mods     = state.filters.modules    || [];
+  const phases   = state.filters.phases     || [];
+  const supercats = state.filters.supercats || [];
 
   // Nothing selected — clear results and show prompt
-  if (!query && !engagementType && !businessScenario && !mod) {
+  if (!query && !engagementType && !businessScenario && !mod && mods.length === 0 && phases.length === 0 && supercats.length === 0) {
     state.filteredServices = [];
     state.catalog.hasSearched = false;
     render(); return;
@@ -75,9 +80,12 @@ async function applyFilters() {
     if (engagementType) params.set('engagementType', engagementType);
     if (businessScenario) params.set('businessScenario', businessScenario);
     // multi-module support
-    const mods = state.filters.modules || [];
     if (mods.length > 0) mods.forEach(m => params.append('module', m));
     else if (mod) params.set('module', mod);
+    // phases
+    phases.forEach(p => params.append('phase', p));
+    // supercategories
+    supercats.forEach(s => params.append('supercat', s));
 
     const url = query
       ? `${CAP_BACKEND_URL}/api/catalog/searchServices?${params}`
@@ -102,7 +110,7 @@ function engagementBadge(et) {
 // ── Pages ─────────────────────────────────────────────────────────────────────
 
 function renderCatalogPage() {
-  const { services, loading, error, lastUpdated, moduleMap = {}, bsMap = {}, engagementTypes = [], hasSearched } = state.catalog;
+  const { services, loading, error, lastUpdated, moduleMap = {}, bsMap = {}, engagementTypes = [], phases = [], supercategories = [], hasSearched } = state.catalog;
   const cartCount = state.exportCart.length;
 
   // Fixed engagement type options
@@ -160,8 +168,26 @@ function renderCatalogPage() {
         <label>Module (multi-select)</label>
         <select id="filter-mod" multiple size="${Math.min(uniqueMods.length, 6)}"
           style="min-width:220px"
-          onchange="updateModuleFilter(this)">
+          onchange="updateMultiFilter('modules', this)">
           ${uniqueMods.map(([code, name]) => `<option value="${code}" ${selectedMods.includes(code)?'selected':''}>${name}</option>`).join('')}
+        </select>
+      </div>` : ''}
+      ${phases.length > 0 ? `
+      <div class="filter-group">
+        <label>SAP Activate Phase (multi-select)</label>
+        <select id="filter-phase" multiple size="${Math.min(phases.length, 6)}"
+          style="min-width:200px"
+          onchange="updateMultiFilter('phases', this)">
+          ${phases.map(p => `<option value="${p}" ${(state.filters.phases||[]).includes(p)?'selected':''}>${p}</option>`).join('')}
+        </select>
+      </div>` : ''}
+      ${supercategories.length > 0 ? `
+      <div class="filter-group">
+        <label>Supercategory (multi-select)</label>
+        <select id="filter-supercat" multiple size="${Math.min(supercategories.length, 6)}"
+          style="min-width:220px"
+          onchange="updateMultiFilter('supercats', this)">
+          ${supercategories.map(s => `<option value="${s}" ${(state.filters.supercats||[]).includes(s)?'selected':''}>${s}</option>`).join('')}
         </select>
       </div>` : ''}
       ${showNamingFilter ? `
@@ -229,7 +255,11 @@ function renderCatalogPage() {
           return `
           <tr class="${state.selectedServices.has(svc.code) ? 'selected' : ''}">
             <td><input type="checkbox" ${state.selectedServices.has(svc.code)?'checked':''} onchange="toggleSelect('${svc.code}')" /></td>
-            <td>
+            <td title="${(() => {
+              const strip = h => (h||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+              const alt = strip(svc.summary) || strip(svc.keyBenefits) || strip(svc.description) || '';
+              return alt.substring(0,300).replace(/"/g,'&quot;');
+            })()}">
               <strong>${displayName}</strong>
               ${subName ? `<div style="font-size:0.75rem;color:#6a6a6a">${subName}</div>` : ''}
             </td>
@@ -391,16 +421,16 @@ window.updateFilter = function(key, value) {
   window._filterDebounce = setTimeout(applyFilters, 300);
 };
 
-window.updateModuleFilter = function(selectEl) {
+window.updateMultiFilter = function(key, selectEl) {
   const selected = Array.from(selectEl.selectedOptions).map(o => o.value);
-  state.filters.modules = selected;
-  state.filters.module = selected.length === 1 ? selected[0] : '';
+  state.filters[key] = selected;
+  if (key === 'modules') state.filters.module = selected.length === 1 ? selected[0] : '';
   clearTimeout(window._filterDebounce);
   window._filterDebounce = setTimeout(applyFilters, 300);
 };
 
 window.clearFilters = function() {
-  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], deckName: '', namingType: '' };
+  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], supercats: [], deckName: '', namingType: '' };
   state.filteredServices = [];
   state.catalog.hasSearched = false;
   render();

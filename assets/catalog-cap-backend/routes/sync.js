@@ -226,11 +226,11 @@ function _parseStandardSheet(rows) {
     if (col0 && !SKIP_VALS.has(col0.toLowerCase())) currentDeck = col0;
     if (!currentDeck) continue;
 
-    // Layer name — what gets stored in business_scenario_naming (e.g. "Foundational", "Advanced")
-    // Use col H "success plan layer" if present, otherwise fall back to col 0
-    const storeDeck = (layerCol !== null && layerVal && !SKIP_VALS.has(layerVal.toLowerCase()))
-      ? layerVal
-      : currentDeck;
+    // Deck name = col 0 carry-forward value — this is the name used in the customer deck
+    // e.g. "Going live support", "Integration validation", "Technical platform definition"
+    // Col H (layerVal) = "Foundational"/"Advanced"/"Max" — this is the engagement type label,
+    // NOT the deck name. We store col H separately for reference but NEVER as the deck name.
+    const storeDeck = currentDeck;
 
     // CRM ID mapping — may contain multiple IDs per cell
     const crmIds = [];

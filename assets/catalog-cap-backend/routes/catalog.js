@@ -55,6 +55,12 @@ router.get('/searchServices', (req, res) => {
     const moduleNames = Array.isArray(req.query.module)
       ? req.query.module
       : (req.query.module ? [req.query.module] : []);
+    const phases = Array.isArray(req.query.phase)
+      ? req.query.phase
+      : (req.query.phase ? [req.query.phase] : []);
+    const supercats = Array.isArray(req.query.supercat)
+      ? req.query.supercat
+      : (req.query.supercat ? [req.query.supercat] : []);
 
     const data = snapshot.load();
     if (!data) return res.status(404).json({ error: 'No snapshot available' });
@@ -94,7 +100,34 @@ router.get('/searchServices', (req, res) => {
       const etMatch = !engagementType || etArr.some(e => e === engagementType);
       const bsMatch = !bsServiceCodes || bsServiceCodes.has(svc.code);
       const modMatch = !moduleServiceCodes || moduleServiceCodes.has(svc.code);
-      if (textMatch && etMatch && bsMatch && modMatch) { seen.add(svc.code); return true; }
+      // Phase match
+      let phaseMatch = true;
+      if (phases.length > 0) {
+        const cf = svc.classificationFeatures;
+        const svcPhases = new Set();
+        if (Array.isArray(cf)) {
+          for (const item of cf) {
+            if (item && item.key === 'sapActivateProjectPhase') {
+              const vals = Array.isArray(item.value) ? item.value : [item.value];
+              vals.forEach(v => v && svcPhases.add(String(v)));
+            }
+          }
+        }
+        phaseMatch = phases.some(p => svcPhases.has(p));
+      }
+
+      // Supercategory match
+      let supercatMatch = true;
+      if (supercats.length > 0) {
+        const cats = svc.supercategories;
+        const svcCats = new Set();
+        if (Array.isArray(cats)) {
+          cats.forEach(c => c && c.name && svcCats.add(c.name));
+        }
+        supercatMatch = supercats.some(sc => svcCats.has(sc));
+      }
+
+      if (textMatch && etMatch && bsMatch && modMatch && phaseMatch && supercatMatch) { seen.add(svc.code); return true; }
       return false;
     }).slice(0, 200);
 
@@ -106,12 +139,17 @@ router.get('/searchServices', (req, res) => {
 router.get('/filterServices', (req, res) => {
   try {
     const { engagementType, businessScenario } = req.query;
-    // module can be single string or array
     const moduleNames = Array.isArray(req.query.module)
       ? req.query.module
       : (req.query.module ? [req.query.module] : []);
+    const phases = Array.isArray(req.query.phase)
+      ? req.query.phase
+      : (req.query.phase ? [req.query.phase] : []);
+    const supercats = Array.isArray(req.query.supercat)
+      ? req.query.supercat
+      : (req.query.supercat ? [req.query.supercat] : []);
 
-    if (!engagementType && !businessScenario && moduleNames.length === 0)
+    if (!engagementType && !businessScenario && moduleNames.length === 0 && phases.length === 0 && supercats.length === 0)
       return res.status(400).json({ error: 'At least one filter required' });
 
     const data = snapshot.load();
@@ -152,7 +190,34 @@ router.get('/filterServices', (req, res) => {
       const bsMatch = !bsServiceCodes || bsServiceCodes.has(svc.code);
       const modMatch = !moduleServiceCodes || moduleServiceCodes.has(svc.code);
 
-      if (etMatch && bsMatch && modMatch) { seen.add(svc.code); return true; }
+      // Phase match
+      let phaseMatch = true;
+      if (phases.length > 0) {
+        const cf = svc.classificationFeatures;
+        const svcPhases = new Set();
+        if (Array.isArray(cf)) {
+          for (const item of cf) {
+            if (item && item.key === 'sapActivateProjectPhase') {
+              const vals = Array.isArray(item.value) ? item.value : [item.value];
+              vals.forEach(v => v && svcPhases.add(String(v)));
+            }
+          }
+        }
+        phaseMatch = phases.some(p => svcPhases.has(p));
+      }
+
+      // Supercategory match
+      let supercatMatch = true;
+      if (supercats.length > 0) {
+        const cats = svc.supercategories;
+        const svcCats = new Set();
+        if (Array.isArray(cats)) {
+          cats.forEach(c => c && c.name && svcCats.add(c.name));
+        }
+        supercatMatch = supercats.some(sc => svcCats.has(sc));
+      }
+
+      if (etMatch && bsMatch && modMatch && phaseMatch && supercatMatch) { seen.add(svc.code); return true; }
       return false;
     }).slice(0, 500);
 
@@ -169,6 +234,8 @@ router.get('/metadata', (req, res) => {
 
     const bsMap = {}, moduleMap = {}, bsToMods = {};
     const etSet = new Set();
+    const phaseSet = new Set();
+    const supercatMap = {}; // key = "code - name", value = true
 
     for (const [code, svc] of Object.entries(flatIndex)) {
       if (svc.serviceObject === 'Business Scenario') {
@@ -181,8 +248,31 @@ router.get('/metadata', (req, res) => {
           bsToMods[code].push(modCode);
         }
       }
+      // Engagement types
       const ets = Array.isArray(svc.engagementType) ? svc.engagementType : (svc.engagementType ? [svc.engagementType] : []);
       ets.forEach(et => etSet.add(et));
+
+      // SAP Activate project phases from classificationFeatures
+      const cf = svc.classificationFeatures;
+      if (Array.isArray(cf)) {
+        for (const item of cf) {
+          if (item && item.key === 'sapActivateProjectPhase') {
+            const vals = Array.isArray(item.value) ? item.value : [item.value];
+            vals.forEach(v => v && phaseSet.add(String(v)));
+          }
+        }
+      }
+
+      // Supercategories
+      const cats = svc.supercategories;
+      if (Array.isArray(cats)) {
+        for (const c of cats) {
+          if (c && c.name) {
+            const key = c.name;
+            supercatMap[key] = true;
+          }
+        }
+      }
     }
 
     res.json({
@@ -191,7 +281,9 @@ router.get('/metadata', (req, res) => {
       bsMap,
       moduleMap,
       bsToMods,
-      engagementTypes: [...etSet].sort()
+      engagementTypes: [...etSet].sort(),
+      phases: [...phaseSet].sort(),
+      supercategories: Object.keys(supercatMap).sort()
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
