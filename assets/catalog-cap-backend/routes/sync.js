@@ -759,6 +759,41 @@ router.post('/full', requirePublishToken, async (req, res) => {
     }
     console.log(`Flat index built: ${Object.keys(flatIndex).length} services`);
 
+    // Enrich leaf services with fields=FULL (classificationFeatures, supercategories etc.)
+    const leafCodes = Object.keys(flatIndex).filter(c => {
+      const so = flatIndex[c].serviceObject;
+      return so !== 'Business Scenario' && so !== 'Business Scenario module';
+    });
+    console.log(`Fetching fields=FULL for ${leafCodes.length} leaf services...`);
+    const BATCH = 10;
+    for (let i = 0; i < leafCodes.length; i += BATCH) {
+      const batch = leafCodes.slice(i, i + BATCH);
+      const fetched = await Promise.all(batch.map(async code => {
+        try { return await fetchFullService(code, token); }
+        catch(e) { console.warn(`  fields=FULL failed for ${code}: ${e.message}`); return null; }
+      }));
+      for (const full of fetched) {
+        if (full && full.code && flatIndex[full.code]) {
+          // Merge only the fields missing from paginated fetch
+          const existing = flatIndex[full.code];
+          flatIndex[full.code] = {
+            ...existing,
+            classificationFeatures: full.classificationFeatures || existing.classificationFeatures || null,
+            supercategories: full.supercategories || existing.supercategories || null,
+            summary: full.summary || existing.summary || null,
+            businessNeeds: full.businessNeeds || existing.businessNeeds || null,
+            keyBenefits: full.keyBenefits || existing.keyBenefits || null,
+            deliveryApproach: full.deliveryApproach || existing.deliveryApproach || null,
+            description: full.description || existing.description || null,
+            serviceTeaserText: full.serviceTeaserText || existing.serviceTeaserText || null,
+          };
+        }
+      }
+      if (i % 100 === 0) console.log(`  fields=FULL progress: ${Math.min(i + BATCH, leafCodes.length)}/${leafCodes.length}`);
+      await new Promise(r => setTimeout(r, 200));
+    }
+    console.log(`fields=FULL enrichment complete.`);
+
     // Enrich from staged Excels
     const bsCodes = Object.keys(flatIndex).filter(c => flatIndex[c].serviceObject === 'Business Scenario');
     let totalEnriched = 0;
