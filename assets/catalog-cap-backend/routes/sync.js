@@ -82,13 +82,11 @@ async function fetchAllCatalogPages(token) {
     'Embedded Launch Activities', 'Cloud Prepackaged Services'
   ];
   const facets = ENGAGEMENT_TYPES.map(et => `engagementType:${et}`).join(',');
-  // Request specific fields needed for filtering — avoids FULL but includes classificationFeatures and supercategories
-  const fields = 'services(code,name,serviceObject,serviceNumber,shortDescription,summary,engagementType,childServices,parentCode,classificationFeatures,supercategories,businessScenarioNaming,serviceTeaserText,description,keyBenefits,deliveryApproach,businessNeeds,modifiedTime),pagination';
   const results = [];
   let page = 0;
   let totalPages = 1;
   do {
-    const data = await sscGet(`/${siteId}/services?facets=${encodeURIComponent(facets)}&pageSize=100&currentPage=${page}&fields=${encodeURIComponent(fields)}`, token);
+    const data = await sscGet(`/${siteId}/services?facets=${encodeURIComponent(facets)}&pageSize=100&currentPage=${page}`, token);
     results.push(...(data.services || []));
     const p = data.pagination || {};
     totalPages = p.totalPages || 1;

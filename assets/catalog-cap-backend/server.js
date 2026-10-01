@@ -39,15 +39,16 @@ app.get('/health', (req, res) => {
 // If snapshot is missing (e.g. after CF restart), trigger full sync + manifest build automatically.
 async function startupSync() {
   const snapshot = require('./store/snapshot');
-  if (snapshot.load()) {
-    console.log('[startup] Snapshot already available — skipping auto-sync.');
+  const existing = snapshot.load();
+  if (existing && existing.serviceCount > 100) {
+    console.log(`[startup] Snapshot already available (${existing.serviceCount} services) — skipping auto-sync.`);
     return;
   }
   if (!process.env.SSC_AUTH_URL || !process.env.SSC_CLIENT_ID || !process.env.SSC_CLIENT_SECRET) {
     console.warn('[startup] SSC credentials not configured — skipping auto-sync.');
     return;
   }
-  console.log('[startup] No snapshot found — triggering full sync automatically...');
+  console.log(`[startup] Snapshot missing or incomplete (serviceCount=${existing ? existing.serviceCount : 0}) — triggering full sync automatically...`);
   try {
     const http = require('http');
     const port = process.env.PORT || 4004;
