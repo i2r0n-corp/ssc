@@ -786,6 +786,22 @@ router.post('/full', requirePublishToken, async (req, res) => {
     }
     console.log(`fields=FULL enrichment complete.`);
 
+    // Restore Excel files from PostgreSQL before enrichment
+    try {
+      const db = require('../store/db');
+      db.getPool();
+      const excelRes = await db.query(`SELECT bs_code, file_data FROM catalog_excel_files`);
+      if (excelRes.rows.length) {
+        fs.mkdirSync(EXCEL_DIR, { recursive: true });
+        for (const row of excelRes.rows) {
+          fs.writeFileSync(path.join(EXCEL_DIR, `${row.bs_code}.xlsx`), row.file_data);
+        }
+        console.log(`[sync] Restored ${excelRes.rows.length} Excel files from PostgreSQL for enrichment.`);
+      }
+    } catch(e) {
+      if (!e.message.includes('No PostgreSQL')) console.warn('[sync] Excel restore failed:', e.message);
+    }
+
     // Enrich from staged Excels
     const bsCodes = Object.keys(flatIndex).filter(c => flatIndex[c].serviceObject === 'Business Scenario');
     let totalEnriched = 0;

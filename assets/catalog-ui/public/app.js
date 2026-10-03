@@ -146,49 +146,50 @@ function renderCatalogPage() {
     <div class="filter-row">
       <div class="filter-group">
         <label>Search</label>
-        <input type="search" id="filter-query" placeholder="Search services..." value="${state.filters.query}"
-          style="min-width:220px" oninput="updateFilter('query', this.value)" />
+        <ui5-input id="filter-query" placeholder="Search services..." value="${state.filters.query}"
+          style="min-width:220px" oninput="updateFilter('query', this.value)">
+        </ui5-input>
       </div>
       <div class="filter-group">
         <label>Engagement Type</label>
-        <select id="filter-et" onchange="updateFilter('engagementType', this.value)">
-          <option value="">All</option>
-          ${ET_OPTIONS.map(o => `<option value="${o.value}" ${state.filters.engagementType===o.value?'selected':''}>${o.label}</option>`).join('')}
-        </select>
+        <ui5-select id="filter-et" onchange="updateFilter('engagementType', this.selectedOption?.dataset?.value||'')">
+          <ui5-option data-value="" ${!state.filters.engagementType?'selected':''}>All</ui5-option>
+          ${ET_OPTIONS.map(o => `<ui5-option data-value="${o.value}" ${state.filters.engagementType===o.value?'selected':''}>${o.label}</ui5-option>`).join('')}
+        </ui5-select>
       </div>
       <div class="filter-group">
         <label>Business Scenario</label>
-        <select id="filter-bs" onchange="updateFilter('businessScenario', this.value)">
-          <option value="">All</option>
-          ${uniqueBS.map(([code, name]) => `<option value="${code}" ${state.filters.businessScenario===code?'selected':''}>${name}</option>`).join('')}
-        </select>
+        <ui5-select id="filter-bs" style="min-width:280px" onchange="updateFilter('businessScenario', this.selectedOption?.dataset?.value||'')">
+          <ui5-option data-value="" ${!state.filters.businessScenario?'selected':''}>All</ui5-option>
+          ${uniqueBS.map(([code, name]) => `<ui5-option data-value="${code}" ${state.filters.businessScenario===code?'selected':''}>${name}</ui5-option>`).join('')}
+        </ui5-select>
       </div>
       ${showModuleFilter ? `
       <div class="filter-group">
-        <label>Module (multi-select)</label>
-        <select id="filter-mod" multiple size="${Math.min(uniqueMods.length, 6)}"
-          style="min-width:220px"
-          onchange="updateMultiFilter('modules', this)">
-          ${uniqueMods.map(([code, name]) => `<option value="${code}" ${selectedMods.includes(code)?'selected':''}>${name}</option>`).join('')}
-        </select>
+        <label>Module</label>
+        <ui5-multi-combobox id="filter-mod" style="min-width:280px"
+          placeholder="Select modules..."
+          onselection-change="updateMultiFilterUI5('modules', this)">
+          ${uniqueMods.map(([code, name]) => `<ui5-mcb-item text="${name.replace(/"/g,'&quot;')}" data-value="${code}" ${selectedMods.includes(code)?'selected':''}></ui5-mcb-item>`).join('')}
+        </ui5-multi-combobox>
       </div>` : ''}
       ${phases.length > 0 ? `
       <div class="filter-group">
-        <label>SAP Activate Phase (multi-select)</label>
-        <select id="filter-phase" multiple size="${Math.min(phases.length, 6)}"
-          style="min-width:200px"
-          onchange="updateMultiFilter('phases', this)">
-          ${phases.map(p => `<option value="${p}" ${(state.filters.phases||[]).includes(p)?'selected':''}>${p}</option>`).join('')}
-        </select>
+        <label>SAP Activate Phase</label>
+        <ui5-multi-combobox id="filter-phase" style="min-width:220px"
+          placeholder="Select phases..."
+          onselection-change="updateMultiFilterUI5('phases', this)">
+          ${phases.map(p => `<ui5-mcb-item text="${p.replace(/"/g,'&quot;')}" data-value="${p}" ${(state.filters.phases||[]).includes(p)?'selected':''}></ui5-mcb-item>`).join('')}
+        </ui5-multi-combobox>
       </div>` : ''}
       ${supercategories.length > 0 ? `
       <div class="filter-group">
-        <label>Supercategory (multi-select)</label>
-        <select id="filter-supercat" multiple size="${Math.min(supercategories.length, 6)}"
-          style="min-width:220px"
-          onchange="updateMultiFilter('supercats', this)">
-          ${supercategories.map(s => `<option value="${s}" ${(state.filters.supercats||[]).includes(s)?'selected':''}>${s}</option>`).join('')}
-        </select>
+        <label>Supercategory</label>
+        <ui5-multi-combobox id="filter-supercat" style="min-width:280px"
+          placeholder="Select supercategories..."
+          onselection-change="updateMultiFilterUI5('supercats', this)">
+          ${supercategories.map(s => `<ui5-mcb-item text="${s.replace(/"/g,'&quot;')}" data-value="${s}" ${(state.filters.supercats||[]).includes(s)?'selected':''}></ui5-mcb-item>`).join('')}
+        </ui5-multi-combobox>
       </div>` : ''}
       ${showNamingFilter ? `
       <div class="filter-group">
@@ -198,7 +199,7 @@ function renderCatalogPage() {
           <button class="toggle-btn ${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
         </div>
       </div>` : ''}
-      <button class="btn btn-secondary btn-sm" onclick="clearFilters()">Clear</button>
+      <ui5-button design="Transparent" onclick="clearFilters()">Clear</ui5-button>
       ${lastUpdated ? `<span class="last-updated">Last updated: ${new Date(lastUpdated).toLocaleString()}</span>` : ''}
     </div>
     ${loading ? '<div class="loading"><div class="loading-spinner"></div> Loading...</div>' : ''}
@@ -423,6 +424,14 @@ window.updateFilter = function(key, value) {
 
 window.updateMultiFilter = function(key, selectEl) {
   const selected = Array.from(selectEl.selectedOptions).map(o => o.value);
+  state.filters[key] = selected;
+  if (key === 'modules') state.filters.module = selected.length === 1 ? selected[0] : '';
+  clearTimeout(window._filterDebounce);
+  window._filterDebounce = setTimeout(applyFilters, 300);
+};
+
+window.updateMultiFilterUI5 = function(key, combobox) {
+  const selected = Array.from(combobox.querySelectorAll('ui5-mcb-item[selected]')).map(i => i.dataset.value || i.getAttribute('text'));
   state.filters[key] = selected;
   if (key === 'modules') state.filters.module = selected.length === 1 ? selected[0] : '';
   clearTimeout(window._filterDebounce);
