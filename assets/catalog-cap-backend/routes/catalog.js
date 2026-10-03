@@ -55,6 +55,8 @@ router.get('/searchServices', (req, res) => {
     const moduleNames = Array.isArray(req.query.module) ? req.query.module : (req.query.module ? [req.query.module] : []);
     const phases = Array.isArray(req.query.phase) ? req.query.phase : (req.query.phase ? [req.query.phase] : []);
     const supercats = Array.isArray(req.query.supercat) ? req.query.supercat : (req.query.supercat ? [req.query.supercat] : []);
+    const advancedLoSCats = Array.isArray(req.query.advancedLoSCat) ? req.query.advancedLoSCat : (req.query.advancedLoSCat ? [req.query.advancedLoSCat] : []);
+    const advancedLoSMode = req.query.advancedLoSMode || 'merge';
 
     const data = snapshot.load();
     if (!data) return res.status(404).json({ error: 'No snapshot available' });
@@ -106,14 +108,20 @@ router.get('/searchServices', (req, res) => {
         }
         phaseMatch = phases.some(p => svcPhases.has(p));
       }
+      const cats = svc.supercategories;
+      const svcCats = new Set();
+      if (Array.isArray(cats)) cats.forEach(c => c && c.name && svcCats.add(c.name));
       let supercatMatch = true;
       if (supercats.length > 0) {
-        const cats = svc.supercategories;
-        const svcCats = new Set();
-        if (Array.isArray(cats)) cats.forEach(c => c && c.name && svcCats.add(c.name));
         supercatMatch = supercats.some(sc => svcCats.has(sc));
       }
-      if (textMatch && etMatch && bsMatch && modMatch && phaseMatch && supercatMatch) { seen.add(svc.code); return true; }
+      let advancedLoSMatch = true;
+      if (advancedLoSCats.length > 0) {
+        advancedLoSMatch = advancedLoSMode === 'intersect'
+          ? advancedLoSCats.every(sc => svcCats.has(sc))
+          : advancedLoSCats.some(sc => svcCats.has(sc));
+      }
+      if (textMatch && etMatch && bsMatch && modMatch && phaseMatch && supercatMatch && advancedLoSMatch) { seen.add(svc.code); return true; }
       return false;
     }).slice(0, 200);
 
@@ -128,8 +136,10 @@ router.get('/filterServices', async (req, res) => {
     const moduleNames = Array.isArray(req.query.module) ? req.query.module : (req.query.module ? [req.query.module] : []);
     const phases = Array.isArray(req.query.phase) ? req.query.phase : (req.query.phase ? [req.query.phase] : []);
     const supercats = Array.isArray(req.query.supercat) ? req.query.supercat : (req.query.supercat ? [req.query.supercat] : []);
+    const advancedLoSCats = Array.isArray(req.query.advancedLoSCat) ? req.query.advancedLoSCat : (req.query.advancedLoSCat ? [req.query.advancedLoSCat] : []);
+    const advancedLoSMode = req.query.advancedLoSMode || 'merge';
 
-    if (!engagementType && !businessScenario && moduleNames.length === 0 && phases.length === 0 && supercats.length === 0)
+    if (!engagementType && !businessScenario && moduleNames.length === 0 && phases.length === 0 && supercats.length === 0 && advancedLoSCats.length === 0)
       return res.status(400).json({ error: 'At least one filter required' });
 
     // ── PostgreSQL path ───────────────────────────────────────────────────────
@@ -169,6 +179,21 @@ router.get('/filterServices', async (req, res) => {
         params.push(supercats);
         sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[]))';
         pIdx++;
+      }
+
+      if (advancedLoSCats.length > 0) {
+        if (advancedLoSMode === 'intersect') {
+          // Each selected LoS cat must match — one EXISTS per cat
+          for (const cat of advancedLoSCats) {
+            params.push(cat);
+            sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = $' + pIdx + ')';
+            pIdx++;
+          }
+        } else {
+          params.push(advancedLoSCats);
+          sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[]))';
+          pIdx++;
+        }
       }
 
       sql += ' ORDER BY s.name LIMIT 500';
@@ -245,7 +270,16 @@ router.get('/filterServices', async (req, res) => {
         if (Array.isArray(cats)) cats.forEach(c => c && c.name && svcCats.add(c.name));
         supercatMatch = supercats.some(sc => svcCats.has(sc));
       }
-      if (etMatch && bsMatch && modMatch && phaseMatch && supercatMatch) { seen.add(svc.code); return true; }
+      let advancedLoSMatch = true;
+      if (advancedLoSCats.length > 0) {
+        const cats = svc.supercategories;
+        const svcCats = new Set();
+        if (Array.isArray(cats)) cats.forEach(c => c && c.name && svcCats.add(c.name));
+        advancedLoSMatch = advancedLoSMode === 'intersect'
+          ? advancedLoSCats.every(sc => svcCats.has(sc))
+          : advancedLoSCats.some(sc => svcCats.has(sc));
+      }
+      if (etMatch && bsMatch && modMatch && phaseMatch && supercatMatch && advancedLoSMatch) { seen.add(svc.code); return true; }
       return false;
     }).slice(0, 500);
 

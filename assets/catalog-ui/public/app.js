@@ -66,11 +66,11 @@ async function applyFilters() {
   const advancedLoSMode = state.filters.advancedLoSMode || 'merge';
   const foundationalCats = state.filters.foundationalCats || [];
 
-  // Combine all supercats
-  const allSupercats = [...new Set([...supercats, ...advancedLoS, ...foundationalCats])];
+  // Combine foundational supercats (always OR) and keep advancedLoS separate for mode handling
+  const allSupercats = [...new Set([...supercats, ...foundationalCats])];
 
   // Nothing selected — clear results and show prompt
-  if (!query && !engagementType && !businessScenario && !mod && mods.length === 0 && phases.length === 0 && allSupercats.length === 0) {
+  if (!query && !engagementType && !businessScenario && !mod && mods.length === 0 && phases.length === 0 && allSupercats.length === 0 && advancedLoS.length === 0) {
     state.filteredServices = [];
     state.catalog.hasSearched = false;
     render(); return;
@@ -90,8 +90,11 @@ async function applyFilters() {
     else if (mod) params.set('module', mod);
     // phases
     phases.forEach(p => params.append('phase', p));
-    // supercategories — combine all three supercat filters
+    // foundational + plain supercats — always OR union
     allSupercats.forEach(s => params.append('supercat', s));
+    // advanced LoS — sent separately so the backend can apply the right mode
+    advancedLoS.forEach(s => params.append('advancedLoSCat', s));
+    if (advancedLoS.length > 0) params.set('advancedLoSMode', advancedLoSMode);
 
     const url = query
       ? `${CAP_BACKEND_URL}/api/catalog/searchServices?${params}`
@@ -214,10 +217,10 @@ function renderCatalogPage() {
             <div style="display:flex;gap:4px;margin-bottom:6px">
               <button class="toggle-btn ${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}"
                 style="font-size:0.72rem;padding:2px 8px;border:1px solid #0070F2;border-radius:3px"
-                onclick="updateFilter('advancedLoSMode','merge')">OR</button>
+                onclick="updateFilter('advancedLoSMode','merge')">Merge</button>
               <button class="toggle-btn ${state.filters.advancedLoSMode==='intersect'?'active':''}"
                 style="font-size:0.72rem;padding:2px 8px;border:1px solid #0070F2;border-radius:3px"
-                onclick="updateFilter('advancedLoSMode','intersect')">AND</button>
+                onclick="updateFilter('advancedLoSMode','intersect')">Intersect</button>
             </div>
             <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:4px 0">
               ${advancedLoS.map(s => `
