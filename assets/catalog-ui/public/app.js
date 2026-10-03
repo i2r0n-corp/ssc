@@ -12,7 +12,7 @@ const AGENT_BASE_URL  = window.AGENT_BASE_URL  || 'http://localhost:5000';
 let state = {
   currentPage: 'catalog',
   catalog: { services: [], lastUpdated: null, loading: false, error: null },
-  filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], deckName: '', namingType: '' },
+  filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], deckName: '', namingType: '' },
   filteredServices: [],
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
   selectedServices: new Set(),
@@ -61,6 +61,7 @@ async function applyFilters() {
   const { query, engagementType, businessScenario, module: mod } = state.filters;
   const mods            = state.filters.modules       || [];
   const phases          = state.filters.phases        || [];
+  const phaseMode       = state.filters.phaseMode      || 'merge';
   const supercats       = state.filters.supercats     || [];
   const advancedLoS     = state.filters.advancedLoS   || [];
   const advancedLoSMode = state.filters.advancedLoSMode || 'merge';
@@ -90,6 +91,7 @@ async function applyFilters() {
     else if (mod) params.set('module', mod);
     // phases
     phases.forEach(p => params.append('phase', p));
+    if (phases.length > 0) params.set('phaseMode', phaseMode);
     // foundational + plain supercats — always OR union
     allSupercats.forEach(s => params.append('supercat', s));
     // advanced LoS — sent separately so the backend can apply the right mode
@@ -194,6 +196,10 @@ function renderCatalogPage() {
       ${phases.length > 0 ? `
       <div class="filter-group">
         <label>SAP Activate Phase</label>
+        <div class="toggle-group" style="margin-bottom:6px">
+          <button class="toggle-btn ${(state.filters.phaseMode||'merge')==='merge'?'active':''}" onclick="updateFilter('phaseMode','merge')">Merge</button>
+          <button class="toggle-btn ${state.filters.phaseMode==='intersect'?'active':''}" onclick="updateFilter('phaseMode','intersect')">Intersect</button>
+        </div>
         <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:4px 0">
           ${phases.map(p => `
             <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:400;cursor:pointer">
@@ -214,13 +220,9 @@ function renderCatalogPage() {
           html += `
           <div class="filter-group">
             <label>Advanced LoS</label>
-            <div style="display:flex;gap:4px;margin-bottom:6px">
-              <button class="toggle-btn ${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}"
-                style="font-size:0.72rem;padding:2px 8px;border:1px solid #0070F2;border-radius:3px"
-                onclick="updateFilter('advancedLoSMode','merge')">Merge</button>
-              <button class="toggle-btn ${state.filters.advancedLoSMode==='intersect'?'active':''}"
-                style="font-size:0.72rem;padding:2px 8px;border:1px solid #0070F2;border-radius:3px"
-                onclick="updateFilter('advancedLoSMode','intersect')">Intersect</button>
+            <div class="toggle-group" style="margin-bottom:6px">
+              <button class="toggle-btn ${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}" onclick="updateFilter('advancedLoSMode','merge')">Merge</button>
+              <button class="toggle-btn ${state.filters.advancedLoSMode==='intersect'?'active':''}" onclick="updateFilter('advancedLoSMode','intersect')">Intersect</button>
             </div>
             <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:4px 0">
               ${advancedLoS.map(s => `
@@ -505,7 +507,7 @@ window.updateMultiFilterUI5 = function(key, combobox) {
 };
 
 window.clearFilters = function() {
-  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], deckName: '', namingType: '' };
+  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], deckName: '', namingType: '' };
   state.filteredServices = [];
   state.catalog.hasSearched = false;
   render();

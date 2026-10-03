@@ -54,6 +54,7 @@ router.get('/searchServices', (req, res) => {
     const { query = '', engagementType, businessScenario } = req.query;
     const moduleNames = Array.isArray(req.query.module) ? req.query.module : (req.query.module ? [req.query.module] : []);
     const phases = Array.isArray(req.query.phase) ? req.query.phase : (req.query.phase ? [req.query.phase] : []);
+    const phaseMode = req.query.phaseMode || 'merge';
     const supercats = Array.isArray(req.query.supercat) ? req.query.supercat : (req.query.supercat ? [req.query.supercat] : []);
     const advancedLoSCats = Array.isArray(req.query.advancedLoSCat) ? req.query.advancedLoSCat : (req.query.advancedLoSCat ? [req.query.advancedLoSCat] : []);
     const advancedLoSMode = req.query.advancedLoSMode || 'merge';
@@ -106,7 +107,9 @@ router.get('/searchServices', (req, res) => {
             }
           }
         }
-        phaseMatch = phases.some(p => svcPhases.has(p));
+        phaseMatch = phaseMode === 'intersect'
+          ? phases.every(p => svcPhases.has(p))
+          : phases.some(p => svcPhases.has(p));
       }
       const cats = svc.supercategories;
       const svcCats = new Set();
@@ -135,6 +138,7 @@ router.get('/filterServices', async (req, res) => {
     const { engagementType, businessScenario } = req.query;
     const moduleNames = Array.isArray(req.query.module) ? req.query.module : (req.query.module ? [req.query.module] : []);
     const phases = Array.isArray(req.query.phase) ? req.query.phase : (req.query.phase ? [req.query.phase] : []);
+    const phaseMode = req.query.phaseMode || 'merge';
     const supercats = Array.isArray(req.query.supercat) ? req.query.supercat : (req.query.supercat ? [req.query.supercat] : []);
     const advancedLoSCats = Array.isArray(req.query.advancedLoSCat) ? req.query.advancedLoSCat : (req.query.advancedLoSCat ? [req.query.advancedLoSCat] : []);
     const advancedLoSMode = req.query.advancedLoSMode || 'merge';
@@ -170,9 +174,17 @@ router.get('/filterServices', async (req, res) => {
       }
 
       if (phases.length > 0) {
-        params.push(phases);
-        sql += ' AND EXISTS (SELECT 1 FROM catalog_classification cp WHERE cp.service_code = s.code AND cp.feature_key = \'sapActivateProjectPhase\' AND cp.feature_value = ANY($' + pIdx + '::text[]))';
-        pIdx++;
+        if (phaseMode === 'intersect') {
+          for (const phase of phases) {
+            params.push(phase);
+            sql += ' AND EXISTS (SELECT 1 FROM catalog_classification cp WHERE cp.service_code = s.code AND cp.feature_key = \'sapActivateProjectPhase\' AND cp.feature_value = $' + pIdx + ')';
+            pIdx++;
+          }
+        } else {
+          params.push(phases);
+          sql += ' AND EXISTS (SELECT 1 FROM catalog_classification cp WHERE cp.service_code = s.code AND cp.feature_key = \'sapActivateProjectPhase\' AND cp.feature_value = ANY($' + pIdx + '::text[]))';
+          pIdx++;
+        }
       }
 
       if (supercats.length > 0) {
@@ -261,7 +273,9 @@ router.get('/filterServices', async (req, res) => {
             }
           }
         }
-        phaseMatch = phases.some(p => svcPhases.has(p));
+        phaseMatch = phaseMode === 'intersect'
+          ? phases.every(p => svcPhases.has(p))
+          : phases.some(p => svcPhases.has(p));
       }
       let supercatMatch = true;
       if (supercats.length > 0) {
