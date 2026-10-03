@@ -157,15 +157,16 @@ router.get('/filterServices', async (req, res) => {
       const db = require('../store/db');
       db.getPool();
 
+      const params = [];
+      let pIdx = 1;
+
       let sql = `
         SELECT DISTINCT s.*, bn.deck_name, bn.bs_code AS bn_bs_code
         FROM catalog_services s
-        LEFT JOIN catalog_bs_naming bn ON bn.service_code = s.code AND bn.bs_code = $1
+        LEFT JOIN catalog_bs_naming bn ON bn.service_code = s.code
         WHERE s.service_object NOT IN ('Business Scenario', 'Business Scenario module')
           AND s.name IS NOT NULL
       `;
-      const params = [businessScenario || null];
-      let pIdx = 2;
 
       if (engagementType) {
         sql += ` AND EXISTS (
