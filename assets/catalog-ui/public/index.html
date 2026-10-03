@@ -107,6 +107,8 @@
       height: 3rem;
     }
     .fl-field select { padding-right: 2rem; }
+    .fl-field select[multiple] { padding: 0.5rem 0.75rem; height: auto; padding-right: 0.75rem; }
+    .fl-field select[multiple] ~ label { top: 0.45rem; transform: none; font-size: 0.68rem; color: #556B82; font-weight: 600; }
     .fl-field label {
       position: absolute;
       left: 0.75rem;
@@ -141,7 +143,7 @@
     .fl-field select:focus ~ label { color: #0070F2; }
     /* ─────────────────────────────────────────────────────────────────────── */
     /* ── Mode switch (Merge / Intersect) ──────────────────────────────────── */
-    .mode-switch { display: inline-flex; align-items: center; background: #EBF2FF; border-radius: 2rem; padding: 2px; gap: 0; margin-bottom: 6px; }
+    .mode-switch { display: flex; width: fit-content; align-items: center; background: #EBF2FF; border-radius: 2rem; padding: 2px; gap: 0; margin-bottom: 6px; }
     .mode-switch button {
       border: none; background: transparent; border-radius: 2rem;
       padding: 3px 12px; font-size: 0.72rem; font-weight: 600; cursor: pointer;

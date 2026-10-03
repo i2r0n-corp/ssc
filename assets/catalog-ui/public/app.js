@@ -12,7 +12,7 @@ const AGENT_BASE_URL  = window.AGENT_BASE_URL  || 'http://localhost:5000';
 let state = {
   currentPage: 'catalog',
   catalog: { services: [], lastUpdated: null, loading: false, error: null },
-  filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], deckName: '', namingType: '' },
+  filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', deckName: '', namingType: '' },
   filteredServices: [],
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
   selectedServices: new Set(),
@@ -66,12 +66,13 @@ async function applyFilters() {
   const advancedLoS     = state.filters.advancedLoS   || [];
   const advancedLoSMode = state.filters.advancedLoSMode || 'merge';
   const foundationalCats = state.filters.foundationalCats || [];
+  const foundationalCatsMode = state.filters.foundationalCatsMode || 'merge';
 
-  // Combine foundational supercats (always OR) and keep advancedLoS separate for mode handling
-  const allSupercats = [...new Set([...supercats, ...foundationalCats])];
+  // Combine foundational supercats and keep advancedLoS separate for mode handling
+  const allSupercats = [...new Set([...supercats])];
 
   // Nothing selected — clear results and show prompt
-  if (!query && !engagementType && !businessScenario && !mod && mods.length === 0 && phases.length === 0 && allSupercats.length === 0 && advancedLoS.length === 0) {
+  if (!query && !engagementType && !businessScenario && !mod && mods.length === 0 && phases.length === 0 && allSupercats.length === 0 && advancedLoS.length === 0 && foundationalCats.length === 0) {
     state.filteredServices = [];
     state.catalog.hasSearched = false;
     render(); return;
@@ -92,11 +93,14 @@ async function applyFilters() {
     // phases
     phases.forEach(p => params.append('phase', p));
     if (phases.length > 0) params.set('phaseMode', phaseMode);
-    // foundational + plain supercats — always OR union
+    // plain supercats (always OR union)
     allSupercats.forEach(s => params.append('supercat', s));
     // advanced LoS — sent separately so the backend can apply the right mode
     advancedLoS.forEach(s => params.append('advancedLoSCat', s));
     if (advancedLoS.length > 0) params.set('advancedLoSMode', advancedLoSMode);
+    // foundational cats — sent separately so the backend can apply the right mode
+    foundationalCats.forEach(s => params.append('foundationalCat', s));
+    if (foundationalCats.length > 0) params.set('foundationalCatsMode', foundationalCatsMode);
 
     const url = query
       ? `${CAP_BACKEND_URL}/api/catalog/searchServices?${params}`
@@ -187,14 +191,17 @@ function renderCatalogPage() {
         <label>Business Scenario</label>
       </div>
       ${showModuleFilter ? `
-      <div class="filter-group">
-        <label>Module</label>
-        <select id="filter-mod" multiple size="${Math.min(uniqueMods.length, 5)}" style="min-width:280px"
+      <div class="fl-field" style="min-width:280px">
+        <select id="filter-mod" multiple size="${Math.min(uniqueMods.length, 5)}"
           onchange="updateMultiFilter('modules', this)">
-          ${uniqueMods.map(([code, name]) => `<option value="${code}" ${selectedMods.includes(code)?'selected':''}>${name}</option>`).join('')}
+          ${uniqueMods.map(([code, name]) => {
+            const label = name.includes(' // ') ? name.split(' // ').slice(1).join(' // ') : name;
+            return `<option value="${code}" ${selectedMods.includes(code)?'selected':''}>${label}</option>`;
+          }).join('')}
         </select>
-        <span class="filter-hint">Hold Ctrl to select multiple</span>
-      </div>` : ''}
+        <label>Module</label>
+      </div>
+      <span class="filter-hint" style="align-self:center">Hold Ctrl to select multiple</span>` : ''}
       ${phases.length > 0 ? `
       <div class="filter-group">
         <label>SAP Activate Phase</label>
@@ -240,6 +247,10 @@ function renderCatalogPage() {
           html += `
           <div class="filter-group">
             <label>Foundationals</label>
+            <div class="mode-switch">
+              <button class="${(state.filters.foundationalCatsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('foundationalCatsMode','merge')">Merge</button>
+              <button class="${state.filters.foundationalCatsMode==='intersect'?'active':''}" onclick="updateFilter('foundationalCatsMode','intersect')">Intersect</button>
+            </div>
             <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:4px 0">
               ${foundationalCats.map(s => `
                 <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:400;cursor:pointer">
@@ -509,7 +520,7 @@ window.updateMultiFilterUI5 = function(key, combobox) {
 };
 
 window.clearFilters = function() {
-  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], deckName: '', namingType: '' };
+  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', deckName: '', namingType: '' };
   state.filteredServices = [];
   state.catalog.hasSearched = false;
   render();

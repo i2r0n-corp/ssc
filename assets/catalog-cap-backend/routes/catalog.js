@@ -58,6 +58,8 @@ router.get('/searchServices', (req, res) => {
     const supercats = Array.isArray(req.query.supercat) ? req.query.supercat : (req.query.supercat ? [req.query.supercat] : []);
     const advancedLoSCats = Array.isArray(req.query.advancedLoSCat) ? req.query.advancedLoSCat : (req.query.advancedLoSCat ? [req.query.advancedLoSCat] : []);
     const advancedLoSMode = req.query.advancedLoSMode || 'merge';
+    const foundationalCats = Array.isArray(req.query.foundationalCat) ? req.query.foundationalCat : (req.query.foundationalCat ? [req.query.foundationalCat] : []);
+    const foundationalCatsMode = req.query.foundationalCatsMode || 'merge';
 
     // ── PostgreSQL path ───────────────────────────────────────────────────────
     const dbSearch = async () => {
@@ -121,6 +123,20 @@ router.get('/searchServices', (req, res) => {
           }
         } else {
           params.push(advancedLoSCats);
+          sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[]))';
+          pIdx++;
+        }
+      }
+
+      if (foundationalCats.length > 0) {
+        if (foundationalCatsMode === 'intersect') {
+          for (const cat of foundationalCats) {
+            params.push(cat);
+            sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = $' + pIdx + ')';
+            pIdx++;
+          }
+        } else {
+          params.push(foundationalCats);
           sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[]))';
           pIdx++;
         }
@@ -213,7 +229,13 @@ router.get('/searchServices', (req, res) => {
             ? advancedLoSCats.every(sc => svcCats.has(sc))
             : advancedLoSCats.some(sc => svcCats.has(sc));
         }
-        if (textMatch && etMatch && bsMatch && modMatch && phaseMatch && supercatMatch && advancedLoSMatch) { seen.add(svc.code); return true; }
+        let foundationalMatch = true;
+        if (foundationalCats.length > 0) {
+          foundationalMatch = foundationalCatsMode === 'intersect'
+            ? foundationalCats.every(sc => svcCats.has(sc))
+            : foundationalCats.some(sc => svcCats.has(sc));
+        }
+        if (textMatch && etMatch && bsMatch && modMatch && phaseMatch && supercatMatch && advancedLoSMatch && foundationalMatch) { seen.add(svc.code); return true; }
         return false;
       }).slice(0, 200);
 
@@ -232,8 +254,10 @@ router.get('/filterServices', async (req, res) => {
     const supercats = Array.isArray(req.query.supercat) ? req.query.supercat : (req.query.supercat ? [req.query.supercat] : []);
     const advancedLoSCats = Array.isArray(req.query.advancedLoSCat) ? req.query.advancedLoSCat : (req.query.advancedLoSCat ? [req.query.advancedLoSCat] : []);
     const advancedLoSMode = req.query.advancedLoSMode || 'merge';
+    const foundationalCats = Array.isArray(req.query.foundationalCat) ? req.query.foundationalCat : (req.query.foundationalCat ? [req.query.foundationalCat] : []);
+    const foundationalCatsMode = req.query.foundationalCatsMode || 'merge';
 
-    if (!engagementType && !businessScenario && moduleNames.length === 0 && phases.length === 0 && supercats.length === 0 && advancedLoSCats.length === 0)
+    if (!engagementType && !businessScenario && moduleNames.length === 0 && phases.length === 0 && supercats.length === 0 && advancedLoSCats.length === 0 && foundationalCats.length === 0)
       return res.status(400).json({ error: 'At least one filter required' });
 
     // ── PostgreSQL path ───────────────────────────────────────────────────────
@@ -293,6 +317,20 @@ router.get('/filterServices', async (req, res) => {
           }
         } else {
           params.push(advancedLoSCats);
+          sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[]))';
+          pIdx++;
+        }
+      }
+
+      if (foundationalCats.length > 0) {
+        if (foundationalCatsMode === 'intersect') {
+          for (const cat of foundationalCats) {
+            params.push(cat);
+            sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = $' + pIdx + ')';
+            pIdx++;
+          }
+        } else {
+          params.push(foundationalCats);
           sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[]))';
           pIdx++;
         }
@@ -383,7 +421,16 @@ router.get('/filterServices', async (req, res) => {
           ? advancedLoSCats.every(sc => svcCats.has(sc))
           : advancedLoSCats.some(sc => svcCats.has(sc));
       }
-      if (etMatch && bsMatch && modMatch && phaseMatch && supercatMatch && advancedLoSMatch) { seen.add(svc.code); return true; }
+      let foundationalMatch = true;
+      if (foundationalCats.length > 0) {
+        const cats = svc.supercategories;
+        const svcCats = new Set();
+        if (Array.isArray(cats)) cats.forEach(c => c && c.name && svcCats.add(c.name));
+        foundationalMatch = foundationalCatsMode === 'intersect'
+          ? foundationalCats.every(sc => svcCats.has(sc))
+          : foundationalCats.some(sc => svcCats.has(sc));
+      }
+      if (etMatch && bsMatch && modMatch && phaseMatch && supercatMatch && advancedLoSMatch && foundationalMatch) { seen.add(svc.code); return true; }
       return false;
     }).slice(0, 500);
 
