@@ -59,76 +59,166 @@ router.get('/searchServices', (req, res) => {
     const advancedLoSCats = Array.isArray(req.query.advancedLoSCat) ? req.query.advancedLoSCat : (req.query.advancedLoSCat ? [req.query.advancedLoSCat] : []);
     const advancedLoSMode = req.query.advancedLoSMode || 'merge';
 
-    const data = snapshot.load();
-    if (!data) return res.status(404).json({ error: 'No snapshot available' });
-    const flatIndex = JSON.parse(data.payload).flat_index || {};
-    const q = query.toLowerCase();
+    // ── PostgreSQL path ───────────────────────────────────────────────────────
+    const dbSearch = async () => {
+      const db = require('../store/db');
+      db.getPool();
 
-    let moduleServiceCodes = null;
-    if (moduleNames.length > 0) {
-      moduleServiceCodes = new Set();
-      for (const modCode of moduleNames) {
-        const mod = flatIndex[modCode];
-        if (mod) (mod.childServices || []).forEach(c => moduleServiceCodes.add(c));
+      const params = [];
+      let pIdx = 1;
+      let sql = 'SELECT DISTINCT s.*, bn.deck_name, bn.bs_code AS bn_bs_code FROM catalog_services s LEFT JOIN catalog_bs_naming bn ON bn.service_code = s.code WHERE s.service_object NOT IN (\'Business Scenario\', \'Business Scenario module\') AND s.name IS NOT NULL';
+
+      if (query) {
+        params.push(`%${query.toLowerCase()}%`);
+        sql += ' AND (LOWER(s.name) LIKE $' + pIdx + ' OR LOWER(s.short_description) LIKE $' + pIdx + ')';
+        pIdx++;
       }
-    }
 
-    let bsServiceCodes = null;
-    if (businessScenario) {
-      bsServiceCodes = new Set();
-      const bs = flatIndex[businessScenario];
-      if (bs) {
-        for (const modCode of bs.childServices || []) {
-          const mod = flatIndex[modCode];
-          if (mod) (mod.childServices || []).forEach(c => bsServiceCodes.add(c));
+      if (engagementType) {
+        params.push(engagementType);
+        sql += ' AND EXISTS (SELECT 1 FROM catalog_classification cc WHERE cc.service_code = s.code AND cc.feature_key = \'engagementType\' AND cc.feature_value = $' + pIdx + ')';
+        pIdx++;
+      }
+
+      if (businessScenario) {
+        params.push(businessScenario);
+        sql += ' AND EXISTS (SELECT 1 FROM catalog_hierarchy h1 JOIN catalog_hierarchy h2 ON h2.parent_code = h1.child_code WHERE h1.parent_code = $' + pIdx + ' AND h2.child_code = s.code)';
+        pIdx++;
+      }
+
+      if (moduleNames.length > 0) {
+        params.push(moduleNames);
+        sql += ' AND EXISTS (SELECT 1 FROM catalog_hierarchy hm WHERE hm.parent_code = ANY($' + pIdx + '::text[]) AND hm.child_code = s.code)';
+        pIdx++;
+      }
+
+      if (phases.length > 0) {
+        if (phaseMode === 'intersect') {
+          for (const phase of phases) {
+            params.push(phase);
+            sql += ' AND EXISTS (SELECT 1 FROM catalog_classification cp WHERE cp.service_code = s.code AND cp.feature_key = \'sapActivateProjectPhase\' AND cp.feature_value = $' + pIdx + ')';
+            pIdx++;
+          }
+        } else {
+          params.push(phases);
+          sql += ' AND EXISTS (SELECT 1 FROM catalog_classification cp WHERE cp.service_code = s.code AND cp.feature_key = \'sapActivateProjectPhase\' AND cp.feature_value = ANY($' + pIdx + '::text[]))';
+          pIdx++;
         }
       }
-    }
 
-    const seen = new Set();
-    const results = Object.values(flatIndex).filter(svc => {
-      if (svc.serviceObject === 'Business Scenario' || svc.serviceObject === 'Business Scenario module') return false;
-      if (!svc.name) return false;
-      if (seen.has(svc.code)) return false;
-      const textMatch = !q || svc.name.toLowerCase().includes(q) || (svc.shortDescription||'').toLowerCase().includes(q);
-      const etArr = Array.isArray(svc.engagementType) ? svc.engagementType : (svc.engagementType ? [svc.engagementType] : []);
-      const etMatch = !engagementType || etArr.some(e => e === engagementType);
-      const bsMatch = !bsServiceCodes || bsServiceCodes.has(svc.code);
-      const modMatch = !moduleServiceCodes || moduleServiceCodes.has(svc.code);
-      let phaseMatch = true;
-      if (phases.length > 0) {
-        const cf = svc.classificationFeatures;
-        const svcPhases = new Set();
-        if (Array.isArray(cf)) {
-          for (const item of cf) {
-            if (item && item.key === 'sapActivateProjectPhase') {
-              const vals = Array.isArray(item.value) ? item.value : [item.value];
-              vals.forEach(v => v && svcPhases.add(String(v)));
-            }
+      if (supercats.length > 0) {
+        params.push(supercats);
+        sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[]))';
+        pIdx++;
+      }
+
+      if (advancedLoSCats.length > 0) {
+        if (advancedLoSMode === 'intersect') {
+          for (const cat of advancedLoSCats) {
+            params.push(cat);
+            sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = $' + pIdx + ')';
+            pIdx++;
+          }
+        } else {
+          params.push(advancedLoSCats);
+          sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[]))';
+          pIdx++;
+        }
+      }
+
+      sql += ' ORDER BY s.name LIMIT 200';
+
+      const result = await db.query(sql, params);
+      const services = result.rows.map(row => {
+        const svc = row.raw_data || {};
+        if (row.deck_name && row.bn_bs_code) {
+          if (!svc.business_scenario_naming) svc.business_scenario_naming = {};
+          svc.business_scenario_naming[row.bn_bs_code] = row.deck_name;
+        }
+        return svc;
+      });
+      return services;
+    };
+
+    // Try DB first, fall back to snapshot file
+    dbSearch().then(services => {
+      res.json({ count: services.length, services });
+    }).catch(dbErr => {
+      if (!dbErr.message.includes('No PostgreSQL')) {
+        console.warn('[searchServices] DB failed, falling back to file:', dbErr.message);
+      }
+      // ── File fallback ─────────────────────────────────────────────────────
+      const data = snapshot.load();
+      if (!data) return res.status(404).json({ error: 'No snapshot available' });
+      const flatIndex = JSON.parse(data.payload).flat_index || {};
+      const q = query.toLowerCase();
+
+      let moduleServiceCodes = null;
+      if (moduleNames.length > 0) {
+        moduleServiceCodes = new Set();
+        for (const modCode of moduleNames) {
+          const mod = flatIndex[modCode];
+          if (mod) (mod.childServices || []).forEach(c => moduleServiceCodes.add(c));
+        }
+      }
+
+      let bsServiceCodes = null;
+      if (businessScenario) {
+        bsServiceCodes = new Set();
+        const bs = flatIndex[businessScenario];
+        if (bs) {
+          for (const modCode of bs.childServices || []) {
+            const mod = flatIndex[modCode];
+            if (mod) (mod.childServices || []).forEach(c => bsServiceCodes.add(c));
           }
         }
-        phaseMatch = phaseMode === 'intersect'
-          ? phases.every(p => svcPhases.has(p))
-          : phases.some(p => svcPhases.has(p));
       }
-      const cats = svc.supercategories;
-      const svcCats = new Set();
-      if (Array.isArray(cats)) cats.forEach(c => c && c.name && svcCats.add(c.name));
-      let supercatMatch = true;
-      if (supercats.length > 0) {
-        supercatMatch = supercats.some(sc => svcCats.has(sc));
-      }
-      let advancedLoSMatch = true;
-      if (advancedLoSCats.length > 0) {
-        advancedLoSMatch = advancedLoSMode === 'intersect'
-          ? advancedLoSCats.every(sc => svcCats.has(sc))
-          : advancedLoSCats.some(sc => svcCats.has(sc));
-      }
-      if (textMatch && etMatch && bsMatch && modMatch && phaseMatch && supercatMatch && advancedLoSMatch) { seen.add(svc.code); return true; }
-      return false;
-    }).slice(0, 200);
 
-    res.json({ count: results.length, services: results });
+      const seen = new Set();
+      const results = Object.values(flatIndex).filter(svc => {
+        if (svc.serviceObject === 'Business Scenario' || svc.serviceObject === 'Business Scenario module') return false;
+        if (!svc.name) return false;
+        if (seen.has(svc.code)) return false;
+        const textMatch = !q || svc.name.toLowerCase().includes(q) || (svc.shortDescription||'').toLowerCase().includes(q);
+        const etArr = Array.isArray(svc.engagementType) ? svc.engagementType : (svc.engagementType ? [svc.engagementType] : []);
+        const etMatch = !engagementType || etArr.some(e => e === engagementType);
+        const bsMatch = !bsServiceCodes || bsServiceCodes.has(svc.code);
+        const modMatch = !moduleServiceCodes || moduleServiceCodes.has(svc.code);
+        let phaseMatch = true;
+        if (phases.length > 0) {
+          const cf = svc.classificationFeatures;
+          const svcPhases = new Set();
+          if (Array.isArray(cf)) {
+            for (const item of cf) {
+              if (item && item.key === 'sapActivateProjectPhase') {
+                const vals = Array.isArray(item.value) ? item.value : [item.value];
+                vals.forEach(v => v && svcPhases.add(String(v)));
+              }
+            }
+          }
+          phaseMatch = phaseMode === 'intersect'
+            ? phases.every(p => svcPhases.has(p))
+            : phases.some(p => svcPhases.has(p));
+        }
+        const cats = svc.supercategories;
+        const svcCats = new Set();
+        if (Array.isArray(cats)) cats.forEach(c => c && c.name && svcCats.add(c.name));
+        let supercatMatch = true;
+        if (supercats.length > 0) {
+          supercatMatch = supercats.some(sc => svcCats.has(sc));
+        }
+        let advancedLoSMatch = true;
+        if (advancedLoSCats.length > 0) {
+          advancedLoSMatch = advancedLoSMode === 'intersect'
+            ? advancedLoSCats.every(sc => svcCats.has(sc))
+            : advancedLoSCats.some(sc => svcCats.has(sc));
+        }
+        if (textMatch && etMatch && bsMatch && modMatch && phaseMatch && supercatMatch && advancedLoSMatch) { seen.add(svc.code); return true; }
+        return false;
+      }).slice(0, 200);
+
+      res.json({ count: results.length, services: results });
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

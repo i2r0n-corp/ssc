@@ -165,24 +165,26 @@ function renderCatalogPage() {
     <h2>Catalog Browser</h2>
     ${error ? `<div class="error-strip">⚠ ${error}</div>` : ''}
     <div class="filter-row">
-      <div class="filter-group">
-        <label>Search</label>
-        <input type="search" id="filter-query" placeholder="Search services..." value="${state.filters.query}"
-          style="min-width:220px" oninput="updateFilter('query', this.value)" />
+      <div class="fl-field" style="min-width:220px">
+        <input type="search" id="filter-query" placeholder=" " value="${state.filters.query}"
+          oninput="updateFilter('query', this.value)" />
+        <label>Search services</label>
       </div>
-      <div class="filter-group">
-        <label>Engagement Type</label>
-        <select id="filter-et" onchange="updateFilter('engagementType', this.value)">
-          <option value="">All</option>
+      <div class="fl-field">
+        <select id="filter-et" ${!state.filters.engagementType ? 'data-empty="true"' : ''}
+          onchange="updateFilter('engagementType', this.value); this.dataset.empty = this.value ? 'false' : 'true'">
+          <option value=""></option>
           ${ET_OPTIONS.map(o => `<option value="${o.value}" ${state.filters.engagementType===o.value?'selected':''}>${o.label}</option>`).join('')}
         </select>
+        <label>Engagement Type</label>
       </div>
-      <div class="filter-group">
-        <label>Business Scenario</label>
-        <select id="filter-bs" style="min-width:280px" onchange="updateFilter('businessScenario', this.value)">
-          <option value="">All</option>
+      <div class="fl-field" style="min-width:280px">
+        <select id="filter-bs" ${!state.filters.businessScenario ? 'data-empty="true"' : ''}
+          onchange="updateFilter('businessScenario', this.value); this.dataset.empty = this.value ? 'false' : 'true'">
+          <option value=""></option>
           ${uniqueBS.map(([code, name]) => `<option value="${code}" ${state.filters.businessScenario===code?'selected':''}>${name}</option>`).join('')}
         </select>
+        <label>Business Scenario</label>
       </div>
       ${showModuleFilter ? `
       <div class="filter-group">
@@ -196,9 +198,9 @@ function renderCatalogPage() {
       ${phases.length > 0 ? `
       <div class="filter-group">
         <label>SAP Activate Phase</label>
-        <div class="toggle-group" style="margin-bottom:6px">
-          <button class="toggle-btn ${(state.filters.phaseMode||'merge')==='merge'?'active':''}" onclick="updateFilter('phaseMode','merge')">Merge</button>
-          <button class="toggle-btn ${state.filters.phaseMode==='intersect'?'active':''}" onclick="updateFilter('phaseMode','intersect')">Intersect</button>
+        <div class="mode-switch">
+          <button class="${(state.filters.phaseMode||'merge')==='merge'?'active':''}" onclick="updateFilter('phaseMode','merge')">Merge</button>
+          <button class="${state.filters.phaseMode==='intersect'?'active':''}" onclick="updateFilter('phaseMode','intersect')">Intersect</button>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:4px 0">
           ${phases.map(p => `
@@ -220,9 +222,9 @@ function renderCatalogPage() {
           html += `
           <div class="filter-group">
             <label>Advanced LoS</label>
-            <div class="toggle-group" style="margin-bottom:6px">
-              <button class="toggle-btn ${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}" onclick="updateFilter('advancedLoSMode','merge')">Merge</button>
-              <button class="toggle-btn ${state.filters.advancedLoSMode==='intersect'?'active':''}" onclick="updateFilter('advancedLoSMode','intersect')">Intersect</button>
+            <div class="mode-switch">
+              <button class="${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}" onclick="updateFilter('advancedLoSMode','merge')">Merge</button>
+              <button class="${state.filters.advancedLoSMode==='intersect'?'active':''}" onclick="updateFilter('advancedLoSMode','intersect')">Intersect</button>
             </div>
             <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:4px 0">
               ${advancedLoS.map(s => `

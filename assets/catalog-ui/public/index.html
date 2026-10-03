@@ -14,7 +14,7 @@
     .nav-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
     .nav-tab { padding: 0.5rem 1.2rem; border: 1px solid #c0c0c0; border-radius: 4px; background: white; cursor: pointer; font-size: 0.875rem; }
     .nav-tab.active { background: var(--sap-brand-color); color: white; border-color: var(--sap-brand-color); }
-    .filter-row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end; margin-bottom: 1rem; background: white; padding: 1rem; border-radius: 8px; border: 1px solid #e0e0e0; }
+    .filter-row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-start; margin-bottom: 1rem; background: white; padding: 1rem; border-radius: 8px; border: 1px solid #e0e0e0; }
     .filter-group { display: flex; flex-direction: column; gap: 0.25rem; min-width: 200px; }
     .filter-group label { font-size: 0.75rem; color: #6a6a6a; font-weight: 600; }
     .results-info { font-size: 0.8rem; color: #6a6a6a; margin-bottom: 0.5rem; }
@@ -98,6 +98,62 @@
     .shell-nav { display: flex; gap: 0.5rem; }
     .shell-nav-item { padding: 0.4rem 0.9rem; color: rgba(255,255,255,0.85); text-decoration: none; border-radius: 4px; font-size: 0.875rem; }
     .shell-nav-item:hover, .shell-nav-item.active { background: rgba(255,255,255,0.15); color: white; }
+    /* ── Floating label fields ─────────────────────────────────────────────── */
+    .fl-field { position: relative; min-width: 200px; }
+    .fl-field input,
+    .fl-field select {
+      width: 100%;
+      padding: 1.25rem 0.75rem 0.35rem;
+      height: 3rem;
+    }
+    .fl-field select { padding-right: 2rem; }
+    .fl-field label {
+      position: absolute;
+      left: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.875rem;
+      color: #8696A9;
+      font-weight: 400;
+      pointer-events: none;
+      transition: top 0.15s ease, font-size 0.15s ease, color 0.15s ease, font-weight 0.15s ease;
+      white-space: nowrap;
+    }
+    /* input: float when focused OR has text (placeholder=" " trick) */
+    .fl-field input:focus ~ label,
+    .fl-field input:not(:placeholder-shown) ~ label {
+      top: 0.45rem;
+      transform: none;
+      font-size: 0.68rem;
+      color: #556B82;
+      font-weight: 600;
+    }
+    .fl-field input:focus ~ label { color: #0070F2; }
+    /* select: float when focused OR a real value is chosen (value != "") */
+    .fl-field select:focus ~ label,
+    .fl-field select:not([data-empty="true"]) ~ label {
+      top: 0.45rem;
+      transform: none;
+      font-size: 0.68rem;
+      color: #556B82;
+      font-weight: 600;
+    }
+    .fl-field select:focus ~ label { color: #0070F2; }
+    /* ─────────────────────────────────────────────────────────────────────── */
+    /* ── Mode switch (Merge / Intersect) ──────────────────────────────────── */
+    .mode-switch { display: inline-flex; align-items: center; background: #EBF2FF; border-radius: 2rem; padding: 2px; gap: 0; margin-bottom: 6px; }
+    .mode-switch button {
+      border: none; background: transparent; border-radius: 2rem;
+      padding: 3px 12px; font-size: 0.72rem; font-weight: 600; cursor: pointer;
+      color: #556B82; transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+      white-space: nowrap;
+    }
+    .mode-switch button.active {
+      background: var(--sap-brand-color); color: #fff;
+      box-shadow: 0 1px 4px rgba(0,112,242,0.25);
+    }
+    .mode-switch button:not(.active):hover { background: #d6e8ff; color: #0070F2; }
+    /* ─────────────────────────────────────────────────────────────────────── */
     .toggle-group { display: flex; border: 1px solid var(--sap-brand-color); border-radius: 4px; overflow: hidden; }
     .toggle-btn { padding: 0.4rem 0.85rem; font-size: 0.8rem; font-weight: 600; border: none; background: white; color: var(--sap-brand-color); cursor: pointer; transition: all 0.15s; }
     .toggle-btn.active { background: var(--sap-brand-color); color: white; }
