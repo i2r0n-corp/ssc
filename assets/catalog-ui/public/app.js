@@ -201,8 +201,8 @@ function renderCatalogPage() {
         </div>
       </div>` : ''}
       ${(() => {
-        const advancedLoS = supercategories.filter(s => s.startsWith('Success Plan for'));
-        const foundationalCats = supercategories.filter(s => !s.startsWith('Success Plan for'));
+        const advancedLoS = supercategories.filter(s => s.startsWith('Success Plans for'));
+        const foundationalCats = supercategories.filter(s => !s.startsWith('Success Plans for'));
         const et = state.filters.engagementType;
         const showAdvanced = !et || et === 'Advanced Success Plan' || et === 'Max Success Plan';
         const showFoundational = !et || et === 'Enterprise Support';
@@ -224,7 +224,7 @@ function renderCatalogPage() {
                 <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:400;cursor:pointer">
                   <input type="checkbox" value="${s}" ${(state.filters.advancedLoS||[]).includes(s)?'checked':''}
                     onchange="updateCheckboxFilter('advancedLoS', '${s.replace(/'/g,"\\'")}', this.checked)" />
-                  ${s.replace('Success Plan for ', '')}
+                  ${s.replace('Success Plans for ', '')}
                 </label>`).join('')}
             </div>
           </div>`;
