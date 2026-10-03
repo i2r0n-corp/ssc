@@ -814,7 +814,7 @@ router.post('/full', requirePublishToken, async (req, res) => {
     }
     console.log(`Excel enrichment: ${totalEnriched} services enriched across ${bsCodes.length} BS`);
 
-    const result = publishSnapshot(flatIndex, new Date().toISOString());
+    const result = await publishSnapshot(flatIndex, new Date().toISOString());
     res.json({ status: 'completed', mode: 'full', ...result, enrichedServices: totalEnriched });
   } catch (err) {
     console.error(`[M1.missed]: full sync failed — error=${err.message}`);

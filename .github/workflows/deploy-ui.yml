@@ -3,8 +3,6 @@ name: Deploy UI to CF
 on:
   push:
     branches: [main]
-    paths:
-      - 'assets/catalog-ui/**'
   workflow_dispatch:
 
 jobs:

@@ -3,8 +3,6 @@ name: Deploy CAP Backend to CF
 on:
   push:
     branches: [main]
-    paths:
-      - 'assets/catalog-cap-backend/**'
   workflow_dispatch:
 
 jobs:

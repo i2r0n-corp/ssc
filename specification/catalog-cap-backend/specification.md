@@ -15,6 +15,18 @@ This CAP (Cloud Application Programming Model) backend serves the enriched catal
 
 ---
 
+## ⚠️ CRITICAL RULE — NEVER SUGGEST FULL REBUILD IF POSTGRESQL HAS DATA
+
+**PostgreSQL is the permanent store. All service data including `classificationFeatures` and `supercategories` comes from the SSC API and is stored in PostgreSQL during the initial full build.**
+
+- On every restart → app loads from PostgreSQL → ready instantly, NO rebuild needed
+- Full rebuild is needed ONLY when PostgreSQL is completely empty (first-time setup)
+- Excel enrichment (deck names, module injections) runs periodically via local Python script → uploads to backend → stored in PostgreSQL → no rebuild needed
+- **NEVER suggest a full rebuild because filters are broken, supercategories are missing, or enrichment is empty — fix the bug in code instead**
+- Before suggesting any sync or rebuild, read this rule and ask: "Is PostgreSQL empty?" If not — the fix is in code, not a rebuild.
+
+---
+
 ## ⚠️ CRITICAL RULE — SSC API Field Fetching
 
 **ALWAYS fetch ALL fields from the SSC Catalog API.** Never use partial field sets.

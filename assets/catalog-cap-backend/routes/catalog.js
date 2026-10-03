@@ -34,7 +34,7 @@ router.post('/publishSnapshot', requirePublishToken, (req, res) => {
       payload: typeof payload === 'string' ? payload : JSON.stringify(payload)
     };
     snapshot.save(data);
-    console.log(`[M1.achieved]: catalog published — service_count=${serviceCount}`);
+    console.log('[M1.achieved]: catalog published — service_count=' + serviceCount);
     res.json({ status: 'published', serviceCount, lastUpdated: data.lastUpdated });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -52,22 +52,15 @@ router.get('/getSnapshot', (req, res) => {
 router.get('/searchServices', (req, res) => {
   try {
     const { query = '', engagementType, businessScenario } = req.query;
-    const moduleNames = Array.isArray(req.query.module)
-      ? req.query.module
-      : (req.query.module ? [req.query.module] : []);
-    const phases = Array.isArray(req.query.phase)
-      ? req.query.phase
-      : (req.query.phase ? [req.query.phase] : []);
-    const supercats = Array.isArray(req.query.supercat)
-      ? req.query.supercat
-      : (req.query.supercat ? [req.query.supercat] : []);
+    const moduleNames = Array.isArray(req.query.module) ? req.query.module : (req.query.module ? [req.query.module] : []);
+    const phases = Array.isArray(req.query.phase) ? req.query.phase : (req.query.phase ? [req.query.phase] : []);
+    const supercats = Array.isArray(req.query.supercat) ? req.query.supercat : (req.query.supercat ? [req.query.supercat] : []);
 
     const data = snapshot.load();
     if (!data) return res.status(404).json({ error: 'No snapshot available' });
     const flatIndex = JSON.parse(data.payload).flat_index || {};
     const q = query.toLowerCase();
 
-    // Build union of service codes for selected modules
     let moduleServiceCodes = null;
     if (moduleNames.length > 0) {
       moduleServiceCodes = new Set();
@@ -77,7 +70,6 @@ router.get('/searchServices', (req, res) => {
       }
     }
 
-    // Build BS service codes
     let bsServiceCodes = null;
     if (businessScenario) {
       bsServiceCodes = new Set();
@@ -100,7 +92,6 @@ router.get('/searchServices', (req, res) => {
       const etMatch = !engagementType || etArr.some(e => e === engagementType);
       const bsMatch = !bsServiceCodes || bsServiceCodes.has(svc.code);
       const modMatch = !moduleServiceCodes || moduleServiceCodes.has(svc.code);
-      // Phase match
       let phaseMatch = true;
       if (phases.length > 0) {
         const cf = svc.classificationFeatures;
@@ -115,18 +106,13 @@ router.get('/searchServices', (req, res) => {
         }
         phaseMatch = phases.some(p => svcPhases.has(p));
       }
-
-      // Supercategory match
       let supercatMatch = true;
       if (supercats.length > 0) {
         const cats = svc.supercategories;
         const svcCats = new Set();
-        if (Array.isArray(cats)) {
-          cats.forEach(c => c && c.name && svcCats.add(c.name));
-        }
+        if (Array.isArray(cats)) cats.forEach(c => c && c.name && svcCats.add(c.name));
         supercatMatch = supercats.some(sc => svcCats.has(sc));
       }
-
       if (textMatch && etMatch && bsMatch && modMatch && phaseMatch && supercatMatch) { seen.add(svc.code); return true; }
       return false;
     }).slice(0, 200);
@@ -139,15 +125,9 @@ router.get('/searchServices', (req, res) => {
 router.get('/filterServices', async (req, res) => {
   try {
     const { engagementType, businessScenario } = req.query;
-    const moduleNames = Array.isArray(req.query.module)
-      ? req.query.module
-      : (req.query.module ? [req.query.module] : []);
-    const phases = Array.isArray(req.query.phase)
-      ? req.query.phase
-      : (req.query.phase ? [req.query.phase] : []);
-    const supercats = Array.isArray(req.query.supercat)
-      ? req.query.supercat
-      : (req.query.supercat ? [req.query.supercat] : []);
+    const moduleNames = Array.isArray(req.query.module) ? req.query.module : (req.query.module ? [req.query.module] : []);
+    const phases = Array.isArray(req.query.phase) ? req.query.phase : (req.query.phase ? [req.query.phase] : []);
+    const supercats = Array.isArray(req.query.supercat) ? req.query.supercat : (req.query.supercat ? [req.query.supercat] : []);
 
     if (!engagementType && !businessScenario && moduleNames.length === 0 && phases.length === 0 && supercats.length === 0)
       return res.status(400).json({ error: 'At least one filter required' });
@@ -159,62 +139,43 @@ router.get('/filterServices', async (req, res) => {
 
       const params = [];
       let pIdx = 1;
-
-      let sql = `
-        SELECT DISTINCT s.*, bn.deck_name, bn.bs_code AS bn_bs_code
-        FROM catalog_services s
-        LEFT JOIN catalog_bs_naming bn ON bn.service_code = s.code
-        WHERE s.service_object NOT IN ('Business Scenario', 'Business Scenario module')
-          AND s.name IS NOT NULL
-      `;
+      let sql = 'SELECT DISTINCT s.*, bn.deck_name, bn.bs_code AS bn_bs_code FROM catalog_services s LEFT JOIN catalog_bs_naming bn ON bn.service_code = s.code WHERE s.service_object NOT IN (\'Business Scenario\', \'Business Scenario module\') AND s.name IS NOT NULL';
 
       if (engagementType) {
-        sql += ` AND EXISTS (
-          SELECT 1 FROM catalog_classification cc
-          WHERE cc.service_code = s.code AND cc.feature_key = 'engagementType' AND cc.feature_value = ${pIdx}
-        )`;
-        params.push(engagementType); pIdx++;
+        params.push(engagementType);
+        sql += ' AND EXISTS (SELECT 1 FROM catalog_classification cc WHERE cc.service_code = s.code AND cc.feature_key = \'engagementType\' AND cc.feature_value = $' + pIdx + ')';
+        pIdx++;
       }
 
       if (businessScenario) {
-        sql += ` AND EXISTS (
-          SELECT 1 FROM catalog_hierarchy h1
-          JOIN catalog_hierarchy h2 ON h2.parent_code = h1.child_code
-          WHERE h1.parent_code = ${pIdx} AND h2.child_code = s.code
-        )`;
-        params.push(businessScenario); pIdx++;
+        params.push(businessScenario);
+        sql += ' AND EXISTS (SELECT 1 FROM catalog_hierarchy h1 JOIN catalog_hierarchy h2 ON h2.parent_code = h1.child_code WHERE h1.parent_code = $' + pIdx + ' AND h2.child_code = s.code)';
+        pIdx++;
       }
 
       if (moduleNames.length > 0) {
-        sql += ` AND EXISTS (
-          SELECT 1 FROM catalog_hierarchy hm
-          WHERE hm.parent_code = ANY(${pIdx}::text[]) AND hm.child_code = s.code
-        )`;
-        params.push(moduleNames); pIdx++;
+        params.push(moduleNames);
+        sql += ' AND EXISTS (SELECT 1 FROM catalog_hierarchy hm WHERE hm.parent_code = ANY($' + pIdx + '::text[]) AND hm.child_code = s.code)';
+        pIdx++;
       }
 
       if (phases.length > 0) {
-        sql += ` AND EXISTS (
-          SELECT 1 FROM catalog_classification cp
-          WHERE cp.service_code = s.code AND cp.feature_key = 'sapActivateProjectPhase' AND cp.feature_value = ANY(${pIdx}::text[])
-        )`;
-        params.push(phases); pIdx++;
+        params.push(phases);
+        sql += ' AND EXISTS (SELECT 1 FROM catalog_classification cp WHERE cp.service_code = s.code AND cp.feature_key = \'sapActivateProjectPhase\' AND cp.feature_value = ANY($' + pIdx + '::text[]))';
+        pIdx++;
       }
 
       if (supercats.length > 0) {
-        sql += ` AND EXISTS (
-          SELECT 1 FROM catalog_supercategories cs
-          WHERE cs.service_code = s.code AND cs.category_name = ANY(${pIdx}::text[])
-        )`;
-        params.push(supercats); pIdx++;
+        params.push(supercats);
+        sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[]))';
+        pIdx++;
       }
 
-      sql += ` ORDER BY s.name LIMIT 500`;
+      sql += ' ORDER BY s.name LIMIT 500';
 
       const result = await db.query(sql, params);
       const services = result.rows.map(row => {
         const svc = row.raw_data || {};
-        // Attach deck name from DB
         if (row.deck_name && row.bn_bs_code) {
           if (!svc.business_scenario_naming) svc.business_scenario_naming = {};
           svc.business_scenario_naming[row.bn_bs_code] = row.deck_name;
@@ -233,7 +194,6 @@ router.get('/filterServices', async (req, res) => {
     if (!data) return res.status(404).json({ error: 'No snapshot available' });
     const flatIndex = JSON.parse(data.payload).flat_index || {};
 
-    // Build set of service codes per module (union across all selected modules)
     let moduleServiceCodes = null;
     if (moduleNames.length > 0) {
       moduleServiceCodes = new Set();
@@ -243,7 +203,6 @@ router.get('/filterServices', async (req, res) => {
       }
     }
 
-    // Build set of service codes in the BS (walk BS → modules → childServices)
     let bsServiceCodes = null;
     if (businessScenario) {
       bsServiceCodes = new Set();
@@ -261,13 +220,10 @@ router.get('/filterServices', async (req, res) => {
       if (svc.serviceObject === 'Business Scenario' || svc.serviceObject === 'Business Scenario module') return false;
       if (!svc.name) return false;
       if (seen.has(svc.code)) return false;
-
       const etArr = Array.isArray(svc.engagementType) ? svc.engagementType : (svc.engagementType ? [svc.engagementType] : []);
       const etMatch = !engagementType || etArr.some(e => e === engagementType);
       const bsMatch = !bsServiceCodes || bsServiceCodes.has(svc.code);
       const modMatch = !moduleServiceCodes || moduleServiceCodes.has(svc.code);
-
-      // Phase match
       let phaseMatch = true;
       if (phases.length > 0) {
         const cf = svc.classificationFeatures;
@@ -282,18 +238,13 @@ router.get('/filterServices', async (req, res) => {
         }
         phaseMatch = phases.some(p => svcPhases.has(p));
       }
-
-      // Supercategory match
       let supercatMatch = true;
       if (supercats.length > 0) {
         const cats = svc.supercategories;
         const svcCats = new Set();
-        if (Array.isArray(cats)) {
-          cats.forEach(c => c && c.name && svcCats.add(c.name));
-        }
+        if (Array.isArray(cats)) cats.forEach(c => c && c.name && svcCats.add(c.name));
         supercatMatch = supercats.some(sc => svcCats.has(sc));
       }
-
       if (etMatch && bsMatch && modMatch && phaseMatch && supercatMatch) { seen.add(svc.code); return true; }
       return false;
     }).slice(0, 500);
@@ -302,28 +253,20 @@ router.get('/filterServices', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Metadata endpoint — lightweight, no full snapshot download ────────────────
+// ── Metadata endpoint ─────────────────────────────────────────────────────────
 router.get('/metadata', async (req, res) => {
   try {
-    // Try PostgreSQL first
-    let fromDb = false;
     try {
       const db = require('../store/db');
-      db.getPool(); // throws if not configured
+      db.getPool();
 
       const [syncRes, bsRes, modRes, etRes, phaseRes, supercatRes] = await Promise.all([
-        db.query(`SELECT last_updated, service_count FROM catalog_sync ORDER BY id DESC LIMIT 1`),
-        db.query(`SELECT code, name FROM catalog_services WHERE service_object='Business Scenario' ORDER BY name`),
-        db.query(`
-          SELECT h.parent_code AS bs_code, s.code AS mod_code, s.name AS mod_name
-          FROM catalog_hierarchy h
-          JOIN catalog_services s ON s.code = h.child_code
-          WHERE s.service_object = 'Business Scenario module'
-          ORDER BY s.name
-        `),
-        db.query(`SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key='engagementType' ORDER BY feature_value`),
-        db.query(`SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key='sapActivateProjectPhase' ORDER BY feature_value`),
-        db.query(`SELECT DISTINCT category_name FROM catalog_supercategories ORDER BY category_name`)
+        db.query('SELECT last_updated, service_count FROM catalog_sync ORDER BY id DESC LIMIT 1'),
+        db.query('SELECT code, name FROM catalog_services WHERE service_object=\'Business Scenario\' ORDER BY name'),
+        db.query('SELECT h.parent_code AS bs_code, s.code AS mod_code, s.name AS mod_name FROM catalog_hierarchy h JOIN catalog_services s ON s.code = h.child_code WHERE s.service_object = \'Business Scenario module\' ORDER BY s.name'),
+        db.query('SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key=\'engagementType\' ORDER BY feature_value'),
+        db.query('SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key=\'sapActivateProjectPhase\' ORDER BY feature_value'),
+        db.query('SELECT DISTINCT category_name FROM catalog_supercategories ORDER BY category_name')
       ]);
 
       if (syncRes.rows.length) {
@@ -411,16 +354,16 @@ router.get('/module/:code/children', (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Export full services list with all fields (for Excel export) ─────────────
+// ── Export full services list with all fields ─────────────────────────────────
 router.get('/export-full', async (req, res) => {
   try {
     const syncModule = require('./sync');
     console.log('[export-full] Fetching all services with fields=FULL from SSC API...');
     const services = await syncModule.fetchAllServicesFull();
-    console.log(`[export-full] Fetched ${services.length} services`);
+    console.log('[export-full] Fetched ' + services.length + ' services');
     res.json({ count: services.length, services });
   } catch(e) {
-    console.error(`[export-full] Error: ${e.message}`);
+    console.error('[export-full] Error: ' + e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -432,7 +375,7 @@ router.get('/service/:code', (req, res) => {
     if (!data) return res.status(404).json({ error: 'No snapshot available' });
     const flatIndex = JSON.parse(data.payload).flat_index || {};
     const svc = flatIndex[req.params.code];
-    if (!svc) return res.status(404).json({ error: `Service not found: ${req.params.code}` });
+    if (!svc) return res.status(404).json({ error: 'Service not found: ' + req.params.code });
     res.json(svc);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -456,8 +399,6 @@ router.put('/excel-manifest', requirePublishToken, (req, res) => {
 });
 
 // ── Excel Upload + Immediate Enrichment ──────────────────────────────────────
-// IMPORTANT: must be defined BEFORE /excel/:bsCode to avoid route collision
-
 router.put('/excel/upload', (req, res) => {
   try {
     const filename  = req.headers['x-filename'] || '';
@@ -467,7 +408,7 @@ router.put('/excel/upload', (req, res) => {
     const buf = req.body;
     if (!buf || buf.length === 0) return res.status(400).json({ error: 'Empty body' });
 
-    console.log(`[excel-upload] ${bsCode}: ${filename} (${buf.length} bytes)`);
+    console.log('[excel-upload] ' + bsCode + ': ' + filename + ' (' + buf.length + ' bytes)');
 
     const xlsx = require('xlsx');
     const workbook = xlsx.read(buf, { type: 'buffer' });
@@ -481,7 +422,6 @@ router.put('/excel/upload', (req, res) => {
         if (/^\d{7,10}$/.test(val) || /^[A-Z]{2,}\d{4,}/.test(val)) serviceCodes.add(val);
       }
     }
-    console.log(`[excel-upload] ${bsCode}: ${serviceCodes.size} service codes found`);
 
     const data = snapshot.load();
     if (!data) return res.status(404).json({ error: 'No snapshot available' });
@@ -501,7 +441,6 @@ router.put('/excel/upload', (req, res) => {
 
     snapshot.save({ ...data, payload: JSON.stringify(parsed), lastUpdated: new Date().toISOString() });
 
-    // Update lastProcessed in manifest
     if (fs.existsSync(MANIFEST_FILE)) {
       try {
         const m = JSON.parse(fs.readFileSync(MANIFEST_FILE, 'utf8'));
@@ -510,15 +449,14 @@ router.put('/excel/upload', (req, res) => {
       } catch(e) { /* non-critical */ }
     }
 
-    console.log(`[excel-upload] ${bsCode}: enriched ${enriched} services`);
     res.json({ status: 'enriched', bsCode, filename, servicesEnriched: enriched, codesFound: serviceCodes.size });
   } catch (err) {
-    console.error(`[excel-upload] Error: ${err.message}`);
+    console.error('[excel-upload] Error: ' + err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// ── Serial enrichment queue — processes ONE BS at a time, no race conditions ──
+// ── Serial enrichment queue ───────────────────────────────────────────────────
 const enrichQueue = [];
 let enrichRunning = false;
 
@@ -528,9 +466,9 @@ async function processEnrichQueue() {
   while (enrichQueue.length > 0) {
     const { bsCode, buf } = enrichQueue.shift();
     try {
-      console.log(`[enrich-queue] Processing ${bsCode} (${enrichQueue.length} remaining)`);
+      console.log('[enrich-queue] Processing ' + bsCode + ' (' + enrichQueue.length + ' remaining)');
       const cached = snapshot.load();
-      if (!cached) { console.warn(`[enrich-queue] No snapshot for ${bsCode}`); continue; }
+      if (!cached) { console.warn('[enrich-queue] No snapshot for ' + bsCode); continue; }
       const syncModule = require('./sync');
       const parsed = JSON.parse(cached.payload);
       const flatIndex = parsed.flat_index || {};
@@ -541,7 +479,6 @@ async function processEnrichQueue() {
       parsed.business_scenarios = businessScenarios;
       snapshot.save({ ...cached, payload: JSON.stringify(parsed), lastUpdated: new Date().toISOString() });
 
-      // Save injection log
       const logPath = path.join(__dirname, '..', 'data', 'injection-log.json');
       let existingLog = {};
       try { existingLog = JSON.parse(fs.readFileSync(logPath, 'utf8')); } catch(e) {}
@@ -550,10 +487,9 @@ async function processEnrichQueue() {
       existingLog.details[bsCode] = injectionLog[bsCode] || {};
       fs.mkdirSync(path.dirname(logPath), { recursive: true });
       fs.writeFileSync(logPath, JSON.stringify(existingLog, null, 2));
-      console.log(`[enrich-queue] ✅ ${bsCode}: ${enriched} services enriched`);
+      console.log('[enrich-queue] OK ' + bsCode + ': ' + enriched + ' services enriched');
     } catch(e) {
-      console.error(`[enrich-queue] ❌ ${bsCode}: ${e.message}`);
-      // Save error to log
+      console.error('[enrich-queue] ERROR ' + bsCode + ': ' + e.message);
       try {
         const logPath = path.join(__dirname, '..', 'data', 'injection-log.json');
         let existingLog = {};
@@ -577,35 +513,29 @@ router.get('/excel', (req, res) => {
 
 router.put('/excel/:bsCode', requirePublishToken, async (req, res) => {
   const { bsCode } = req.params;
-  if (!/^[A-Z0-9]{5,10}$/.test(bsCode)) return res.status(400).json({ error: `Invalid bsCode: ${bsCode}` });
+  if (!/^[A-Z0-9]{5,10}$/.test(bsCode)) return res.status(400).json({ error: 'Invalid bsCode: ' + bsCode });
   const buf = req.body;
   if (!buf || buf.length === 0) return res.status(400).json({ error: 'Empty body' });
 
-  // Save to filesystem (primary for enrichment queue)
-  fs.writeFileSync(path.join(EXCEL_DIR, `${bsCode}.xlsx`), buf);
+  fs.writeFileSync(path.join(EXCEL_DIR, bsCode + '.xlsx'), buf);
 
-  // Also save to PostgreSQL for persistence across restarts
   try {
     const db = require('../store/db');
     db.getPool();
-    await db.query(`
-      INSERT INTO catalog_excel_files (bs_code, file_data, file_size, uploaded_at)
-      VALUES ($1, $2, $3, NOW())
-      ON CONFLICT (bs_code) DO UPDATE SET file_data=EXCLUDED.file_data, file_size=EXCLUDED.file_size, uploaded_at=NOW()
-    `, [bsCode, buf, buf.length]);
+    await db.query(
+      'INSERT INTO catalog_excel_files (bs_code, file_data, file_size, uploaded_at) VALUES ($1, $2, $3, NOW()) ON CONFLICT (bs_code) DO UPDATE SET file_data=EXCLUDED.file_data, file_size=EXCLUDED.file_size, uploaded_at=NOW()',
+      [bsCode, buf, buf.length]
+    );
   } catch(e) {
     if (!e.message.includes('No PostgreSQL')) console.warn('[excel] DB save failed:', e.message);
   }
 
-  // Add to serial enrichment queue
   enrichQueue.push({ bsCode, buf });
   processEnrichQueue();
   res.json({ status: 'queued', bsCode, sizeBytes: buf.length });
 });
 
 // ── Apply enrichment results from Python ──────────────────────────────────────
-// Python does all heavy matching locally, sends only the results map here
-// Body: { deckNames: { "serviceCode": "deckName", ... }, injectionLog: {...} }
 router.post('/excel/:bsCode/enrich', requirePublishToken, (req, res) => {
   const { bsCode } = req.params;
   const { deckNames = {}, injectionLog = {} } = req.body;
@@ -618,7 +548,6 @@ router.post('/excel/:bsCode/enrich', requirePublishToken, (req, res) => {
     const flatIndex = parsed.flat_index || {};
     let enriched = 0;
 
-    // Apply deck names — simple hash lookup, milliseconds
     for (const [svcCode, deckName] of Object.entries(deckNames)) {
       const svc = flatIndex[svcCode];
       if (svc) {
@@ -628,13 +557,11 @@ router.post('/excel/:bsCode/enrich', requirePublishToken, (req, res) => {
       }
     }
 
-    // Rebuild hierarchy and save
     const syncModule = require('./sync');
     parsed.flat_index = flatIndex;
     parsed.business_scenarios = syncModule.buildHierarchy(flatIndex);
     snapshot.save({ ...cached, payload: JSON.stringify(parsed), lastUpdated: new Date().toISOString() });
 
-    // Save injection log
     const logPath = path.join(__dirname, '..', 'data', 'injection-log.json');
     let existingLog = {};
     try { existingLog = JSON.parse(fs.readFileSync(logPath, 'utf8')); } catch(e) {}
@@ -644,19 +571,19 @@ router.post('/excel/:bsCode/enrich', requirePublishToken, (req, res) => {
     fs.mkdirSync(path.dirname(logPath), { recursive: true });
     fs.writeFileSync(logPath, JSON.stringify(existingLog, null, 2));
 
-    console.log(`[M1.achieved]: excel-enrich published — bs_processed=1 enriched_services=${enriched}`);
+    console.log('[M1.achieved]: excel-enrich published — bs_processed=1 enriched_services=' + enriched);
     res.json({ status: 'enriched', bsCode, enrichedServices: enriched });
   } catch(e) {
-    console.error(`[enrich] ${bsCode}: ${e.message}`);
+    console.error('[enrich] ' + bsCode + ': ' + e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
 router.get('/excel/:bsCode', (req, res) => {
-  const filePath = path.join(EXCEL_DIR, `${req.params.bsCode}.xlsx`);
-  if (!fs.existsSync(filePath)) return res.status(404).json({ error: `Not found: ${req.params.bsCode}` });
+  const filePath = path.join(EXCEL_DIR, req.params.bsCode + '.xlsx');
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'Not found: ' + req.params.bsCode });
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="${req.params.bsCode}.xlsx"`);
+  res.setHeader('Content-Disposition', 'attachment; filename="' + req.params.bsCode + '.xlsx"');
   fs.createReadStream(filePath).pipe(res);
 });
 
