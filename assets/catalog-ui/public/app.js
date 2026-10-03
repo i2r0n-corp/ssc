@@ -146,50 +146,49 @@ function renderCatalogPage() {
     <div class="filter-row">
       <div class="filter-group">
         <label>Search</label>
-        <ui5-input id="filter-query" placeholder="Search services..." value="${state.filters.query}"
-          style="min-width:220px" oninput="updateFilter('query', this.value)">
-        </ui5-input>
+        <input type="search" id="filter-query" placeholder="Search services..." value="${state.filters.query}"
+          style="min-width:220px" oninput="updateFilter('query', this.value)" />
       </div>
       <div class="filter-group">
         <label>Engagement Type</label>
-        <ui5-select id="filter-et" onchange="updateFilter('engagementType', this.selectedOption?.dataset?.value||'')">
-          <ui5-option data-value="" ${!state.filters.engagementType?'selected':''}>All</ui5-option>
-          ${ET_OPTIONS.map(o => `<ui5-option data-value="${o.value}" ${state.filters.engagementType===o.value?'selected':''}>${o.label}</ui5-option>`).join('')}
-        </ui5-select>
+        <select id="filter-et" onchange="updateFilter('engagementType', this.value)">
+          <option value="">All</option>
+          ${ET_OPTIONS.map(o => `<option value="${o.value}" ${state.filters.engagementType===o.value?'selected':''}>${o.label}</option>`).join('')}
+        </select>
       </div>
       <div class="filter-group">
         <label>Business Scenario</label>
-        <ui5-select id="filter-bs" style="min-width:280px" onchange="updateFilter('businessScenario', this.selectedOption?.dataset?.value||'')">
-          <ui5-option data-value="" ${!state.filters.businessScenario?'selected':''}>All</ui5-option>
-          ${uniqueBS.map(([code, name]) => `<ui5-option data-value="${code}" ${state.filters.businessScenario===code?'selected':''}>${name}</ui5-option>`).join('')}
-        </ui5-select>
+        <select id="filter-bs" style="min-width:280px" onchange="updateFilter('businessScenario', this.value)">
+          <option value="">All</option>
+          ${uniqueBS.map(([code, name]) => `<option value="${code}" ${state.filters.businessScenario===code?'selected':''}>${name}</option>`).join('')}
+        </select>
       </div>
       ${showModuleFilter ? `
       <div class="filter-group">
         <label>Module</label>
-        <ui5-multi-combobox id="filter-mod" style="min-width:280px"
-          placeholder="Select modules..."
-          onselection-change="updateMultiFilterUI5('modules', this)">
-          ${uniqueMods.map(([code, name]) => `<ui5-mcb-item text="${name.replace(/"/g,'&quot;')}" data-value="${code}" ${selectedMods.includes(code)?'selected':''}></ui5-mcb-item>`).join('')}
-        </ui5-multi-combobox>
+        <select id="filter-mod" multiple size="${Math.min(uniqueMods.length, 5)}" style="min-width:280px"
+          onchange="updateMultiFilter('modules', this)">
+          ${uniqueMods.map(([code, name]) => `<option value="${code}" ${selectedMods.includes(code)?'selected':''}>${name}</option>`).join('')}
+        </select>
+        <span class="filter-hint">Hold Ctrl to select multiple</span>
       </div>` : ''}
       ${phases.length > 0 ? `
       <div class="filter-group">
         <label>SAP Activate Phase</label>
-        <ui5-multi-combobox id="filter-phase" style="min-width:220px"
-          placeholder="Select phases..."
-          onselection-change="updateMultiFilterUI5('phases', this)">
-          ${phases.map(p => `<ui5-mcb-item text="${p.replace(/"/g,'&quot;')}" data-value="${p}" ${(state.filters.phases||[]).includes(p)?'selected':''}></ui5-mcb-item>`).join('')}
-        </ui5-multi-combobox>
+        <select id="filter-phase" multiple size="${Math.min(phases.length, 5)}" style="min-width:200px"
+          onchange="updateMultiFilter('phases', this)">
+          ${phases.map(p => `<option value="${p}" ${(state.filters.phases||[]).includes(p)?'selected':''}>${p}</option>`).join('')}
+        </select>
+        <span class="filter-hint">Hold Ctrl to select multiple</span>
       </div>` : ''}
       ${supercategories.length > 0 ? `
       <div class="filter-group">
         <label>Supercategory</label>
-        <ui5-multi-combobox id="filter-supercat" style="min-width:280px"
-          placeholder="Select supercategories..."
-          onselection-change="updateMultiFilterUI5('supercats', this)">
-          ${supercategories.map(s => `<ui5-mcb-item text="${s.replace(/"/g,'&quot;')}" data-value="${s}" ${(state.filters.supercats||[]).includes(s)?'selected':''}></ui5-mcb-item>`).join('')}
-        </ui5-multi-combobox>
+        <select id="filter-supercat" multiple size="${Math.min(supercategories.length, 5)}" style="min-width:280px"
+          onchange="updateMultiFilter('supercats', this)">
+          ${supercategories.map(s => `<option value="${s}" ${(state.filters.supercats||[]).includes(s)?'selected':''}>${s}</option>`).join('')}
+        </select>
+        <span class="filter-hint">Hold Ctrl to select multiple</span>
       </div>` : ''}
       ${showNamingFilter ? `
       <div class="filter-group">
@@ -199,7 +198,7 @@ function renderCatalogPage() {
           <button class="toggle-btn ${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
         </div>
       </div>` : ''}
-      <ui5-button design="Transparent" onclick="clearFilters()">Clear</ui5-button>
+      <button class="btn btn-secondary btn-sm" onclick="clearFilters()">Clear</button>
       ${lastUpdated ? `<span class="last-updated">Last updated: ${new Date(lastUpdated).toLocaleString()}</span>` : ''}
     </div>
     ${loading ? '<div class="loading"><div class="loading-spinner"></div> Loading...</div>' : ''}

@@ -4,15 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SSC Catalog Intelligence</title>
-  <!-- SAP UI5 Web Components -->
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@ui5/webcomponents@2/dist/Button.js"></script>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@ui5/webcomponents@2/dist/Select.js"></script>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@ui5/webcomponents@2/dist/Option.js"></script>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@ui5/webcomponents@2/dist/MultiComboBox.js"></script>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@ui5/webcomponents@2/dist/MultiComboBoxItem.js"></script>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@ui5/webcomponents@2/dist/Input.js"></script>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@ui5/webcomponents-fiori@2/dist/ShellBar.js"></script>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/@ui5/webcomponents-fiori@2/dist/ShellBarItem.js"></script>
+  <!-- SAP 72 Font -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=72:wght@400;600;700&display=swap" />
   <style>
     :root { --sap-brand-color: #0070F2; --sap-dark-color: #003366; }
     * { box-sizing: border-box; font-family: '72', 'SAP72', Arial, sans-serif; }
@@ -63,8 +56,40 @@
     .last-updated { font-size: 0.75rem; color: #6a6a6a; margin-left: auto; }
     h2 { color: var(--sap-dark-color); margin-top: 0; }
     h3 { color: var(--sap-dark-color); margin-top: 0; }
-    input[type="text"], input[type="search"], select { padding: 0.5rem 0.75rem; border: 1px solid #c0c0c0; border-radius: 4px; font-size: 0.875rem; }
-    input[type="text"]:focus, select:focus { outline: none; border-color: var(--sap-brand-color); }
+    input[type="text"], input[type="search"], select {
+      padding: 0.5rem 0.75rem;
+      border: 1px solid #8696A9;
+      border-radius: 0.25rem;
+      font-size: 0.875rem;
+      font-family: '72', 'SAP72', Arial, sans-serif;
+      background: #fff;
+      color: #1D2D3E;
+      height: 2.25rem;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23556B82' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.6rem center;
+      padding-right: 2rem;
+    }
+    select[multiple] {
+      background-image: none;
+      padding-right: 0.75rem;
+      height: auto;
+      border-radius: 0.25rem;
+    }
+    select[multiple] option { padding: 0.3rem 0.5rem; border-radius: 0.2rem; }
+    select[multiple] option:checked { background: #0070F2; color: white; }
+    input[type="text"]:focus, input[type="search"]:focus, select:focus {
+      outline: none;
+      border-color: #0070F2;
+      box-shadow: 0 0 0 2px rgba(0,112,242,0.15);
+    }
+    input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
+    .filter-hint { font-size: 0.7rem; color: #8696A9; margin-top: 2px; }
     .upload-area { border: 2px dashed #c0c0c0; border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: border-color 0.2s; }
     .upload-area:hover { border-color: var(--sap-brand-color); }
     .upload-area.dragover { border-color: var(--sap-brand-color); background: #f0f7ff; }
