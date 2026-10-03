@@ -1,4 +1,5 @@
 name: Deploy CAP Backend to CF
+# triggers on every push to main
 
 on:
   push:

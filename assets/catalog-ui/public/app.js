@@ -12,7 +12,7 @@ const AGENT_BASE_URL  = window.AGENT_BASE_URL  || 'http://localhost:5000';
 let state = {
   currentPage: 'catalog',
   catalog: { services: [], lastUpdated: null, loading: false, error: null },
-  filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], supercats: [], deckName: '', namingType: '' },
+  filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], deckName: '', namingType: '' },
   filteredServices: [],
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
   selectedServices: new Set(),
@@ -59,12 +59,18 @@ async function loadCatalog() {
 
 async function applyFilters() {
   const { query, engagementType, businessScenario, module: mod } = state.filters;
-  const mods     = state.filters.modules    || [];
-  const phases   = state.filters.phases     || [];
-  const supercats = state.filters.supercats || [];
+  const mods            = state.filters.modules       || [];
+  const phases          = state.filters.phases        || [];
+  const supercats       = state.filters.supercats     || [];
+  const advancedLoS     = state.filters.advancedLoS   || [];
+  const advancedLoSMode = state.filters.advancedLoSMode || 'merge';
+  const foundationalCats = state.filters.foundationalCats || [];
+
+  // Combine all supercats
+  const allSupercats = [...new Set([...supercats, ...advancedLoS, ...foundationalCats])];
 
   // Nothing selected — clear results and show prompt
-  if (!query && !engagementType && !businessScenario && !mod && mods.length === 0 && phases.length === 0 && supercats.length === 0) {
+  if (!query && !engagementType && !businessScenario && !mod && mods.length === 0 && phases.length === 0 && allSupercats.length === 0) {
     state.filteredServices = [];
     state.catalog.hasSearched = false;
     render(); return;
@@ -84,8 +90,8 @@ async function applyFilters() {
     else if (mod) params.set('module', mod);
     // phases
     phases.forEach(p => params.append('phase', p));
-    // supercategories
-    supercats.forEach(s => params.append('supercat', s));
+    // supercategories — combine all three supercat filters
+    allSupercats.forEach(s => params.append('supercat', s));
 
     const url = query
       ? `${CAP_BACKEND_URL}/api/catalog/searchServices?${params}`
@@ -99,12 +105,22 @@ async function applyFilters() {
   state.catalog.loading = false; render();
 }
 
+// ── ET display mapping ────────────────────────────────────────────────────────
+// "Enterprise Support" → displayed as "Foundational" everywhere in results
+function mapEtDisplay(val) {
+  if (!val) return val;
+  return val === 'Enterprise Support' ? 'Foundational' : val;
+}
+
 // ── Engagement type badge ─────────────────────────────────────────────────────
 function engagementBadge(et) {
-  // et may be an array — show first value only as a badge
-  const val = Array.isArray(et) ? et[0] : et;
-  const cls = val?.includes('Max') ? 'badge-max' : val?.includes('Advanced') ? 'badge-adv' : 'badge-ent';
-  return val ? `<span class="badge ${cls}">${val}</span>` : '—';
+  const arr = Array.isArray(et) ? et : (et ? [et] : []);
+  if (arr.length === 0) return '—';
+  return arr.map(val => {
+    const display = mapEtDisplay(val);
+    const cls = display.includes('Max') ? 'badge-max' : display.includes('Advanced') ? 'badge-adv' : 'badge-ent';
+    return `<span class="badge ${cls}">${display}</span>`;
+  }).join(' ');
 }
 
 // ── Pages ─────────────────────────────────────────────────────────────────────
@@ -175,21 +191,60 @@ function renderCatalogPage() {
       ${phases.length > 0 ? `
       <div class="filter-group">
         <label>SAP Activate Phase</label>
-        <select id="filter-phase" multiple size="${Math.min(phases.length, 5)}" style="min-width:200px"
-          onchange="updateMultiFilter('phases', this)">
-          ${phases.map(p => `<option value="${p}" ${(state.filters.phases||[]).includes(p)?'selected':''}>${p}</option>`).join('')}
-        </select>
-        <span class="filter-hint">Hold Ctrl to select multiple</span>
+        <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:4px 0">
+          ${phases.map(p => `
+            <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:400;cursor:pointer">
+              <input type="checkbox" value="${p}" ${(state.filters.phases||[]).includes(p)?'checked':''}
+                onchange="updateCheckboxFilter('phases', '${p}', this.checked)" />
+              ${p}
+            </label>`).join('')}
+        </div>
       </div>` : ''}
-      ${supercategories.length > 0 ? `
-      <div class="filter-group">
-        <label>Supercategory</label>
-        <select id="filter-supercat" multiple size="${Math.min(supercategories.length, 5)}" style="min-width:280px"
-          onchange="updateMultiFilter('supercats', this)">
-          ${supercategories.map(s => `<option value="${s}" ${(state.filters.supercats||[]).includes(s)?'selected':''}>${s}</option>`).join('')}
-        </select>
-        <span class="filter-hint">Hold Ctrl to select multiple</span>
-      </div>` : ''}
+      ${(() => {
+        const advancedLoS = supercategories.filter(s => s.startsWith('Success Plan for'));
+        const foundationalCats = supercategories.filter(s => !s.startsWith('Success Plan for'));
+        const et = state.filters.engagementType;
+        const showAdvanced = !et || et === 'Advanced Success Plan' || et === 'Max Success Plan';
+        const showFoundational = !et || et === 'Enterprise Support';
+        let html = '';
+        if (showAdvanced && advancedLoS.length > 0) {
+          html += `
+          <div class="filter-group">
+            <label>Advanced LoS</label>
+            <div style="display:flex;gap:4px;margin-bottom:6px">
+              <button class="toggle-btn ${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}"
+                style="font-size:0.72rem;padding:2px 8px;border:1px solid #0070F2;border-radius:3px"
+                onclick="updateFilter('advancedLoSMode','merge')">OR</button>
+              <button class="toggle-btn ${state.filters.advancedLoSMode==='intersect'?'active':''}"
+                style="font-size:0.72rem;padding:2px 8px;border:1px solid #0070F2;border-radius:3px"
+                onclick="updateFilter('advancedLoSMode','intersect')">AND</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:4px 0">
+              ${advancedLoS.map(s => `
+                <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:400;cursor:pointer">
+                  <input type="checkbox" value="${s}" ${(state.filters.advancedLoS||[]).includes(s)?'checked':''}
+                    onchange="updateCheckboxFilter('advancedLoS', '${s.replace(/'/g,"\\'")}', this.checked)" />
+                  ${s.replace('Success Plan for ', '')}
+                </label>`).join('')}
+            </div>
+          </div>`;
+        }
+        if (showFoundational && foundationalCats.length > 0) {
+          html += `
+          <div class="filter-group">
+            <label>Foundationals</label>
+            <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:4px 0">
+              ${foundationalCats.map(s => `
+                <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:400;cursor:pointer">
+                  <input type="checkbox" value="${s}" ${(state.filters.foundationalCats||[]).includes(s)?'checked':''}
+                    onchange="updateCheckboxFilter('foundationalCats', '${s.replace(/'/g,"\\'")}', this.checked)" />
+                  ${s}
+                </label>`).join('')}
+            </div>
+          </div>`;
+        }
+        return html;
+      })()}
       ${showNamingFilter ? `
       <div class="filter-group">
         <label>Service Name</label>
@@ -421,6 +476,15 @@ window.updateFilter = function(key, value) {
   window._filterDebounce = setTimeout(applyFilters, 300);
 };
 
+window.updateCheckboxFilter = function(key, value, checked) {
+  const arr = state.filters[key] ? [...state.filters[key]] : [];
+  if (checked && !arr.includes(value)) arr.push(value);
+  else if (!checked) { const i = arr.indexOf(value); if (i > -1) arr.splice(i, 1); }
+  state.filters[key] = arr;
+  clearTimeout(window._filterDebounce);
+  window._filterDebounce = setTimeout(applyFilters, 300);
+};
+
 window.updateMultiFilter = function(key, selectEl) {
   const selected = Array.from(selectEl.selectedOptions).map(o => o.value);
   state.filters[key] = selected;
@@ -438,7 +502,7 @@ window.updateMultiFilterUI5 = function(key, combobox) {
 };
 
 window.clearFilters = function() {
-  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], supercats: [], deckName: '', namingType: '' };
+  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], deckName: '', namingType: '' };
   state.filteredServices = [];
   state.catalog.hasSearched = false;
   render();

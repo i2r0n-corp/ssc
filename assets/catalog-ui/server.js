@@ -21,8 +21,16 @@ app.get('/', (req, res) => {
   res.send(html);
 });
 
-// Serve static assets
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static assets — disable caching for JS/CSS so deployments take effect immediately
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
 
 // Fallback: serve index for all routes (SPA)
 app.get('*', (req, res) => {
