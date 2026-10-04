@@ -4,11 +4,12 @@ SSC Catalog — Excel Enrichment Sync (Local Folder)
 Runs hourly via Windows Task Scheduler.
 
 What it does:
-  1. Fetches excel-manifest from CAP backend
-  2. For each manifest entry — finds exact file in local SharePoint-synced folder
-  3. If modified since last check — uploads via PUT /excel/{bsCode}
-  4. Server handles enrichment via serial queue
-  5. Updates last-check timestamp in log
+  1. Checks if app restarted since last sync — forces full re-upload if so
+  2. Fetches excel-manifest from CAP backend
+  3. For each manifest entry — finds exact file in local SharePoint-synced folder
+  4. If modified since last check — uploads via PUT /excel/{bsCode}
+  5. Server handles enrichment via serial queue
+  6. Updates last-check timestamp in log
 
 Requirements:
   pip install requests
@@ -50,9 +51,10 @@ def main():
     print(f"  {now.strftime('%Y-%m-%d %H:%M:%S')} UTC")
     print(f"{'='*55}")
 
-    # Check if app restarted since last sync
-    force_reupload = False
     last_check_str = log.get("lastCheck")
+
+    # 1. Check if app restarted since last sync — always runs regardless of interval
+    force_reupload = False
     try:
         health_resp = requests.get(f"{CAP_BACKEND_URL}/health", timeout=10)
         health_resp.raise_for_status()
@@ -68,19 +70,23 @@ def main():
     except Exception as e:
         print(f"⚠️  Could not check app start time: {e}")
 
-    if last_check_str and not force_reupload:
-        last_check = datetime.fromisoformat(last_check_str)
-        if last_check.tzinfo is None:
-            last_check = last_check.replace(tzinfo=timezone.utc)
-        minutes_since = (now - last_check).total_seconds() / 60
-        if minutes_since < CHECK_INTERVAL:
-            print(f"⏭️  Last check was {minutes_since:.0f} min ago — minimum is {CHECK_INTERVAL} min. Skipping.")
-            return
-        print(f"⏱️  Last check: {last_check.strftime('%Y-%m-%d %H:%M:%S')} UTC ({minutes_since:.0f} min ago)")
-    else:
-        if not last_check_str:
+    # 2. Only apply interval check if NOT force reupload
+    last_check = None
+    if not force_reupload:
+        if last_check_str:
+            last_check = datetime.fromisoformat(last_check_str)
+            if last_check.tzinfo is None:
+                last_check = last_check.replace(tzinfo=timezone.utc)
+            minutes_since = (now - last_check).total_seconds() / 60
+            if minutes_since < CHECK_INTERVAL:
+                print(f"⏭️  Last check was {minutes_since:.0f} min ago — minimum is {CHECK_INTERVAL} min. Skipping.")
+                return
+            print(f"⏱️  Last check: {last_check.strftime('%Y-%m-%d %H:%M:%S')} UTC ({minutes_since:.0f} min ago)")
+        else:
             print("⚡ First run — uploading all Excel files found in manifest.")
-        last_check = None
+            last_check = None
+    else:
+        last_check = None  # force all files to re-upload
 
     # Fetch manifest
     print(f"\n📋 Fetching manifest from CAP backend...")

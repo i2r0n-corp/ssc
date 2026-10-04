@@ -566,16 +566,56 @@ router.get('/service/:code', (req, res) => {
 });
 
 // ── Excel Manifest ────────────────────────────────────────────────────────────
-router.get('/excel-manifest', (req, res) => {
-  if (!fs.existsSync(MANIFEST_FILE)) return res.status(404).json({ error: 'No manifest yet.' });
-  try { res.json(JSON.parse(fs.readFileSync(MANIFEST_FILE, 'utf8'))); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+router.get('/excel-manifest', async (req, res) => {
+  try {
+    const db = require('../store/db');
+    db.getPool();
+    const result = await db.query(
+      'SELECT bs_code, file_name, file_size, uploaded_at, processed_at FROM catalog_excel_files ORDER BY bs_code'
+    );
+    const entries = result.rows.map(r => ({
+      bsCode:        r.bs_code,
+      fileName:      r.file_name,
+      fileSize:      r.file_size,
+      uploadedAt:    r.uploaded_at,
+      lastProcessed: r.processed_at
+    }));
+    return res.json({ updatedAt: new Date().toISOString(), count: entries.length, entries });
+  } catch (dbErr) {
+    if (!dbErr.message.includes('No PostgreSQL')) {
+      console.warn('[excel-manifest GET] DB failed, falling back to file:', dbErr.message);
+    }
+    if (!fs.existsSync(MANIFEST_FILE)) return res.status(404).json({ error: 'No manifest yet.' });
+    try { res.json(JSON.parse(fs.readFileSync(MANIFEST_FILE, 'utf8'))); }
+    catch (e) { res.status(500).json({ error: e.message }); }
+  }
 });
 
-router.put('/excel-manifest', requirePublishToken, (req, res) => {
+router.put('/excel-manifest', requirePublishToken, async (req, res) => {
   try {
     const { entries } = req.body;
     if (!Array.isArray(entries)) return res.status(400).json({ error: '"entries" array required' });
+
+    try {
+      const db = require('../store/db');
+      db.getPool();
+      for (const entry of entries) {
+        const { bsCode, fileName } = entry;
+        if (!bsCode) continue;
+        await db.query(
+          `INSERT INTO catalog_excel_files (bs_code, file_name, file_data, file_size)
+           VALUES ($1, $2, ''::bytea, 0)
+           ON CONFLICT (bs_code) DO UPDATE SET file_name = EXCLUDED.file_name`,
+          [bsCode, fileName || null]
+        );
+      }
+      return res.json({ status: 'saved', count: entries.length });
+    } catch (dbErr) {
+      if (!dbErr.message.includes('No PostgreSQL')) {
+        console.warn('[excel-manifest PUT] DB failed, falling back to file:', dbErr.message);
+      }
+    }
+
     const manifest = { updatedAt: new Date().toISOString(), count: entries.length, entries };
     fs.mkdirSync(path.dirname(MANIFEST_FILE), { recursive: true });
     fs.writeFileSync(MANIFEST_FILE, JSON.stringify(manifest, null, 2));
@@ -584,7 +624,7 @@ router.put('/excel-manifest', requirePublishToken, (req, res) => {
 });
 
 // ── Excel Upload + Immediate Enrichment ──────────────────────────────────────
-router.put('/excel/upload', (req, res) => {
+router.put('/excel/upload', async (req, res) => {
   try {
     const filename  = req.headers['x-filename'] || '';
     const bsCode    = (req.headers['x-bs-code'] || filename.split('_')[0] || '').toUpperCase();
@@ -610,6 +650,7 @@ router.put('/excel/upload', (req, res) => {
 
     const data = snapshot.load();
     if (!data) return res.status(404).json({ error: 'No snapshot available' });
+    if (!data.payload) return res.status(503).json({ error: 'Snapshot not available in file mode; use DB mode.' });
 
     const parsed = JSON.parse(data.payload);
     const flatIndex = parsed.flat_index || {};
@@ -626,6 +667,11 @@ router.put('/excel/upload', (req, res) => {
 
     snapshot.save({ ...data, payload: JSON.stringify(parsed), lastUpdated: new Date().toISOString() });
 
+    try {
+      const db = require('../store/db');
+      db.getPool();
+      await db.query('UPDATE catalog_excel_files SET processed_at = NOW() WHERE bs_code = $1', [bsCode]);
+    } catch(e) { /* non-critical */ }
     if (fs.existsSync(MANIFEST_FILE)) {
       try {
         const m = JSON.parse(fs.readFileSync(MANIFEST_FILE, 'utf8'));
@@ -702,14 +748,17 @@ router.put('/excel/:bsCode', requirePublishToken, async (req, res) => {
   const buf = req.body;
   if (!buf || buf.length === 0) return res.status(400).json({ error: 'Empty body' });
 
-  fs.writeFileSync(path.join(EXCEL_DIR, bsCode + '.xlsx'), buf);
+  try { fs.writeFileSync(path.join(EXCEL_DIR, bsCode + '.xlsx'), buf); } catch(e) { /* ephemeral FS on CF */ }
 
+  const fileName = req.headers['x-filename'] || (bsCode + '.xlsx');
   try {
     const db = require('../store/db');
     db.getPool();
     await db.query(
-      'INSERT INTO catalog_excel_files (bs_code, file_data, file_size, uploaded_at) VALUES ($1, $2, $3, NOW()) ON CONFLICT (bs_code) DO UPDATE SET file_data=EXCLUDED.file_data, file_size=EXCLUDED.file_size, uploaded_at=NOW()',
-      [bsCode, buf, buf.length]
+      `INSERT INTO catalog_excel_files (bs_code, file_name, file_data, file_size, uploaded_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (bs_code) DO UPDATE SET file_name=EXCLUDED.file_name, file_data=EXCLUDED.file_data, file_size=EXCLUDED.file_size, uploaded_at=NOW()`,
+      [bsCode, fileName, buf, buf.length]
     );
   } catch(e) {
     if (!e.message.includes('No PostgreSQL')) console.warn('[excel] DB save failed:', e.message);
