@@ -245,17 +245,22 @@ function renderCatalogFilters() {
         <!-- Right column: Module (only when BS selected) -->
         ${showModuleFilter ? `
         <div style="border-left:1px solid #e0e0e0;padding:1rem;width:50%;display:flex;flex-direction:column;gap:0.25rem">
-          <div class="fl-field" style="flex:1">
-            <select id="filter-mod" multiple size="${Math.min(uniqueMods.length, 6)}"
-              onchange="updateMultiFilter('modules', this)" style="height:auto">
+          <div class="filter-group" style="width:100%">
+            <label>Module</label>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;min-height:1.6rem">
+              ${selectedMods.length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('modules')">✕</button>` : ''}
+            </div>
+            <div class="check-panel">
               ${uniqueMods.map(([code, name]) => {
                 const label = name.includes(' // ') ? name.split(' // ').slice(1).join(' // ') : name;
-                return `<option value="${code}" ${selectedMods.includes(code)?'selected':''}>${label}</option>`;
+                return `<label>
+                  <input type="checkbox" value="${code}" ${selectedMods.includes(code)?'checked':''}
+                    onchange="updateCheckboxFilter('modules', '${code}', this.checked)" />
+                  ${label}
+                </label>`;
               }).join('')}
-            </select>
-            <label>Module</label>
+            </div>
           </div>
-          <span class="filter-hint">Hold Ctrl to select multiple</span>
         </div>` : ''}
       </div>
 
@@ -613,6 +618,7 @@ window.updateCheckboxFilter = function(key, value, checked) {
 };
 window.updateCheckboxFilter._clearKey = function(key) {
   state.filters[key] = [];
+  if (key === 'modules') state.filters.module = '';
   patchFilters();
   clearTimeout(window._filterDebounce);
   window._filterDebounce = setTimeout(applyFilters, 300);
