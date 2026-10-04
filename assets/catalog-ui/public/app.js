@@ -57,6 +57,12 @@ async function loadCatalog() {
   state.catalog.loading = false; render();
 }
 
+function patchResults() {
+  const el = document.getElementById('catalog-results');
+  if (el) el.innerHTML = renderCatalogResults();
+  else render();
+}
+
 async function applyFilters() {
   const { query, engagementType, businessScenario, module: mod } = state.filters;
   const mods            = state.filters.modules       || [];
@@ -75,11 +81,11 @@ async function applyFilters() {
   if (!query && !engagementType && !businessScenario && !mod && mods.length === 0 && phases.length === 0 && allSupercats.length === 0 && advancedLoS.length === 0 && foundationalCats.length === 0) {
     state.filteredServices = [];
     state.catalog.hasSearched = false;
-    render(); return;
+    patchResults(); return;
   }
 
   state.catalog.hasSearched = true;
-  state.catalog.loading = true; render();
+  state.catalog.loading = true; patchResults();
 
   try {
     // Build query params for server-side filtering
@@ -111,7 +117,7 @@ async function applyFilters() {
   } catch (e) {
     state.filteredServices = [];
   }
-  state.catalog.loading = false; render();
+  state.catalog.loading = false; patchResults();
 }
 
 // ── ET display mapping ────────────────────────────────────────────────────────
@@ -145,7 +151,12 @@ function renderCatalogPage() {
     { value: 'Enterprise Support',    label: 'Foundational Success Plan' },
   ];
 
-  const uniqueBS = Object.entries(bsMap).sort((a, b) => a[1].localeCompare(b[1]));
+  const uniqueBS = Object.entries(bsMap)
+    .map(([code, name]) => {
+      const label = name.includes('-') ? name.replace(/^[^-]+-\s*/, '') : name;
+      return [code, name, label];
+    })
+    .sort((a, b) => a[2].localeCompare(b[2]));
 
   // Modules — only shown when BS is selected, multiselect
   const showModuleFilter = !!state.filters.businessScenario;
@@ -186,7 +197,7 @@ function renderCatalogPage() {
         <select id="filter-bs" ${!state.filters.businessScenario ? 'data-empty="true"' : ''}
           onchange="updateFilter('businessScenario', this.value); this.dataset.empty = this.value ? 'false' : 'true'">
           <option value=""></option>
-          ${uniqueBS.map(([code, name]) => `<option value="${code}" ${state.filters.businessScenario===code?'selected':''}>${name}</option>`).join('')}
+          ${uniqueBS.map(([code, name, label]) => `<option value="${code}" ${state.filters.businessScenario===code?'selected':''}>${label}</option>`).join('')}
         </select>
         <label>Business Scenario</label>
       </div>
@@ -274,6 +285,13 @@ function renderCatalogPage() {
       <button class="btn btn-secondary btn-sm" onclick="clearFilters()">Clear</button>
       ${lastUpdated ? `<span class="last-updated">Last updated: ${new Date(lastUpdated).toLocaleString()}</span>` : ''}
     </div>
+    <div id="catalog-results">${renderCatalogResults()}</div>`;
+}
+
+function renderCatalogResults() {
+  const { loading, moduleMap = {} } = state.catalog;
+  const hasSearched = state.catalog.hasSearched;
+  return `
     ${loading ? '<div class="loading"><div class="loading-spinner"></div> Loading...</div>' : ''}
     ${!hasSearched && !loading ? `
       <div class="empty-state">
@@ -529,7 +547,7 @@ window.clearFilters = function() {
 window.toggleSelect = function(code) {
   if (state.selectedServices.has(code)) state.selectedServices.delete(code);
   else state.selectedServices.add(code);
-  render();
+  patchResults();
 };
 
 window.addSelectedToCart = function() {
@@ -611,7 +629,7 @@ window.addIncidentResultsToCart = function() {
 window.toggleSelectAll = function(checked) {
   if (checked) state.filteredServices.forEach(s => state.selectedServices.add(s.code));
   else state.selectedServices.clear();
-  render();
+  patchResults();
 };
 
 window.generatePptx = async function(template) {
