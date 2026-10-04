@@ -188,10 +188,10 @@ function renderCatalogFilters() {
   const et = state.filters.engagementType;
   const queryOrBS = !!(state.filters.query || state.filters.businessScenario);
 
-  const activatePhaseActive = queryOrBS;
-  const maxTopicsActive     = queryOrBS || et === 'Max Success Plan';
-  const advancedActive      = queryOrBS || et === 'Advanced Success Plan';
-  const foundationalActive  = queryOrBS || et === 'Enterprise Support';
+  const activatePhaseActive  = queryOrBS;
+  const maxTopicsActive      = (queryOrBS || et === 'Max Success Plan')      && et !== 'Advanced Success Plan' && et !== 'Enterprise Support';
+  const advancedActive       = (queryOrBS || et === 'Advanced Success Plan') && et !== 'Max Success Plan'      && et !== 'Enterprise Support';
+  const foundationalActive   = (queryOrBS || et === 'Enterprise Support')    && et !== 'Max Success Plan'      && et !== 'Advanced Success Plan';
   const disabledStyle = 'opacity:0.4;pointer-events:none';
 
   const advancedLoSItems  = supercategories.filter(s => s.startsWith('Success Plans for'));
