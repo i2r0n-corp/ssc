@@ -214,21 +214,20 @@ function renderCatalogFilters() {
 
         <!-- Left column: BS + naming toggle + hr + Keywords + ET -->
         <div class="filter-col-left">
-          <div class="fl-field" style="width:100%">
+          <!-- BS field: static label + naming toggle + select -->
+          <div style="width:100%;display:flex;flex-direction:column;gap:4px">
+            <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600">Business Scenario</label>
+            <div style="display:flex;align-items:center;gap:6px;${namingStyle}">
+              <div class="mode-switch" style="margin-bottom:0">
+                <button class="${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'catalog')">Catalog Name</button>
+                <button class="${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
+              </div>
+            </div>
             <select id="filter-bs" ${!state.filters.businessScenario ? 'data-empty="true"' : ''}
               onchange="updateFilter('businessScenario', this.value); this.dataset.empty = this.value ? 'false' : 'true'">
               <option value=""></option>
               ${uniqueBS.map(([code, , label]) => `<option value="${code}" ${state.filters.businessScenario===code?'selected':''}>${label}</option>`).join('')}
             </select>
-            <label>Business Scenario</label>
-          </div>
-
-          <!-- Naming toggle under BS -->
-          <div style="display:flex;align-items:center;gap:6px;margin-top:0.5rem;${namingStyle}">
-            <div class="mode-switch" style="margin-bottom:0">
-              <button class="${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'catalog')">Catalog Name</button>
-              <button class="${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
-            </div>
           </div>
 
           <hr style="border:none;border-top:1px solid #e0e0e0;margin:0.75rem 0" />
@@ -357,7 +356,7 @@ function renderCatalogPage() {
   const { lastUpdated } = state.catalog;
   return `
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:0.5rem">
-      <h2 style="margin:0">Catalog Browser</h2>
+      <h2 style="margin:0">Catalogue Browser</h2>
       ${lastUpdated ? `<span class="last-updated">Last updated: ${new Date(lastUpdated).toLocaleString()}</span>` : ''}
     </div>
     <div id="catalog-filters">${renderCatalogFilters()}</div>
@@ -507,7 +506,7 @@ function renderExportPage() {
       ${cartServices.length > 50 ? `<div class="error-strip">⚠ Maximum 50 services per export. Please remove ${cartServices.length - 50} service(s).</div>` : ''}
       ${cartServices.length === 0 ? `
         <div class="empty-state">
-          <p>Your export cart is empty. Go to the <a href="#" onclick="navigate('catalog')">Catalog Browser</a> or
+          <p>Your export cart is empty. Go to the <a href="#" onclick="navigate('catalog')">Catalogue Browser</a> or
           <a href="#" onclick="navigate('incidents')">Incident Analysis</a> to add services.</p>
         </div>` : `
       <table class="service-table">
@@ -907,26 +906,26 @@ function renderDebugPage() {
   return `
     <h2>Matching Debug</h2>
     <div class="filter-row" style="gap:1rem;flex-wrap:wrap;align-items:flex-end">
-      <div class="fl-field" style="min-width:220px;max-width:320px">
-        <select onchange="updateDebugFilter('bsCode',this.value)" data-empty="${!bsCode}">
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;max-width:320px">
+        <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600">Business Scenario</label>
+        <select onchange="updateDebugFilter('bsCode',this.value)">
           <option value="">All business scenarios</option>
           ${bsOptions}
         </select>
-        <label>Business Scenario</label>
       </div>
-      <div class="fl-field" style="min-width:160px;max-width:240px">
-        <input type="text" placeholder=" " value="${module}" oninput="updateDebugFilter('module',this.value)" />
-        <label>Module (contains)</label>
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:160px;max-width:240px">
+        <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600">Module (contains)</label>
+        <input type="text" value="${module}" oninput="updateDebugFilter('module',this.value)" />
       </div>
-      <div class="fl-field" style="min-width:160px;max-width:220px">
-        <select onchange="updateDebugFilter('status',this.value)" data-empty="${!status}">
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:160px;max-width:220px">
+        <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600">Status</label>
+        <select onchange="updateDebugFilter('status',this.value)">
           ${statusOptions}
         </select>
-        <label>Status</label>
       </div>
       ${loading ? `<div class="loading"><div class="loading-spinner"></div> Loading…</div>` : ''}
     </div>
-    ${error ? `<div class="error-strip">Error: ${error}</div>` : ''}
+    ${error ? `<div class="error-strip">Error: ${error.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : ''}
     ${totalsHtml}
     <div style="overflow-x:auto">
       <table class="service-table">
@@ -951,7 +950,7 @@ function render() {
   if (!app) return;
 
   const pages = [
-    { id: 'catalog',   label: 'Catalog' },
+    { id: 'catalog',   label: 'Catalogue Browser' },
     { id: 'incidents', label: 'Incidents' },
     { id: 'chat',      label: 'Chat' },
     { id: 'debug',     label: 'Matching Debug' },
@@ -967,7 +966,7 @@ function render() {
 
   app.innerHTML = `
     <div class="shell-bar">
-      <span class="shell-bar-title">🗂 SSC Catalog Intelligence</span>
+      <span class="shell-bar-title">🗂 SSC Intelligence</span>
       <nav class="shell-nav">
         ${pages.map(p => `<a href="#" class="shell-nav-item ${state.currentPage===p.id?'active':''}" onclick="navigate('${p.id}');return false">${p.label}</a>`).join('')}
       </nav>
