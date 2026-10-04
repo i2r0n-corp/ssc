@@ -15,6 +15,7 @@ let state = {
   filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', maxFocusTopics: [], maxFocusTopicsMode: 'merge', deckName: '', namingType: '' },
   filteredServices: [],
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
+  filtersExpanded: false,
   selectedServices: new Set(),
   incident: { file: null, results: [], loading: false, error: null, selectedCodes: new Set() },
   pptx: { template: 'short-description', generating: false, error: null, downloadUrl: null },
@@ -183,37 +184,36 @@ function renderCatalogFilters() {
   }
 
   const selectedMods = state.filters.modules || [];
-  const showNamingFilter = !!state.filters.businessScenario;
-
   const et = state.filters.engagementType;
   const queryOrBS = !!(state.filters.query || state.filters.businessScenario);
 
-  // Per-filter activation conditions
   const activatePhaseActive = queryOrBS;
   const maxTopicsActive     = queryOrBS || et === 'Max Success Plan';
   const advancedActive      = queryOrBS || et === 'Advanced Success Plan';
   const foundationalActive  = queryOrBS || et === 'Enterprise Support';
-
   const disabledStyle = 'opacity:0.4;pointer-events:none';
 
-  const advancedLoSItems = supercategories.filter(s => s.startsWith('Success Plans for'));
+  const advancedLoSItems  = supercategories.filter(s => s.startsWith('Success Plans for'));
   const foundationalItems = supercategories.filter(s => !s.startsWith('Success Plans for'));
 
-  const showAdvancedBadge    = et === 'Advanced Success Plan';
+  const showAdvancedBadge     = et === 'Advanced Success Plan';
   const showFoundationalBadge = et === 'Enterprise Support';
-  const showMaxBadge         = et === 'Max Success Plan';
+  const showMaxBadge          = et === 'Max Success Plan';
+
+  const namingDisabled = et === 'Max Success Plan';
+  const namingStyle    = namingDisabled ? disabledStyle : '';
+  const namingActive   = !namingDisabled && !!state.filters.businessScenario;
 
   return `
     ${error ? `<div class="error-strip">⚠ ${error}</div>` : ''}
     <div class="filter-row" style="flex-direction:column;gap:0;padding:0">
 
-      <!-- Top area: left column (BS + hr + Keywords+ET) + right column (Module) -->
-      <div style="display:flex;gap:0;align-items:stretch">
+      <!-- Two-column top area -->
+      <div class="filter-columns">
 
-        <!-- Left column -->
-        <div style="display:flex;flex-direction:column;gap:0;width:50%;padding:1rem">
-          <!-- Row 1: Business Scenario -->
-          <div class="fl-field" style="min-width:280px;max-width:420px">
+        <!-- Left column: BS + hr + Keywords + ET -->
+        <div class="filter-col-left">
+          <div class="fl-field" style="width:100%">
             <select id="filter-bs" ${!state.filters.businessScenario ? 'data-empty="true"' : ''}
               onchange="updateFilter('businessScenario', this.value); this.dataset.empty = this.value ? 'false' : 'true'">
               <option value=""></option>
@@ -224,14 +224,13 @@ function renderCatalogFilters() {
 
           <hr style="border:none;border-top:1px solid #e0e0e0;margin:0.75rem 0" />
 
-          <!-- Row 2: Keywords + ET -->
-          <div style="display:flex;gap:1rem;flex-wrap:wrap">
-            <div class="fl-field" style="min-width:200px">
+          <div style="display:flex;gap:1rem">
+            <div class="fl-field" style="flex:1;min-width:0">
               <input type="search" id="filter-query" placeholder=" " value="${state.filters.query}"
                 oninput="updateFilter('query', this.value)" />
               <label>Keywords</label>
             </div>
-            <div class="fl-field" style="min-width:200px">
+            <div class="fl-field" style="flex:1;min-width:0">
               <select id="filter-et" ${!state.filters.engagementType ? 'data-empty="true"' : ''}
                 onchange="updateFilter('engagementType', this.value); this.dataset.empty = this.value ? 'false' : 'true'">
                 <option value=""></option>
@@ -244,31 +243,39 @@ function renderCatalogFilters() {
 
         <!-- Right column: Module (only when BS selected) -->
         ${showModuleFilter ? `
-        <div style="border-left:1px solid #e0e0e0;padding:1rem;width:50%;display:flex;flex-direction:column;gap:0.25rem">
-          <div class="filter-group" style="width:100%">
-            <label>Module</label>
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;min-height:1.6rem">
-              ${selectedMods.length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('modules')">✕</button>` : ''}
+        <div class="filter-col-right">
+          <!-- Naming toggle + clear inline -->
+          <div style="display:flex;align-items:center;gap:6px;${namingStyle}">
+            <div class="mode-switch" style="margin-bottom:0">
+              <button class="${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'catalog')">Catalog Name</button>
+              <button class="${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
             </div>
-            <div class="check-panel">
-              ${uniqueMods.map(([code, name]) => {
-                const label = name.includes(' // ') ? name.split(' // ').slice(1).join(' // ') : name;
-                return `<label>
-                  <input type="checkbox" value="${code}" ${selectedMods.includes(code)?'checked':''}
-                    onchange="updateCheckboxFilter('modules', '${code}', this.checked)" />
-                  ${label}
-                </label>`;
-              }).join('')}
-            </div>
+            ${selectedMods.length > 0 ? `<button class="mode-switch-clear" title="Clear modules" onclick="updateCheckboxFilter._clearKey('modules')">✕</button>` : ''}
+          </div>
+          <!-- Module label -->
+          <div style="font-size:0.75rem;color:#6a6a6a;font-weight:600;margin-top:0.25rem">Module</div>
+          <!-- Module checkboxes -->
+          <div class="check-panel" style="flex:1">
+            ${uniqueMods.map(([code, name]) => {
+              const label = name.includes(' // ') ? name.split(' // ').slice(1).join(' // ') : name;
+              return `<label>
+                <input type="checkbox" value="${code}" ${selectedMods.includes(code)?'checked':''}
+                  onchange="updateCheckboxFilter('modules', '${code}', this.checked)" />
+                ${label}
+              </label>`;
+            }).join('')}
           </div>
         </div>` : ''}
       </div>
 
-      <!-- Horizontal divider before Section 3 -->
+      <!-- Divider + More filters toggle (mobile only) -->
       <hr style="border:none;border-top:1px solid #e0e0e0;margin:0" />
+      <button class="filter-more-btn" onclick="toggleMoreFilters()">
+        ${state.filtersExpanded ? '▲ Less filters' : '▼ More filters'}
+      </button>
 
-      <!-- Section 3: 4 checkbox filters + naming toggle -->
-      <div style="display:flex;gap:1rem;flex-wrap:wrap;padding:1rem;align-items:flex-start">
+      <!-- Section 3: 4 checkbox filters -->
+      <div class="filter-sec3 ${state.filtersExpanded ? 'expanded' : ''}">
 
         ${phases.length > 0 ? `
         <div class="filter-group" style="${activatePhaseActive ? '' : disabledStyle}">
@@ -281,12 +288,10 @@ function renderCatalogFilters() {
             ${(state.filters.phases||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('phases')">✕</button>` : ''}
           </div>
           <div class="check-panel">
-            ${phases.map(p => `
-              <label>
-                <input type="checkbox" value="${p}" ${(state.filters.phases||[]).includes(p)?'checked':''}
-                  onchange="updateCheckboxFilter('phases', '${p}', this.checked)" />
-                ${p}
-              </label>`).join('')}
+            ${phases.map(p => `<label>
+              <input type="checkbox" value="${p}" ${(state.filters.phases||[]).includes(p)?'checked':''}
+                onchange="updateCheckboxFilter('phases', '${p}', this.checked)" />
+              ${p}</label>`).join('')}
           </div>
         </div>` : ''}
 
@@ -297,12 +302,10 @@ function renderCatalogFilters() {
             ${(state.filters.maxFocusTopics||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('maxFocusTopics')">✕</button>` : ''}
           </div>
           <div class="check-panel">
-            ${allMaxTopics.map(t => `
-              <label>
-                <input type="checkbox" value="${t}" ${(state.filters.maxFocusTopics||[]).includes(t)?'checked':''}
-                  onchange="updateCheckboxFilter('maxFocusTopics', '${t.replace(/'/g,"\\'")}', this.checked)" />
-                ${t}
-              </label>`).join('')}
+            ${allMaxTopics.map(t => `<label>
+              <input type="checkbox" value="${t}" ${(state.filters.maxFocusTopics||[]).includes(t)?'checked':''}
+                onchange="updateCheckboxFilter('maxFocusTopics', '${t.replace(/'/g,"\\'")}', this.checked)" />
+              ${t}</label>`).join('')}
           </div>
         </div>` : ''}
 
@@ -317,12 +320,10 @@ function renderCatalogFilters() {
             ${(state.filters.advancedLoS||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('advancedLoS')">✕</button>` : ''}
           </div>
           <div class="check-panel">
-            ${advancedLoSItems.map(s => `
-              <label>
-                <input type="checkbox" value="${s}" ${(state.filters.advancedLoS||[]).includes(s)?'checked':''}
-                  onchange="updateCheckboxFilter('advancedLoS', '${s.replace(/'/g,"\\'")}', this.checked)" />
-                ${s.replace('Success Plans for ', '')}
-              </label>`).join('')}
+            ${advancedLoSItems.map(s => `<label>
+              <input type="checkbox" value="${s}" ${(state.filters.advancedLoS||[]).includes(s)?'checked':''}
+                onchange="updateCheckboxFilter('advancedLoS', '${s.replace(/'/g,"\\'")}', this.checked)" />
+              ${s.replace('Success Plans for ', '')}</label>`).join('')}
           </div>
         </div>` : ''}
 
@@ -337,21 +338,10 @@ function renderCatalogFilters() {
             ${(state.filters.foundationalCats||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('foundationalCats')">✕</button>` : ''}
           </div>
           <div class="check-panel">
-            ${foundationalItems.map(s => `
-              <label>
-                <input type="checkbox" value="${s}" ${(state.filters.foundationalCats||[]).includes(s)?'checked':''}
-                  onchange="updateCheckboxFilter('foundationalCats', '${s.replace(/'/g,"\\'")}', this.checked)" />
-                ${s}
-              </label>`).join('')}
-          </div>
-        </div>` : ''}
-
-        ${showNamingFilter ? `
-        <div class="filter-group">
-          <label>Service Name</label>
-          <div class="toggle-group">
-            <button class="toggle-btn ${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'catalog')">Catalog Name</button>
-            <button class="toggle-btn ${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
+            ${foundationalItems.map(s => `<label>
+              <input type="checkbox" value="${s}" ${(state.filters.foundationalCats||[]).includes(s)?'checked':''}
+                onchange="updateCheckboxFilter('foundationalCats', '${s.replace(/'/g,"\\'")}', this.checked)" />
+              ${s}</label>`).join('')}
           </div>
         </div>` : ''}
 
@@ -638,6 +628,11 @@ window.updateMultiFilterUI5 = function(key, combobox) {
   if (key === 'modules') state.filters.module = selected.length === 1 ? selected[0] : '';
   clearTimeout(window._filterDebounce);
   window._filterDebounce = setTimeout(applyFilters, 300);
+};
+
+window.toggleMoreFilters = function() {
+  state.filtersExpanded = !state.filtersExpanded;
+  patchFilters();
 };
 
 window.clearFilters = function() {

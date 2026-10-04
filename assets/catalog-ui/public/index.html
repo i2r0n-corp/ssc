@@ -136,6 +136,23 @@
     .fl-field input:focus ~ label,
     .fl-field select:focus ~ label { color: #0070F2; }
     /* ─────────────────────────────────────────────────────────────────────── */
+    /* ── Responsive filter layout ─────────────────────────────────────────── */
+    .filter-columns { display: flex; gap: 0; align-items: stretch; }
+    .filter-col-left  { display: flex; flex-direction: column; gap: 0; width: 50%; padding: 1rem; }
+    .filter-col-right { border-left: 1px solid #e0e0e0; padding: 1rem; width: 50%; display: flex; flex-direction: column; gap: 0.5rem; }
+    .filter-sec3 { display: flex; gap: 1rem; flex-wrap: wrap; padding: 1rem; align-items: flex-start; }
+    .filter-sec3 .filter-group { width: calc(25% - 0.75rem); min-width: 160px; }
+    .filter-more-btn { display: none; }
+    @media (max-width: 768px) {
+      .filter-columns { flex-direction: column; }
+      .filter-col-left  { width: 100%; }
+      .filter-col-right { width: 100%; border-left: none; border-top: 1px solid #e0e0e0; }
+      .filter-sec3 { display: none; padding: 0 1rem 1rem; }
+      .filter-sec3.expanded { display: flex; }
+      .filter-sec3 .filter-group { width: 100%; min-width: unset; }
+      .filter-more-btn { display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 1rem; border: none; background: none; color: var(--sap-brand-color); font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+    }
+    /* ─────────────────────────────────────────────────────────────────────── */
     /* ── Mode switch (Merge / Intersect) ──────────────────────────────────── */
     .mode-switch { display: flex; width: fit-content; align-items: center; background: #EBF2FF; border-radius: 2rem; padding: 2px; gap: 0; margin-bottom: 6px; }
     .mode-switch button {
@@ -181,6 +198,6 @@
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="/app.js?v=20261004e"></script>
+  <script type="module" src="/app.js?v=20261004f"></script>
 </body>
 </html>
