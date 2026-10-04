@@ -795,11 +795,11 @@ router.post('/full', requirePublishToken, async (req, res) => {
       const so = flatIndex[c].serviceObject;
       return so !== 'Business Scenario' && so !== 'Business Scenario module';
     });
-    const bsCodes = Object.keys(flatIndex).filter(c => flatIndex[c].serviceObject === 'Business Scenario');
+    const bsNodeCodes = Object.keys(flatIndex).filter(c => flatIndex[c].serviceObject === 'Business Scenario');
 
     // Fetch fields=FULL for BS nodes to get serviceTeaserText (used for Excel filename parsing)
-    console.log(`Fetching fields=FULL for ${bsCodes.length} Business Scenario nodes...`);
-    for (const code of bsCodes) {
+    console.log(`Fetching fields=FULL for ${bsNodeCodes.length} Business Scenario nodes...`);
+    for (const code of bsNodeCodes) {
       try {
         const full = await fetchFullService(code, token);
         if (full) flatIndex[code] = { ...flatIndex[code], ...full };
