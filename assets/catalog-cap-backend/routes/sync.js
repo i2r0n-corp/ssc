@@ -795,6 +795,17 @@ router.post('/full', requirePublishToken, async (req, res) => {
       const so = flatIndex[c].serviceObject;
       return so !== 'Business Scenario' && so !== 'Business Scenario module';
     });
+    const bsCodes = Object.keys(flatIndex).filter(c => flatIndex[c].serviceObject === 'Business Scenario');
+
+    // Fetch fields=FULL for BS nodes to get serviceTeaserText (used for Excel filename parsing)
+    console.log(`Fetching fields=FULL for ${bsCodes.length} Business Scenario nodes...`);
+    for (const code of bsCodes) {
+      try {
+        const full = await fetchFullService(code, token);
+        if (full) flatIndex[code] = { ...flatIndex[code], ...full };
+      } catch(e) { console.warn(`  fields=FULL failed for BS ${code}: ${e.message}`); }
+      await new Promise(r => setTimeout(r, 100));
+    }
     console.log(`Fetching fields=FULL for ${leafCodes.length} leaf services...`);
     const BATCH = 10;
     for (let i = 0; i < leafCodes.length; i += BATCH) {
