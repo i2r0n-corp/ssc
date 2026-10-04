@@ -167,7 +167,7 @@ router.get('/searchServices', (req, res) => {
         }
       }
 
-      sql += ' ORDER BY s.name LIMIT 200';
+      sql += ' ORDER BY s.name LIMIT 2000';
 
       const result = await db.query(sql, params);
       const services = result.rows.map(row => {
@@ -410,7 +410,7 @@ router.get('/filterServices', async (req, res) => {
         }
       }
 
-      sql += ' ORDER BY s.name LIMIT 500';
+      sql += ' ORDER BY s.name LIMIT 2000';
 
       const result = await db.query(sql, params);
       const services = result.rows.map(row => {

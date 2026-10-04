@@ -145,9 +145,16 @@ function mapEtDisplay(val) {
 function engagementBadge(et) {
   let arr = Array.isArray(et) ? et : (et ? [et] : []);
   if (arr.length === 0) return '—';
-  // When an ET filter is active, show only that ET to avoid cross-type confusion
   const activeET = state.filters.engagementType;
-  if (activeET && arr.includes(activeET)) arr = [activeET];
+  if (activeET) {
+    // ET filter active — show only that ET's badge
+    arr = arr.includes(activeET) ? [activeET] : arr;
+  } else if (arr.length > 1) {
+    // No ET filter — show only the base/foundational ET to avoid multi-badge clutter
+    const priority = ['Enterprise Support', 'Advanced Success Plan', 'Max Success Plan'];
+    const base = priority.find(p => arr.includes(p));
+    if (base) arr = [base];
+  }
   return arr.map(val => {
     const display = mapEtDisplay(val);
     const cls = display.includes('Max') ? 'badge-max' : display.includes('Advanced') ? 'badge-adv' : 'badge-ent';
@@ -258,7 +265,7 @@ function renderCatalogFilters() {
             ${selectedMods.length > 0 ? `<button class="mode-switch-clear" title="Clear modules" onclick="updateCheckboxFilter._clearKey('modules')">✕</button>` : ''}
           </div>
           <!-- Module checkboxes -->
-          <div class="check-panel" style="flex:1">
+          <div class="check-panel" style="flex:1;max-height:9.9rem">
             ${uniqueMods.map(([code, name]) => {
               const label = name.includes(' // ') ? name.split(' // ').slice(1).join(' // ') : name;
               return `<label>
@@ -410,7 +417,7 @@ function renderCatalogResults() {
         </tr>
       </thead>
       <tbody>
-        ${state.filteredServices.slice(0, 500).map(svc => {
+        ${state.filteredServices.slice(0, 2000).map(svc => {
           const useDeck = state.filters.namingType === 'deck' && state.filters.businessScenario;
           const bsNaming = svc.business_scenario_naming || svc.businessScenarioNaming || {};
           const bsCode = state.filters.businessScenario;
