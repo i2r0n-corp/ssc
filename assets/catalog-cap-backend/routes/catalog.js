@@ -787,44 +787,105 @@ async function processEnrichQueue() {
     const { bsCode, buf } = enrichQueue.shift();
     try {
       console.log('[enrich-queue] Processing ' + bsCode + ' (' + enrichQueue.length + ' remaining)');
-      const cached = snapshot.load();
-      if (!cached) { console.warn('[enrich-queue] No snapshot for ' + bsCode); continue; }
-      const syncModule = require('./sync');
-      const parsed = JSON.parse(cached.payload);
-      const flatIndex = parsed.flat_index || {};
-      const injectionLog = {};
-      const enriched = await syncModule.applyExcelEnrichment(flatIndex, bsCode, buf, injectionLog);
-      const businessScenarios = syncModule.buildHierarchy(flatIndex);
-      parsed.flat_index = flatIndex;
-      parsed.business_scenarios = businessScenarios;
-      snapshot.save({ ...cached, payload: JSON.stringify(parsed), lastUpdated: new Date().toISOString() });
 
-      // Stamp processed_at in DB
+      // ── Load flat_index from DB (preferred) or file snapshot ─────────────────
+      let flatIndex = null;
       try {
         const db = require('../store/db');
         db.getPool();
-        await db.query('UPDATE catalog_excel_files SET processed_at = NOW() WHERE bs_code = $1', [bsCode]);
-      } catch(e) { /* non-critical */ }
+        const svcRes = await db.query('SELECT code, raw_data FROM catalog_services');
+        flatIndex = {};
+        for (const row of svcRes.rows) {
+          if (row.raw_data && row.code) flatIndex[row.code] = row.raw_data;
+        }
+        // Attach childServices from hierarchy
+        const hierRes = await db.query('SELECT parent_code, child_code FROM catalog_hierarchy ORDER BY position');
+        for (const row of hierRes.rows) {
+          if (flatIndex[row.parent_code]) {
+            if (!flatIndex[row.parent_code].childServices) flatIndex[row.parent_code].childServices = [];
+            flatIndex[row.parent_code].childServices.push(row.child_code);
+          }
+        }
+        console.log('[enrich-queue] Loaded ' + Object.keys(flatIndex).length + ' services from DB for ' + bsCode);
+      } catch (dbLoadErr) {
+        console.warn('[enrich-queue] DB load failed, falling back to snapshot:', dbLoadErr.message);
+        const cached = snapshot.load();
+        if (!cached || !cached.payload) { console.warn('[enrich-queue] No snapshot for ' + bsCode); continue; }
+        flatIndex = JSON.parse(cached.payload).flat_index || {};
+      }
 
-      const logPath = path.join(__dirname, '..', 'data', 'injection-log.json');
-      let existingLog = {};
-      try { existingLog = JSON.parse(fs.readFileSync(logPath, 'utf8')); } catch(e) {}
-      existingLog.generatedAt = new Date().toISOString();
-      existingLog.details = existingLog.details || {};
-      existingLog.details[bsCode] = injectionLog[bsCode] || {};
-      fs.mkdirSync(path.dirname(logPath), { recursive: true });
-      fs.writeFileSync(logPath, JSON.stringify(existingLog, null, 2));
+      const syncModule = require('./sync');
+      const injectionLog = {};
+      const enriched = await syncModule.applyExcelEnrichment(flatIndex, bsCode, buf, injectionLog);
+      const logEntry = injectionLog[bsCode] || {};
+
+      // ── Write deck names to catalog_bs_naming DB ──────────────────────────────
+      try {
+        const db = require('../store/db');
+        db.getPool();
+        for (const [svcCode, svc] of Object.entries(flatIndex)) {
+          const naming = svc.business_scenario_naming || {};
+          if (naming[bsCode]) {
+            await db.query(
+              `INSERT INTO catalog_bs_naming (service_code, bs_code, deck_name, match_method)
+               VALUES ($1, $2, $3, $4)
+               ON CONFLICT (service_code, bs_code) DO UPDATE SET deck_name=EXCLUDED.deck_name, match_method=EXCLUDED.match_method`,
+              [svcCode, bsCode, naming[bsCode], null]
+            );
+          }
+        }
+
+        // ── Stamp processed_at + counts on catalog_excel_files ────────────────
+        await db.query(
+          `UPDATE catalog_excel_files
+           SET processed_at=NOW(), matched_count=$2, unmatched_count=$3, injected_count=$4
+           WHERE bs_code=$1`,
+          [bsCode, logEntry.matched || 0, logEntry.unmatched || 0, logEntry.injected || 0]
+        );
+
+        // ── Write injection log to catalog_injection_log DB table ─────────────
+        await db.query(
+          `INSERT INTO catalog_injection_log
+             (bs_code, generated_at, matched, unmatched, injected, already_linked, unresolved_mod, unresolved_svc, log_rows)
+           VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (bs_code) DO UPDATE SET
+             generated_at=NOW(), matched=EXCLUDED.matched, unmatched=EXCLUDED.unmatched,
+             injected=EXCLUDED.injected, already_linked=EXCLUDED.already_linked,
+             unresolved_mod=EXCLUDED.unresolved_mod, unresolved_svc=EXCLUDED.unresolved_svc,
+             log_rows=EXCLUDED.log_rows`,
+          [
+            bsCode,
+            logEntry.matched || 0, logEntry.unmatched || 0,
+            logEntry.injected || 0, logEntry.alreadyLinked || 0,
+            logEntry.unresolvedMod || 0, logEntry.unresolvedSvc || 0,
+            JSON.stringify(logEntry.rows || [])
+          ]
+        );
+      } catch (dbWriteErr) {
+        console.warn('[enrich-queue] DB write failed for ' + bsCode + ':', dbWriteErr.message);
+        // Fall back to file snapshot update if DB unavailable
+        const cached = snapshot.load();
+        if (cached && cached.payload) {
+          const parsed = JSON.parse(cached.payload);
+          parsed.flat_index = flatIndex;
+          parsed.business_scenarios = syncModule.buildHierarchy(flatIndex);
+          snapshot.save({ ...cached, payload: JSON.stringify(parsed), lastUpdated: new Date().toISOString() });
+        }
+      }
+
       console.log('[enrich-queue] OK ' + bsCode + ': ' + enriched + ' services enriched');
     } catch(e) {
       console.error('[enrich-queue] ERROR ' + bsCode + ': ' + e.message);
       try {
-        const logPath = path.join(__dirname, '..', 'data', 'injection-log.json');
-        let existingLog = {};
-        try { existingLog = JSON.parse(fs.readFileSync(logPath, 'utf8')); } catch(e2) {}
-        existingLog.details = existingLog.details || {};
-        existingLog.details[bsCode] = { error: e.message, timestamp: new Date().toISOString() };
-        fs.writeFileSync(logPath, JSON.stringify(existingLog, null, 2));
-      } catch(e2) {}
+        const db = require('../store/db');
+        db.getPool();
+        await db.query(
+          `INSERT INTO catalog_injection_log (bs_code, generated_at, matched, unmatched, injected, already_linked, unresolved_mod, unresolved_svc, log_rows)
+           VALUES ($1, NOW(), 0, 0, 0, 0, 0, 0, $2)
+           ON CONFLICT (bs_code) DO UPDATE SET generated_at=NOW(), log_rows=EXCLUDED.log_rows`,
+          [bsCode, JSON.stringify([{ error: e.message }])]
+        );
+      } catch(e2) { /* non-critical */ }
     }
   }
   enrichRunning = false;
@@ -915,6 +976,67 @@ router.get('/excel/:bsCode', (req, res) => {
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="' + req.params.bsCode + '.xlsx"');
   fs.createReadStream(filePath).pipe(res);
+});
+
+// ── Matching Debug ────────────────────────────────────────────────────────────
+router.get('/injection-log', async (req, res) => {
+  try {
+    const db = require('../store/db');
+    db.getPool();
+
+    const { bsCode, status } = req.query;
+    const moduleFilter = (req.query.module || '').toLowerCase();
+
+    const params = [];
+    let sql = 'SELECT bs_code, generated_at, matched, unmatched, injected, already_linked, unresolved_mod, unresolved_svc, log_rows FROM catalog_injection_log';
+    if (bsCode) { params.push(bsCode); sql += ' WHERE bs_code = $' + params.length; }
+    sql += ' ORDER BY generated_at DESC';
+
+    const result = await db.query(sql, params);
+
+    // Aggregate totals across all matching BS rows
+    const totals = { matched: 0, unmatched: 0, injected: 0, already_linked: 0, unresolved_mod: 0, unresolved_svc: 0 };
+    for (const r of result.rows) {
+      totals.matched       += (r.matched        || 0);
+      totals.unmatched     += (r.unmatched      || 0);
+      totals.injected      += (r.injected       || 0);
+      totals.already_linked += (r.already_linked || 0);
+      totals.unresolved_mod += (r.unresolved_mod || 0);
+      totals.unresolved_svc += (r.unresolved_svc || 0);
+    }
+
+    // Flatten log_rows across all BS entries into a single list
+    const rows = [];
+    for (const r of result.rows) {
+      for (const lr of (r.log_rows || [])) {
+        // Module filter: substring match on module/resolvedModule/moduleRaw
+        if (moduleFilter) {
+          const modFields = [lr.module, lr.resolvedModule, lr.moduleRaw].filter(Boolean).join(' ').toLowerCase();
+          if (!modFields.includes(moduleFilter)) continue;
+        }
+        // Status filter
+        if (status && lr.status !== status) continue;
+
+        rows.push({
+          bs_code:      r.bs_code,
+          type:         lr.type,
+          status:       lr.status,
+          // deck_name rows
+          service_code: lr.svcCode  || lr.resolvedService || null,
+          service_name: lr.svcName  || lr.serviceName     || null,
+          module_code:  lr.module   || lr.resolvedModule  || null,
+          module_name:  lr.moduleRaw || null,
+          deck_name:    lr.deckName || null,
+          detail:       lr.detail   || null,
+          crm_ids:      lr.crmIds   || null,
+        });
+      }
+    }
+
+    res.json({ count: rows.length, totals, rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 module.exports = router;

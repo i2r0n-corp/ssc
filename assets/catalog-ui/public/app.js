@@ -16,6 +16,7 @@ let state = {
   filteredServices: [],
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
   filtersExpanded: false,
+  debug: { bsCode: '', module: '', status: '', rows: [], loading: false, error: null },
   selectedServices: new Set(),
   incident: { file: null, results: [], loading: false, error: null, selectedCodes: new Set() },
   pptx: { template: 'short-description', generating: false, error: null, downloadUrl: null },
@@ -577,6 +578,7 @@ window.navigate = function(page) {
   state.currentPage = page;
   render();
   if (page === 'catalog' && state.catalog.services.length === 0) loadCatalog();
+  if (page === 'debug') loadDebugLog();
 };
 
 window.updateFilter = function(key, value) {
@@ -818,6 +820,128 @@ function scrollChatToBottom() {
   }, 50);
 }
 
+// ── Debug / Matching Log ───────────────────────────────────────────────────────
+
+async function loadDebugLog() {
+  state.debug.loading = true;
+  state.debug.error = null;
+  render();
+  try {
+    const params = new URLSearchParams();
+    if (state.debug.bsCode)  params.set('bsCode',  state.debug.bsCode);
+    if (state.debug.module)  params.set('module',  state.debug.module);
+    if (state.debug.status)  params.set('status',  state.debug.status);
+    const res = await fetch(`/api/catalog/injection-log?${params}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    state.debug.rows   = data.rows   || [];
+    state.debug.totals = data.totals || null;
+  } catch (e) {
+    state.debug.error = e.message;
+    state.debug.rows  = [];
+  }
+  state.debug.loading = false;
+  render();
+}
+
+window.updateDebugFilter = function(key, value) {
+  state.debug[key] = value;
+  loadDebugLog();
+};
+
+function renderDebugPage() {
+  const { bsCode, module, status, rows, totals, loading, error } = state.debug;
+
+  const bsOptions = (state.catalog.businessScenarios || [])
+    .map(bs => `<option value="${bs.code}" ${bsCode === bs.code ? 'selected' : ''}>${bs.name || bs.code}</option>`)
+    .join('');
+
+  const statusOptions = [
+    ['',                  'All statuses'],
+    ['Matched',           'Matched'],
+    ['No Match',          'No Match'],
+    ['Added',             'Added'],
+    ['Already Linked',    'Already Linked'],
+    ['No Module Match',   'No Module Match'],
+    ['No Service Match',  'No Service Match'],
+  ].map(([v, l]) => `<option value="${v}" ${status === v ? 'selected' : ''}>${l}</option>`).join('');
+
+  const totalsHtml = totals ? `
+    <div style="display:flex;gap:1.5rem;flex-wrap:wrap;font-size:0.8rem;margin-bottom:1rem;background:white;padding:0.75rem 1rem;border-radius:6px;border:1px solid #e0e0e0;">
+      <span>Matched: <b>${totals.matched||0}</b></span>
+      <span>Unmatched: <b>${totals.unmatched||0}</b></span>
+      <span>Injected: <b>${totals.injected||0}</b></span>
+      <span>Already linked: <b>${totals.already_linked||0}</b></span>
+      <span>No module: <b>${totals.unresolved_mod||0}</b></span>
+      <span>No service: <b>${totals.unresolved_svc||0}</b></span>
+      <span style="margin-left:auto;color:#6a6a6a">${rows.length} rows shown</span>
+    </div>` : '';
+
+  const statusBadge = s => {
+    const map = {
+      'Matched':          ['#d4edda','#155724'],
+      'No Match':         ['#f8d7da','#721c24'],
+      'Added':            ['#d1ecf1','#0c5460'],
+      'Already Linked':   ['#fff3cd','#856404'],
+      'No Module Match':  ['#e2e3e5','#383d41'],
+      'No Service Match': ['#fdecea','#c0392b'],
+      'Module Not In Flat Index': ['#fdecea','#c0392b'],
+    };
+    const [bg, color] = map[s] || ['#e2e3e5','#383d41'];
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:600;background:${bg};color:${color}">${s||''}</span>`;
+  };
+
+  const rowsHtml = rows.length === 0 && !loading ? `
+    <tr><td colspan="5" style="text-align:center;padding:2rem;color:#6a6a6a;">No records found</td></tr>` :
+    rows.map(r => `
+      <tr>
+        <td style="font-size:0.78rem;color:#556B82">${r.bs_code||''}</td>
+        <td style="font-size:0.82rem">${r.service_name||r.service_code||''}</td>
+        <td style="font-size:0.78rem;color:#556B82">${r.module_name||r.module_code||''}</td>
+        <td>${statusBadge(r.status)}</td>
+        <td style="font-size:0.78rem;color:#6a6a6a;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(r.deck_name||'').replace(/"/g,'&quot;')}">${r.deck_name||''}</td>
+      </tr>`).join('');
+
+  return `
+    <h2>Matching Debug</h2>
+    <div class="filter-row" style="gap:1rem;flex-wrap:wrap;align-items:flex-end">
+      <div class="fl-field" style="min-width:220px;max-width:320px">
+        <select onchange="updateDebugFilter('bsCode',this.value)" data-empty="${!bsCode}">
+          <option value="">All business scenarios</option>
+          ${bsOptions}
+        </select>
+        <label>Business Scenario</label>
+      </div>
+      <div class="fl-field" style="min-width:160px;max-width:240px">
+        <input type="text" placeholder=" " value="${module}" oninput="updateDebugFilter('module',this.value)" />
+        <label>Module (contains)</label>
+      </div>
+      <div class="fl-field" style="min-width:160px;max-width:220px">
+        <select onchange="updateDebugFilter('status',this.value)" data-empty="${!status}">
+          ${statusOptions}
+        </select>
+        <label>Status</label>
+      </div>
+      ${loading ? `<div class="loading"><div class="loading-spinner"></div> Loading…</div>` : ''}
+    </div>
+    ${error ? `<div class="error-strip">Error: ${error}</div>` : ''}
+    ${totalsHtml}
+    <div style="overflow-x:auto">
+      <table class="service-table">
+        <thead>
+          <tr>
+            <th>BS Code</th>
+            <th>Service</th>
+            <th>Module</th>
+            <th>Status</th>
+            <th>Deck Name</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>`;
+}
+
 // ── Render ─────────────────────────────────────────────────────────────────────
 
 function render() {
@@ -827,7 +951,8 @@ function render() {
   const pages = [
     { id: 'catalog',   label: 'Catalog' },
     { id: 'incidents', label: 'Incidents' },
-    { id: 'chat',      label: 'Chat' }
+    { id: 'chat',      label: 'Chat' },
+    { id: 'debug',     label: 'Matching Debug' },
   ];
 
   let content = '';
@@ -835,6 +960,7 @@ function render() {
     case 'catalog':   content = renderCatalogPage(); break;
     case 'incidents': content = renderIncidentsPage(); break;
     case 'chat':      content = renderChatPage(); break;
+    case 'debug':     content = renderDebugPage(); break;
   }
 
   app.innerHTML = `
