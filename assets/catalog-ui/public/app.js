@@ -201,7 +201,7 @@ function renderCatalogFilters() {
   const showFoundationalBadge = et === 'Enterprise Support';
   const showMaxBadge          = et === 'Max Success Plan';
 
-  const namingDisabled = et === 'Max Success Plan';
+  const namingDisabled = et === 'Max Success Plan' || !state.filters.businessScenario;
   const namingStyle    = namingDisabled ? disabledStyle : '';
   const namingActive   = !namingDisabled && !!state.filters.businessScenario;
 
@@ -212,7 +212,7 @@ function renderCatalogFilters() {
       <!-- Two-column top area -->
       <div class="filter-columns">
 
-        <!-- Left column: BS + hr + Keywords + ET -->
+        <!-- Left column: BS + naming toggle + hr + Keywords + ET -->
         <div class="filter-col-left">
           <div class="fl-field" style="width:100%">
             <select id="filter-bs" ${!state.filters.businessScenario ? 'data-empty="true"' : ''}
@@ -221,6 +221,14 @@ function renderCatalogFilters() {
               ${uniqueBS.map(([code, , label]) => `<option value="${code}" ${state.filters.businessScenario===code?'selected':''}>${label}</option>`).join('')}
             </select>
             <label>Business Scenario</label>
+          </div>
+
+          <!-- Naming toggle under BS -->
+          <div style="display:flex;align-items:center;gap:6px;margin-top:0.5rem;${namingStyle}">
+            <div class="mode-switch" style="margin-bottom:0">
+              <button class="${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'catalog')">Catalog Name</button>
+              <button class="${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
+            </div>
           </div>
 
           <hr style="border:none;border-top:1px solid #e0e0e0;margin:0.75rem 0" />
@@ -245,16 +253,11 @@ function renderCatalogFilters() {
         <!-- Right column: Module (only when BS selected) -->
         ${showModuleFilter ? `
         <div class="filter-col-right">
-          <!-- Naming toggle + clear inline -->
-          <div style="display:flex;align-items:center;gap:6px;${namingStyle}">
-            <div class="mode-switch" style="margin-bottom:0">
-              <button class="${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'catalog')">Catalog Name</button>
-              <button class="${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
-            </div>
+          <!-- Module label + clear -->
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="font-size:0.75rem;color:#6a6a6a;font-weight:600;flex:1">Module</div>
             ${selectedMods.length > 0 ? `<button class="mode-switch-clear" title="Clear modules" onclick="updateCheckboxFilter._clearKey('modules')">✕</button>` : ''}
           </div>
-          <!-- Module label -->
-          <div style="font-size:0.75rem;color:#6a6a6a;font-weight:600;margin-top:0.25rem">Module</div>
           <!-- Module checkboxes -->
           <div class="check-panel" style="flex:1">
             ${uniqueMods.map(([code, name]) => {
@@ -270,7 +273,6 @@ function renderCatalogFilters() {
       </div>
 
       <!-- Divider + More filters toggle (mobile only) -->
-      <hr style="border:none;border-top:1px solid #e0e0e0;margin:0" />
       <button class="filter-more-btn" onclick="toggleMoreFilters()">
         ${state.filtersExpanded ? '▲ Less filters' : '▼ More filters'}
       </button>
