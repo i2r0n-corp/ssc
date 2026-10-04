@@ -156,7 +156,7 @@ function engagementBadge(et) {
 // ── Pages ─────────────────────────────────────────────────────────────────────
 
 function renderCatalogFilters() {
-  const { error, lastUpdated, moduleMap = {}, bsMap = {}, engagementTypes = [], phases = [], supercategories = [], maxFocusTopics: allMaxTopics = [] } = state.catalog;
+  const { error, moduleMap = {}, bsMap = {}, phases = [], supercategories = [], maxFocusTopics: allMaxTopics = [] } = state.catalog;
 
   const ET_OPTIONS = [
     { value: 'Max Success Plan',      label: 'Max Success Plan' },
@@ -185,67 +185,88 @@ function renderCatalogFilters() {
   const selectedMods = state.filters.modules || [];
   const showNamingFilter = !!state.filters.businessScenario;
 
-  // Section 3 is enabled when query or BS filter has a value
-  const sec3Active = !!(state.filters.query || state.filters.businessScenario);
-  const sec3Style = sec3Active ? '' : 'opacity:0.45;pointer-events:none';
+  const et = state.filters.engagementType;
+  const queryOrBS = !!(state.filters.query || state.filters.businessScenario);
+
+  // Per-filter activation conditions
+  const activatePhaseActive = queryOrBS;
+  const maxTopicsActive     = queryOrBS || et === 'Max Success Plan';
+  const advancedActive      = queryOrBS || et === 'Advanced Success Plan';
+  const foundationalActive  = queryOrBS || et === 'Enterprise Support';
+
+  const disabledStyle = 'opacity:0.4;pointer-events:none';
 
   const advancedLoSItems = supercategories.filter(s => s.startsWith('Success Plans for'));
   const foundationalItems = supercategories.filter(s => !s.startsWith('Success Plans for'));
 
-  const et = state.filters.engagementType;
-  // Each checkbox filter shows badge only when relevant ET is explicitly selected
-  const showAdvancedBadge = et === 'Advanced Success Plan';
+  const showAdvancedBadge    = et === 'Advanced Success Plan';
   const showFoundationalBadge = et === 'Enterprise Support';
-  const showMaxBadge = et === 'Max Success Plan';
+  const showMaxBadge         = et === 'Max Success Plan';
 
   return `
     ${error ? `<div class="error-strip">⚠ ${error}</div>` : ''}
-    <div class="filter-row">
-      <!-- Section 1: Search + ET -->
-      <div class="fl-field" style="min-width:220px">
-        <input type="search" id="filter-query" placeholder=" " value="${state.filters.query}"
-          oninput="updateFilter('query', this.value)" />
-        <label>Search services</label>
-      </div>
-      <div class="fl-field">
-        <select id="filter-et" ${!state.filters.engagementType ? 'data-empty="true"' : ''}
-          onchange="updateFilter('engagementType', this.value); this.dataset.empty = this.value ? 'false' : 'true'">
-          <option value=""></option>
-          ${ET_OPTIONS.map(o => `<option value="${o.value}" ${state.filters.engagementType===o.value?'selected':''}>${o.label}</option>`).join('')}
-        </select>
-        <label>Engagement Type</label>
+    <div class="filter-row" style="flex-direction:column;gap:0;padding:0">
+
+      <!-- Top area: left column (BS + hr + Keywords+ET) + right column (Module) -->
+      <div style="display:flex;gap:0;align-items:stretch">
+
+        <!-- Left column -->
+        <div style="display:flex;flex-direction:column;gap:0;flex:1;padding:1rem">
+          <!-- Row 1: Business Scenario -->
+          <div class="fl-field" style="min-width:280px;max-width:420px">
+            <select id="filter-bs" ${!state.filters.businessScenario ? 'data-empty="true"' : ''}
+              onchange="updateFilter('businessScenario', this.value); this.dataset.empty = this.value ? 'false' : 'true'">
+              <option value=""></option>
+              ${uniqueBS.map(([code, , label]) => `<option value="${code}" ${state.filters.businessScenario===code?'selected':''}>${label}</option>`).join('')}
+            </select>
+            <label>Business Scenario</label>
+          </div>
+
+          <hr style="border:none;border-top:1px solid #e0e0e0;margin:0.75rem 0" />
+
+          <!-- Row 2: Keywords + ET -->
+          <div style="display:flex;gap:1rem;flex-wrap:wrap">
+            <div class="fl-field" style="min-width:200px">
+              <input type="search" id="filter-query" placeholder=" " value="${state.filters.query}"
+                oninput="updateFilter('query', this.value)" />
+              <label>Keywords</label>
+            </div>
+            <div class="fl-field" style="min-width:200px">
+              <select id="filter-et" ${!state.filters.engagementType ? 'data-empty="true"' : ''}
+                onchange="updateFilter('engagementType', this.value); this.dataset.empty = this.value ? 'false' : 'true'">
+                <option value=""></option>
+                ${ET_OPTIONS.map(o => `<option value="${o.value}" ${state.filters.engagementType===o.value?'selected':''}>${o.label}</option>`).join('')}
+              </select>
+              <label>Engagement Type</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right column: Module (only when BS selected) -->
+        ${showModuleFilter ? `
+        <div style="border-left:1px solid #e0e0e0;padding:1rem;min-width:260px;display:flex;flex-direction:column;gap:0.25rem">
+          <div class="fl-field" style="flex:1">
+            <select id="filter-mod" multiple size="${Math.min(uniqueMods.length, 6)}"
+              onchange="updateMultiFilter('modules', this)" style="height:auto">
+              ${uniqueMods.map(([code, name]) => {
+                const label = name.includes(' // ') ? name.split(' // ').slice(1).join(' // ') : name;
+                return `<option value="${code}" ${selectedMods.includes(code)?'selected':''}>${label}</option>`;
+              }).join('')}
+            </select>
+            <label>Module</label>
+          </div>
+          <span class="filter-hint">Hold Ctrl to select multiple</span>
+        </div>` : ''}
       </div>
 
-      <div style="width:1px;min-height:80px;background:#e0e0e0;margin:0;flex-shrink:0"></div>
+      <!-- Horizontal divider before Section 3 -->
+      <hr style="border:none;border-top:1px solid #e0e0e0;margin:0" />
 
-      <!-- Section 2: BS + Module -->
-      <div class="fl-field" style="min-width:280px">
-        <select id="filter-bs" ${!state.filters.businessScenario ? 'data-empty="true"' : ''}
-          onchange="updateFilter('businessScenario', this.value); this.dataset.empty = this.value ? 'false' : 'true'">
-          <option value=""></option>
-          ${uniqueBS.map(([code, name, label]) => `<option value="${code}" ${state.filters.businessScenario===code?'selected':''}>${label}</option>`).join('')}
-        </select>
-        <label>Business Scenario</label>
-      </div>
-      ${showModuleFilter ? `
-      <div class="fl-field" style="min-width:280px">
-        <select id="filter-mod" multiple size="${Math.min(uniqueMods.length, 5)}"
-          onchange="updateMultiFilter('modules', this)">
-          ${uniqueMods.map(([code, name]) => {
-            const label = name.includes(' // ') ? name.split(' // ').slice(1).join(' // ') : name;
-            return `<option value="${code}" ${selectedMods.includes(code)?'selected':''}>${label}</option>`;
-          }).join('')}
-        </select>
-        <label>Module</label>
-      </div>
-      <span class="filter-hint" style="align-self:center">Hold Ctrl to select multiple</span>` : ''}
+      <!-- Section 3: 4 checkbox filters + naming toggle -->
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;padding:1rem;align-items:flex-start">
 
-      <div style="width:1px;min-height:80px;background:#e0e0e0;margin:0;flex-shrink:0"></div>
-
-      <!-- Section 3: 4 checkbox filters (greyed out until query/BS active) -->
-      <div style="display:flex;gap:1rem;flex-wrap:wrap;${sec3Style}">
         ${phases.length > 0 ? `
-        <div class="filter-group">
+        <div class="filter-group" style="${activatePhaseActive ? '' : disabledStyle}">
           <label>Activate Phases</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
             <div class="mode-switch">
@@ -264,8 +285,28 @@ function renderCatalogFilters() {
           </div>
         </div>` : ''}
 
+        ${allMaxTopics.length > 0 ? `
+        <div class="filter-group" style="${maxTopicsActive ? '' : disabledStyle}">
+          <label>Max Focus Topics${showMaxBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Max)</span>'}</label>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <div class="mode-switch">
+              <button class="${(state.filters.maxFocusTopicsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('maxFocusTopicsMode','merge')">Merge</button>
+              <button class="${state.filters.maxFocusTopicsMode==='intersect'?'active':''}" onclick="updateFilter('maxFocusTopicsMode','intersect')">Intersect</button>
+            </div>
+            ${(state.filters.maxFocusTopics||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('maxFocusTopics')">✕</button>` : ''}
+          </div>
+          <div class="check-panel">
+            ${allMaxTopics.map(t => `
+              <label>
+                <input type="checkbox" value="${t}" ${(state.filters.maxFocusTopics||[]).includes(t)?'checked':''}
+                  onchange="updateCheckboxFilter('maxFocusTopics', '${t.replace(/'/g,"\\'")}', this.checked)" />
+                ${t}
+              </label>`).join('')}
+          </div>
+        </div>` : ''}
+
         ${advancedLoSItems.length > 0 ? `
-        <div class="filter-group">
+        <div class="filter-group" style="${advancedActive ? '' : disabledStyle}">
           <label>Advanced LoB${showAdvancedBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Advanced)</span>'}</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
             <div class="mode-switch">
@@ -285,7 +326,7 @@ function renderCatalogFilters() {
         </div>` : ''}
 
         ${foundationalItems.length > 0 ? `
-        <div class="filter-group">
+        <div class="filter-group" style="${foundationalActive ? '' : disabledStyle}">
           <label>Foundation subcategories${showFoundationalBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Foundation)</span>'}</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
             <div class="mode-switch">
@@ -304,26 +345,6 @@ function renderCatalogFilters() {
           </div>
         </div>` : ''}
 
-        ${allMaxTopics.length > 0 ? `
-        <div class="filter-group">
-          <label>Max Focus Topics${showMaxBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Max)</span>'}</label>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div class="mode-switch">
-              <button class="${(state.filters.maxFocusTopicsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('maxFocusTopicsMode','merge')">Merge</button>
-              <button class="${state.filters.maxFocusTopicsMode==='intersect'?'active':''}" onclick="updateFilter('maxFocusTopicsMode','intersect')">Intersect</button>
-            </div>
-            ${(state.filters.maxFocusTopics||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('maxFocusTopics')">✕</button>` : ''}
-          </div>
-          <div class="check-panel">
-            ${allMaxTopics.map(t => `
-              <label>
-                <input type="checkbox" value="${t}" ${(state.filters.maxFocusTopics||[]).includes(t)?'checked':''}
-                  onchange="updateCheckboxFilter('maxFocusTopics', '${t.replace(/'/g,"\\'")}', this.checked)" />
-                ${t}
-              </label>`).join('')}
-          </div>
-        </div>` : ''}
-
         ${showNamingFilter ? `
         <div class="filter-group">
           <label>Service Name</label>
@@ -332,9 +353,9 @@ function renderCatalogFilters() {
             <button class="toggle-btn ${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
           </div>
         </div>` : ''}
-      </div>
 
-      <button class="btn btn-secondary btn-sm" style="align-self:flex-end;margin-left:auto" onclick="clearFilters()">Clear</button>
+        <button class="btn btn-secondary btn-sm" style="align-self:flex-end;margin-left:auto" onclick="clearFilters()">Clear</button>
+      </div>
     </div>`;
 }
 
