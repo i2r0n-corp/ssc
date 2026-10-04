@@ -219,13 +219,16 @@ function renderCatalogPage() {
       ${phases.length > 0 ? `
       <div class="filter-group">
         <label>SAP Activate Phase</label>
-        <div class="mode-switch">
-          <button class="${(state.filters.phaseMode||'merge')==='merge'?'active':''}" onclick="updateFilter('phaseMode','merge')">Merge</button>
-          <button class="${state.filters.phaseMode==='intersect'?'active':''}" onclick="updateFilter('phaseMode','intersect')">Intersect</button>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <div class="mode-switch">
+            <button class="${(state.filters.phaseMode||'merge')==='merge'?'active':''}" onclick="updateFilter('phaseMode','merge')">Merge</button>
+            <button class="${state.filters.phaseMode==='intersect'?'active':''}" onclick="updateFilter('phaseMode','intersect')">Intersect</button>
+          </div>
+          ${(state.filters.phases||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear phases" onclick="updateCheckboxFilter._clearKey('phases')">✕</button>` : ''}
         </div>
-        <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:4px 0">
+        <div class="check-panel">
           ${phases.map(p => `
-            <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:400;cursor:pointer">
+            <label>
               <input type="checkbox" value="${p}" ${(state.filters.phases||[]).includes(p)?'checked':''}
                 onchange="updateCheckboxFilter('phases', '${p}', this.checked)" />
               ${p}
@@ -243,13 +246,16 @@ function renderCatalogPage() {
           html += `
           <div class="filter-group">
             <label>Advanced LoS</label>
-            <div class="mode-switch">
-              <button class="${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}" onclick="updateFilter('advancedLoSMode','merge')">Merge</button>
-              <button class="${state.filters.advancedLoSMode==='intersect'?'active':''}" onclick="updateFilter('advancedLoSMode','intersect')">Intersect</button>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <div class="mode-switch">
+                <button class="${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}" onclick="updateFilter('advancedLoSMode','merge')">Merge</button>
+                <button class="${state.filters.advancedLoSMode==='intersect'?'active':''}" onclick="updateFilter('advancedLoSMode','intersect')">Intersect</button>
+              </div>
+              ${(state.filters.advancedLoS||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear LoS" onclick="updateCheckboxFilter._clearKey('advancedLoS')">✕</button>` : ''}
             </div>
-            <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:4px 0">
+            <div class="check-panel">
               ${advancedLoS.map(s => `
-                <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:400;cursor:pointer">
+                <label>
                   <input type="checkbox" value="${s}" ${(state.filters.advancedLoS||[]).includes(s)?'checked':''}
                     onchange="updateCheckboxFilter('advancedLoS', '${s.replace(/'/g,"\\'")}', this.checked)" />
                   ${s.replace('Success Plans for ', '')}
@@ -261,13 +267,16 @@ function renderCatalogPage() {
           html += `
           <div class="filter-group">
             <label>Foundationals</label>
-            <div class="mode-switch">
-              <button class="${(state.filters.foundationalCatsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('foundationalCatsMode','merge')">Merge</button>
-              <button class="${state.filters.foundationalCatsMode==='intersect'?'active':''}" onclick="updateFilter('foundationalCatsMode','intersect')">Intersect</button>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <div class="mode-switch">
+                <button class="${(state.filters.foundationalCatsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('foundationalCatsMode','merge')">Merge</button>
+                <button class="${state.filters.foundationalCatsMode==='intersect'?'active':''}" onclick="updateFilter('foundationalCatsMode','intersect')">Intersect</button>
+              </div>
+              ${(state.filters.foundationalCats||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear foundationals" onclick="updateCheckboxFilter._clearKey('foundationalCats')">✕</button>` : ''}
             </div>
-            <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;padding:4px 0">
+            <div class="check-panel">
               ${foundationalCats.map(s => `
-                <label style="display:flex;align-items:center;gap:6px;font-size:0.82rem;font-weight:400;cursor:pointer">
+                <label>
                   <input type="checkbox" value="${s}" ${(state.filters.foundationalCats||[]).includes(s)?'checked':''}
                     onchange="updateCheckboxFilter('foundationalCats', '${s.replace(/'/g,"\\'")}', this.checked)" />
                   ${s}
@@ -522,6 +531,11 @@ window.updateCheckboxFilter = function(key, value, checked) {
   if (checked && !arr.includes(value)) arr.push(value);
   else if (!checked) { const i = arr.indexOf(value); if (i > -1) arr.splice(i, 1); }
   state.filters[key] = arr;
+  clearTimeout(window._filterDebounce);
+  window._filterDebounce = setTimeout(applyFilters, 300);
+};
+window.updateCheckboxFilter._clearKey = function(key) {
+  state.filters[key] = [];
   clearTimeout(window._filterDebounce);
   window._filterDebounce = setTimeout(applyFilters, 300);
 };
