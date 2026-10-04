@@ -70,7 +70,13 @@ router.get('/searchServices', (req, res) => {
 
       const params = [];
       let pIdx = 1;
-      let sql = 'SELECT DISTINCT s.*, bn.deck_name, bn.bs_code AS bn_bs_code FROM catalog_services s LEFT JOIN catalog_bs_naming bn ON bn.service_code = s.code WHERE s.service_object NOT IN (\'Business Scenario\', \'Business Scenario module\') AND s.name IS NOT NULL';
+      // Join catalog_bs_naming only for the selected BS — avoids fan-out duplicates when a service has naming entries for multiple BSes
+      let bsJoin = '';
+      if (businessScenario) {
+        params.push(businessScenario); pIdx++;
+        bsJoin = `LEFT JOIN catalog_bs_naming bn ON bn.service_code = s.code AND bn.bs_code = $${pIdx - 1}`;
+      }
+      let sql = `SELECT s.*, ${businessScenario ? 'bn.deck_name, bn.bs_code AS bn_bs_code' : 'NULL::text AS deck_name, NULL::text AS bn_bs_code'} FROM catalog_services s ${bsJoin} WHERE s.service_object NOT IN ('Business Scenario', 'Business Scenario module') AND s.name IS NOT NULL`;
 
       if (query) {
         params.push(`%${query.toLowerCase()}%`);
@@ -313,7 +319,13 @@ router.get('/filterServices', async (req, res) => {
 
       const params = [];
       let pIdx = 1;
-      let sql = 'SELECT DISTINCT s.*, bn.deck_name, bn.bs_code AS bn_bs_code FROM catalog_services s LEFT JOIN catalog_bs_naming bn ON bn.service_code = s.code WHERE s.service_object NOT IN (\'Business Scenario\', \'Business Scenario module\') AND s.name IS NOT NULL';
+      // Join catalog_bs_naming only for the selected BS — avoids fan-out duplicates when a service has naming entries for multiple BSes
+      let bsJoin = '';
+      if (businessScenario) {
+        params.push(businessScenario); pIdx++;
+        bsJoin = `LEFT JOIN catalog_bs_naming bn ON bn.service_code = s.code AND bn.bs_code = $${pIdx - 1}`;
+      }
+      let sql = `SELECT s.*, ${businessScenario ? 'bn.deck_name, bn.bs_code AS bn_bs_code' : 'NULL::text AS deck_name, NULL::text AS bn_bs_code'} FROM catalog_services s ${bsJoin} WHERE s.service_object NOT IN ('Business Scenario', 'Business Scenario module') AND s.name IS NOT NULL`;
 
       if (engagementType) {
         params.push(engagementType);
