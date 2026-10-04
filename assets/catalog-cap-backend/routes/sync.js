@@ -555,6 +555,30 @@ async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog
   }
 }
 
+// ── Teaser filename extraction ─────────────────────────────────────────────────
+
+function parseTeaserFileName(serviceTeaserText) {
+  if (!serviceTeaserText) return null;
+  const idx = serviceTeaserText.toLowerCase().indexOf('entitlements service list');
+  if (idx === -1) return null;
+  const section = serviceTeaserText.substring(idx, idx + 800);
+  const match = section.match(/href="([^"]+\.xlsx[^"]*)"/i);
+  if (!match) return null;
+  const excelUrl = match[1].replace(/&amp;/g, '&');
+  const segment = excelUrl.split('/').find(p => p.toLowerCase().includes('.xlsx')) || '';
+  return decodeURIComponent(segment).split('?')[0] || null;
+}
+
+async function upsertExcelFileName(db, bsCode, fileName) {
+  if (!fileName) return;
+  await db.query(
+    `INSERT INTO catalog_excel_files (bs_code, file_name, file_data, file_size)
+     VALUES ($1, $2, ''::bytea, 0)
+     ON CONFLICT (bs_code) DO UPDATE SET file_name = EXCLUDED.file_name`,
+    [bsCode, fileName]
+  );
+}
+
 function buildHierarchy(flatIndex) {
   const hierarchy = [];
   for (const [code, svc] of Object.entries(flatIndex)) {
@@ -705,6 +729,18 @@ async function publishSnapshot(flatIndex, lastFullBuild) {
       VALUES ($1, NOW(), $2, 'completed')
     `, [lastFullBuild || now, serviceCount]);
 
+    // Upsert Excel filenames parsed from BS teaserText
+    let fileNameCount = 0;
+    for (const [, svc] of Object.entries(flatIndex)) {
+      if (svc.serviceObject !== 'Business Scenario') continue;
+      const fileName = parseTeaserFileName(svc.serviceTeaserText);
+      if (fileName) {
+        await upsertExcelFileName(db, svc.code, fileName);
+        fileNameCount++;
+      }
+    }
+    if (fileNameCount > 0) console.log(`[db] Upserted ${fileNameCount} Excel filenames from BS teasers`);
+
     console.log(`[db] ✅ Written ${serviceCount} services to PostgreSQL`);
   } catch(e) {
     if (e.message.includes('No PostgreSQL credentials')) {
@@ -836,24 +872,45 @@ router.post('/incremental', requirePublishToken, async (req, res) => {
     const ENGAGEMENT_TYPES = ['Max Success Plan', 'Advanced Success Plan', 'Enterprise Support', 'Embedded Launch Activities', 'Cloud Prepackaged Services'];
     const facets = ENGAGEMENT_TYPES.map(et => `engagementType:${et}`).join(',');
 
-    // Lightweight fetch — only code, name, modifiedTime
+    // Lightweight fetch — include serviceTeaserText so we can detect BS changes
     const lightServices = [];
     let page = 0, totalPages = 1;
     do {
-      const data = await sscGet(`/${siteId}/services?facets=${encodeURIComponent(facets)}&pageSize=100&currentPage=${page}&fields=services(code,name,serviceObject,modifiedTime),pagination`, token);
+      const data = await sscGet(`/${siteId}/services?facets=${encodeURIComponent(facets)}&pageSize=100&currentPage=${page}&fields=services(code,name,serviceObject,serviceTeaserText),pagination`, token);
       lightServices.push(...(data.services || []));
       totalPages = (data.pagination || {}).totalPages || 1;
       page++;
     } while (page < totalPages);
 
-    const cachedFlatIndex = JSON.parse(cached.payload).flat_index || {};
+    // Load stored teasers from DB for comparison
+    let storedTeasers = {};
+    try {
+      const db = require('../store/db');
+      db.getPool();
+      const r = await db.query(`SELECT code, service_teaser_text FROM catalog_services WHERE service_object = 'Business Scenario'`);
+      for (const row of r.rows) storedTeasers[row.code] = row.service_teaser_text || '';
+    } catch(e) {
+      // Fall back to snapshot
+      const cachedFI = cached.payload ? JSON.parse(cached.payload).flat_index || {} : {};
+      for (const [code, svc] of Object.entries(cachedFI)) {
+        if (svc.serviceObject === 'Business Scenario') storedTeasers[code] = svc.serviceTeaserText || '';
+      }
+    }
+
+    const cachedFlatIndex = cached.payload ? JSON.parse(cached.payload).flat_index || {} : {};
     const changedBsCodes = [];
+    const newBsCodes = [];
 
     for (const svc of lightServices) {
       if (svc.serviceObject !== 'Business Scenario') continue;
-      const cached_ = cachedFlatIndex[svc.code];
-      if (!cached_ || cached_.modifiedTime !== svc.modifiedTime) {
-        console.log(`  Changed BS: ${svc.code} (${svc.name})`);
+      const freshTeaser = svc.serviceTeaserText || '';
+      const storedTeaser = storedTeasers[svc.code];
+      if (storedTeaser === undefined) {
+        console.log(`  New BS: ${svc.code} (${svc.name})`);
+        newBsCodes.push(svc.code);
+        changedBsCodes.push(svc.code);
+      } else if (freshTeaser !== storedTeaser) {
+        console.log(`  Changed BS (teaser): ${svc.code} (${svc.name})`);
         changedBsCodes.push(svc.code);
       }
     }
@@ -864,9 +921,28 @@ router.post('/incremental', requirePublishToken, async (req, res) => {
     }
 
     console.log(`Refreshing ${changedBsCodes.length} changed BS...`);
+
+    let db = null;
+    try { const d = require('../store/db'); d.getPool(); db = d; } catch(e) { /* no DB */ }
+
     for (const bsCode of changedBsCodes) {
       const bsFull = await fetchFullService(bsCode, token);
+
+      // ── Stale hierarchy cleanup ──────────────────────────────────────────────
+      // Remove old module rows so orphaned modules don't linger after a BS restructure
+      if (db) {
+        try {
+          // Get old module codes before overwriting
+          const oldMods = (cachedFlatIndex[bsCode] || {}).childServices || [];
+          if (oldMods.length > 0) {
+            await db.query(`DELETE FROM catalog_hierarchy WHERE parent_code = $1`, [bsCode]);
+            console.log(`  Cleaned ${oldMods.length} old hierarchy rows for ${bsCode}`);
+          }
+        } catch(e) { console.warn(`  Hierarchy cleanup failed for ${bsCode}:`, e.message); }
+      }
+
       cachedFlatIndex[bsCode] = bsFull;
+
       for (const modCode of bsFull.childServices || []) {
         const mod = await fetchFullService(modCode, token);
         cachedFlatIndex[modCode] = mod;
@@ -875,6 +951,18 @@ router.post('/incremental', requirePublishToken, async (req, res) => {
           await new Promise(r => setTimeout(r, 100));
         }
       }
+
+      // ── Extract filename from new teaser and upsert into catalog_excel_files ─
+      if (db) {
+        const fileName = parseTeaserFileName(bsFull.serviceTeaserText);
+        if (fileName) {
+          try {
+            await upsertExcelFileName(db, bsCode, fileName);
+            console.log(`  Updated Excel filename for ${bsCode}: ${fileName}`);
+          } catch(e) { console.warn(`  Filename upsert failed for ${bsCode}:`, e.message); }
+        }
+      }
+
       // Re-enrich from staged Excel
       const excelPath = path.join(EXCEL_DIR, `${bsCode}.xlsx`);
       if (fs.existsSync(excelPath)) {
@@ -882,8 +970,8 @@ router.post('/incremental', requirePublishToken, async (req, res) => {
       }
     }
 
-    const result = publishSnapshot(cachedFlatIndex, cached.lastFullBuild);
-    res.json({ status: 'completed', mode: 'incremental', changedBsCount: changedBsCodes.length, changedBsCodes, ...result });
+    const result = await publishSnapshot(cachedFlatIndex, cached.lastFullBuild);
+    res.json({ status: 'completed', mode: 'incremental', changedBsCount: changedBsCodes.length, newBsCount: newBsCodes.length, changedBsCodes, ...result });
   } catch (err) {
     console.error(`[M1.missed]: incremental sync failed — error=${err.message}`);
     res.status(500).json({ status: 'failed', error: err.message });
@@ -1003,3 +1091,4 @@ module.exports = router;
 module.exports.applyExcelEnrichment = applyExcelEnrichment;
 module.exports.buildHierarchy = buildHierarchy;
 module.exports.fetchAllServicesFull = fetchAllServicesFull;
+module.exports.parseTeaserFileName = parseTeaserFileName;

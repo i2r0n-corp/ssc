@@ -710,6 +710,13 @@ async function processEnrichQueue() {
       parsed.business_scenarios = businessScenarios;
       snapshot.save({ ...cached, payload: JSON.stringify(parsed), lastUpdated: new Date().toISOString() });
 
+      // Stamp processed_at in DB
+      try {
+        const db = require('../store/db');
+        db.getPool();
+        await db.query('UPDATE catalog_excel_files SET processed_at = NOW() WHERE bs_code = $1', [bsCode]);
+      } catch(e) { /* non-critical */ }
+
       const logPath = path.join(__dirname, '..', 'data', 'injection-log.json');
       let existingLog = {};
       try { existingLog = JSON.parse(fs.readFileSync(logPath, 'utf8')); } catch(e) {}

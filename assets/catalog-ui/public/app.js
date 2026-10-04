@@ -63,6 +63,12 @@ function patchResults() {
   else render();
 }
 
+function patchFilters() {
+  const el = document.getElementById('catalog-filters');
+  if (el) el.innerHTML = renderCatalogFilters();
+  else render();
+}
+
 async function applyFilters() {
   const { query, engagementType, businessScenario, module: mod } = state.filters;
   const mods            = state.filters.modules       || [];
@@ -143,11 +149,9 @@ function engagementBadge(et) {
 
 // ── Pages ─────────────────────────────────────────────────────────────────────
 
-function renderCatalogPage() {
-  const { services, loading, error, lastUpdated, moduleMap = {}, bsMap = {}, engagementTypes = [], phases = [], supercategories = [], hasSearched } = state.catalog;
-  const cartCount = state.exportCart.length;
+function renderCatalogFilters() {
+  const { error, lastUpdated, moduleMap = {}, bsMap = {}, engagementTypes = [], phases = [], supercategories = [] } = state.catalog;
 
-  // Fixed engagement type options
   const ET_OPTIONS = [
     { value: 'Max Success Plan',      label: 'Max Success Plan' },
     { value: 'Advanced Success Plan', label: 'Advanced Success Plan' },
@@ -161,7 +165,6 @@ function renderCatalogPage() {
     })
     .sort((a, b) => a[2].localeCompare(b[2]));
 
-  // Modules — only shown when BS is selected, multiselect
   const showModuleFilter = !!state.filters.businessScenario;
   let uniqueMods = [];
   if (showModuleFilter) {
@@ -173,14 +176,10 @@ function renderCatalogPage() {
       .sort((a, b) => a[1].localeCompare(b[1]));
   }
 
-  // Selected modules as array
   const selectedMods = state.filters.modules || [];
-
-  // Naming type selector — only shown when BS is selected
   const showNamingFilter = !!state.filters.businessScenario;
 
   return `
-    <h2>Catalog Browser</h2>
     ${error ? `<div class="error-strip">⚠ ${error}</div>` : ''}
     <div class="filter-row">
       <div class="fl-field" style="min-width:220px">
@@ -296,7 +295,16 @@ function renderCatalogPage() {
       </div>` : ''}
       <button class="btn btn-secondary btn-sm" onclick="clearFilters()">Clear</button>
       ${lastUpdated ? `<span class="last-updated">Last updated: ${new Date(lastUpdated).toLocaleString()}</span>` : ''}
-    </div>
+    </div>`;
+}
+
+function renderCatalogPage() {
+  const { lastUpdated } = state.catalog;
+  const cartCount = state.exportCart.length;
+
+  return `
+    <h2>Catalog Browser</h2>
+    <div id="catalog-filters">${renderCatalogFilters()}</div>
     <div id="catalog-results">${renderCatalogResults()}</div>`;
 }
 
@@ -518,12 +526,20 @@ window.navigate = function(page) {
 
 window.updateFilter = function(key, value) {
   state.filters[key] = value;
-  // Reset cascading filters downstream
   if (key === 'businessScenario') { state.filters.modules = []; state.filters.module = ''; state.filters.deckName = ''; state.filters.namingType = ''; }
-  // businessScenario and engagementType change the filter panel structure — need full re-render
+  // These keys change filter panel structure — full re-render
   const needsFullRender = key === 'businessScenario' || key === 'engagementType';
+  // Mode-switch keys only need filter panel patch + results
+  const needsFilterPatch = key === 'phaseMode' || key === 'advancedLoSMode' || key === 'foundationalCatsMode' || key === 'namingType';
   clearTimeout(window._filterDebounce);
-  window._filterDebounce = setTimeout(needsFullRender ? () => { render(); applyFilters(); } : applyFilters, 300);
+  if (needsFullRender) {
+    window._filterDebounce = setTimeout(() => { render(); applyFilters(); }, 300);
+  } else if (needsFilterPatch) {
+    patchFilters();
+    window._filterDebounce = setTimeout(applyFilters, 300);
+  } else {
+    window._filterDebounce = setTimeout(applyFilters, 300);
+  }
 };
 
 window.updateCheckboxFilter = function(key, value, checked) {
@@ -531,11 +547,13 @@ window.updateCheckboxFilter = function(key, value, checked) {
   if (checked && !arr.includes(value)) arr.push(value);
   else if (!checked) { const i = arr.indexOf(value); if (i > -1) arr.splice(i, 1); }
   state.filters[key] = arr;
+  patchFilters();
   clearTimeout(window._filterDebounce);
   window._filterDebounce = setTimeout(applyFilters, 300);
 };
 window.updateCheckboxFilter._clearKey = function(key) {
   state.filters[key] = [];
+  patchFilters();
   clearTimeout(window._filterDebounce);
   window._filterDebounce = setTimeout(applyFilters, 300);
 };
