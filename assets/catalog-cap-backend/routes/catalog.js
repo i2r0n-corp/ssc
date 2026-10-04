@@ -60,6 +60,8 @@ router.get('/searchServices', (req, res) => {
     const advancedLoSMode = req.query.advancedLoSMode || 'merge';
     const foundationalCats = Array.isArray(req.query.foundationalCat) ? req.query.foundationalCat : (req.query.foundationalCat ? [req.query.foundationalCat] : []);
     const foundationalCatsMode = req.query.foundationalCatsMode || 'merge';
+    const maxFocusTopics = Array.isArray(req.query.maxFocusTopic) ? req.query.maxFocusTopic : (req.query.maxFocusTopic ? [req.query.maxFocusTopic] : []);
+    const maxFocusTopicsMode = req.query.maxFocusTopicsMode || 'merge';
 
     // ── PostgreSQL path ───────────────────────────────────────────────────────
     const dbSearch = async () => {
@@ -115,29 +117,46 @@ router.get('/searchServices', (req, res) => {
       }
 
       if (advancedLoSCats.length > 0) {
+        // Only narrows Advanced Success Plan services; non-Advanced pass through untouched
         if (advancedLoSMode === 'intersect') {
           for (const cat of advancedLoSCats) {
             params.push(cat);
-            sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = $' + pIdx + ')';
+            sql += ' AND (NOT EXISTS (SELECT 1 FROM catalog_classification cx WHERE cx.service_code = s.code AND cx.feature_key = \'engagementType\' AND cx.feature_value = \'Advanced Success Plan\') OR EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = $' + pIdx + '))';
             pIdx++;
           }
         } else {
           params.push(advancedLoSCats);
-          sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[]))';
+          sql += ' AND (NOT EXISTS (SELECT 1 FROM catalog_classification cx WHERE cx.service_code = s.code AND cx.feature_key = \'engagementType\' AND cx.feature_value = \'Advanced Success Plan\') OR EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[])))';
           pIdx++;
         }
       }
 
       if (foundationalCats.length > 0) {
+        // Only narrows Enterprise Support (Foundation) services; non-Foundation pass through untouched
         if (foundationalCatsMode === 'intersect') {
           for (const cat of foundationalCats) {
             params.push(cat);
-            sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = $' + pIdx + ')';
+            sql += ' AND (NOT EXISTS (SELECT 1 FROM catalog_classification cx WHERE cx.service_code = s.code AND cx.feature_key = \'engagementType\' AND cx.feature_value = \'Enterprise Support\') OR EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = $' + pIdx + '))';
             pIdx++;
           }
         } else {
           params.push(foundationalCats);
-          sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[]))';
+          sql += ' AND (NOT EXISTS (SELECT 1 FROM catalog_classification cx WHERE cx.service_code = s.code AND cx.feature_key = \'engagementType\' AND cx.feature_value = \'Enterprise Support\') OR EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[])))';
+          pIdx++;
+        }
+      }
+
+      if (maxFocusTopics.length > 0) {
+        // Only narrows Max Success Plan services; non-Max pass through untouched
+        if (maxFocusTopicsMode === 'intersect') {
+          for (const topic of maxFocusTopics) {
+            params.push(topic);
+            sql += ' AND (NOT EXISTS (SELECT 1 FROM catalog_classification cx WHERE cx.service_code = s.code AND cx.feature_key = \'engagementType\' AND cx.feature_value = \'Max Success Plan\') OR EXISTS (SELECT 1 FROM catalog_classification cm WHERE cm.service_code = s.code AND cm.feature_key = \'maxFocusTopic\' AND cm.feature_value = $' + pIdx + '))';
+            pIdx++;
+          }
+        } else {
+          params.push(maxFocusTopics);
+          sql += ' AND (NOT EXISTS (SELECT 1 FROM catalog_classification cx WHERE cx.service_code = s.code AND cx.feature_key = \'engagementType\' AND cx.feature_value = \'Max Success Plan\') OR EXISTS (SELECT 1 FROM catalog_classification cm WHERE cm.service_code = s.code AND cm.feature_key = \'maxFocusTopic\' AND cm.feature_value = ANY($' + pIdx + '::text[])))';
           pIdx++;
         }
       }
@@ -225,17 +244,42 @@ router.get('/searchServices', (req, res) => {
         }
         let advancedLoSMatch = true;
         if (advancedLoSCats.length > 0) {
-          advancedLoSMatch = advancedLoSMode === 'intersect'
-            ? advancedLoSCats.every(sc => svcCats.has(sc))
-            : advancedLoSCats.some(sc => svcCats.has(sc));
+          const isAdv = etArr.some(e => e === 'Advanced Success Plan');
+          if (isAdv) {
+            advancedLoSMatch = advancedLoSMode === 'intersect'
+              ? advancedLoSCats.every(sc => svcCats.has(sc))
+              : advancedLoSCats.some(sc => svcCats.has(sc));
+          }
         }
         let foundationalMatch = true;
         if (foundationalCats.length > 0) {
-          foundationalMatch = foundationalCatsMode === 'intersect'
-            ? foundationalCats.every(sc => svcCats.has(sc))
-            : foundationalCats.some(sc => svcCats.has(sc));
+          const isEnt = etArr.some(e => e === 'Enterprise Support');
+          if (isEnt) {
+            foundationalMatch = foundationalCatsMode === 'intersect'
+              ? foundationalCats.every(sc => svcCats.has(sc))
+              : foundationalCats.some(sc => svcCats.has(sc));
+          }
         }
-        if (textMatch && etMatch && bsMatch && modMatch && phaseMatch && supercatMatch && advancedLoSMatch && foundationalMatch) { seen.add(svc.code); return true; }
+        let maxFocusMatch = true;
+        if (maxFocusTopics.length > 0) {
+          const isMax = etArr.some(e => e === 'Max Success Plan');
+          if (isMax) {
+            const cf = svc.classificationFeatures;
+            const svcTopics = new Set();
+            if (Array.isArray(cf)) {
+              for (const item of cf) {
+                if (item && item.key === 'maxFocusTopic') {
+                  const vals = Array.isArray(item.value) ? item.value : [item.value];
+                  vals.forEach(v => v && svcTopics.add(String(v)));
+                }
+              }
+            }
+            maxFocusMatch = maxFocusTopicsMode === 'intersect'
+              ? maxFocusTopics.every(t => svcTopics.has(t))
+              : maxFocusTopics.some(t => svcTopics.has(t));
+          }
+        }
+        if (textMatch && etMatch && bsMatch && modMatch && phaseMatch && supercatMatch && advancedLoSMatch && foundationalMatch && maxFocusMatch) { seen.add(svc.code); return true; }
         return false;
       }).slice(0, 200);
 
@@ -256,8 +300,10 @@ router.get('/filterServices', async (req, res) => {
     const advancedLoSMode = req.query.advancedLoSMode || 'merge';
     const foundationalCats = Array.isArray(req.query.foundationalCat) ? req.query.foundationalCat : (req.query.foundationalCat ? [req.query.foundationalCat] : []);
     const foundationalCatsMode = req.query.foundationalCatsMode || 'merge';
+    const maxFocusTopics = Array.isArray(req.query.maxFocusTopic) ? req.query.maxFocusTopic : (req.query.maxFocusTopic ? [req.query.maxFocusTopic] : []);
+    const maxFocusTopicsMode = req.query.maxFocusTopicsMode || 'merge';
 
-    if (!engagementType && !businessScenario && moduleNames.length === 0 && phases.length === 0 && supercats.length === 0 && advancedLoSCats.length === 0 && foundationalCats.length === 0)
+    if (!engagementType && !businessScenario && moduleNames.length === 0 && phases.length === 0 && supercats.length === 0 && advancedLoSCats.length === 0 && foundationalCats.length === 0 && maxFocusTopics.length === 0)
       return res.status(400).json({ error: 'At least one filter required' });
 
     // ── PostgreSQL path ───────────────────────────────────────────────────────
@@ -308,30 +354,46 @@ router.get('/filterServices', async (req, res) => {
       }
 
       if (advancedLoSCats.length > 0) {
+        // Only narrows Advanced Success Plan services; non-Advanced pass through untouched
         if (advancedLoSMode === 'intersect') {
-          // Each selected LoS cat must match — one EXISTS per cat
           for (const cat of advancedLoSCats) {
             params.push(cat);
-            sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = $' + pIdx + ')';
+            sql += ' AND (NOT EXISTS (SELECT 1 FROM catalog_classification cx WHERE cx.service_code = s.code AND cx.feature_key = \'engagementType\' AND cx.feature_value = \'Advanced Success Plan\') OR EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = $' + pIdx + '))';
             pIdx++;
           }
         } else {
           params.push(advancedLoSCats);
-          sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[]))';
+          sql += ' AND (NOT EXISTS (SELECT 1 FROM catalog_classification cx WHERE cx.service_code = s.code AND cx.feature_key = \'engagementType\' AND cx.feature_value = \'Advanced Success Plan\') OR EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[])))';
           pIdx++;
         }
       }
 
       if (foundationalCats.length > 0) {
+        // Only narrows Enterprise Support (Foundation) services; non-Foundation pass through untouched
         if (foundationalCatsMode === 'intersect') {
           for (const cat of foundationalCats) {
             params.push(cat);
-            sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = $' + pIdx + ')';
+            sql += ' AND (NOT EXISTS (SELECT 1 FROM catalog_classification cx WHERE cx.service_code = s.code AND cx.feature_key = \'engagementType\' AND cx.feature_value = \'Enterprise Support\') OR EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = $' + pIdx + '))';
             pIdx++;
           }
         } else {
           params.push(foundationalCats);
-          sql += ' AND EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[]))';
+          sql += ' AND (NOT EXISTS (SELECT 1 FROM catalog_classification cx WHERE cx.service_code = s.code AND cx.feature_key = \'engagementType\' AND cx.feature_value = \'Enterprise Support\') OR EXISTS (SELECT 1 FROM catalog_supercategories cs WHERE cs.service_code = s.code AND cs.category_name = ANY($' + pIdx + '::text[])))';
+          pIdx++;
+        }
+      }
+
+      if (maxFocusTopics.length > 0) {
+        // Only narrows Max Success Plan services; non-Max pass through untouched
+        if (maxFocusTopicsMode === 'intersect') {
+          for (const topic of maxFocusTopics) {
+            params.push(topic);
+            sql += ' AND (NOT EXISTS (SELECT 1 FROM catalog_classification cx WHERE cx.service_code = s.code AND cx.feature_key = \'engagementType\' AND cx.feature_value = \'Max Success Plan\') OR EXISTS (SELECT 1 FROM catalog_classification cm WHERE cm.service_code = s.code AND cm.feature_key = \'maxFocusTopic\' AND cm.feature_value = $' + pIdx + '))';
+            pIdx++;
+          }
+        } else {
+          params.push(maxFocusTopics);
+          sql += ' AND (NOT EXISTS (SELECT 1 FROM catalog_classification cx WHERE cx.service_code = s.code AND cx.feature_key = \'engagementType\' AND cx.feature_value = \'Max Success Plan\') OR EXISTS (SELECT 1 FROM catalog_classification cm WHERE cm.service_code = s.code AND cm.feature_key = \'maxFocusTopic\' AND cm.feature_value = ANY($' + pIdx + '::text[])))';
           pIdx++;
         }
       }
@@ -414,23 +476,48 @@ router.get('/filterServices', async (req, res) => {
       }
       let advancedLoSMatch = true;
       if (advancedLoSCats.length > 0) {
-        const cats = svc.supercategories;
-        const svcCats = new Set();
-        if (Array.isArray(cats)) cats.forEach(c => c && c.name && svcCats.add(c.name));
-        advancedLoSMatch = advancedLoSMode === 'intersect'
-          ? advancedLoSCats.every(sc => svcCats.has(sc))
-          : advancedLoSCats.some(sc => svcCats.has(sc));
+        const isAdv = etArr.some(e => e === 'Advanced Success Plan');
+        if (isAdv) {
+          const cats = svc.supercategories;
+          const svcCats = new Set();
+          if (Array.isArray(cats)) cats.forEach(c => c && c.name && svcCats.add(c.name));
+          advancedLoSMatch = advancedLoSMode === 'intersect'
+            ? advancedLoSCats.every(sc => svcCats.has(sc))
+            : advancedLoSCats.some(sc => svcCats.has(sc));
+        }
       }
       let foundationalMatch = true;
       if (foundationalCats.length > 0) {
-        const cats = svc.supercategories;
-        const svcCats = new Set();
-        if (Array.isArray(cats)) cats.forEach(c => c && c.name && svcCats.add(c.name));
-        foundationalMatch = foundationalCatsMode === 'intersect'
-          ? foundationalCats.every(sc => svcCats.has(sc))
-          : foundationalCats.some(sc => svcCats.has(sc));
+        const isEnt = etArr.some(e => e === 'Enterprise Support');
+        if (isEnt) {
+          const cats = svc.supercategories;
+          const svcCats = new Set();
+          if (Array.isArray(cats)) cats.forEach(c => c && c.name && svcCats.add(c.name));
+          foundationalMatch = foundationalCatsMode === 'intersect'
+            ? foundationalCats.every(sc => svcCats.has(sc))
+            : foundationalCats.some(sc => svcCats.has(sc));
+        }
       }
-      if (etMatch && bsMatch && modMatch && phaseMatch && supercatMatch && advancedLoSMatch && foundationalMatch) { seen.add(svc.code); return true; }
+      let maxFocusMatch = true;
+      if (maxFocusTopics.length > 0) {
+        const isMax = etArr.some(e => e === 'Max Success Plan');
+        if (isMax) {
+          const cf = svc.classificationFeatures;
+          const svcTopics = new Set();
+          if (Array.isArray(cf)) {
+            for (const item of cf) {
+              if (item && item.key === 'maxFocusTopic') {
+                const vals = Array.isArray(item.value) ? item.value : [item.value];
+                vals.forEach(v => v && svcTopics.add(String(v)));
+              }
+            }
+          }
+          maxFocusMatch = maxFocusTopicsMode === 'intersect'
+            ? maxFocusTopics.every(t => svcTopics.has(t))
+            : maxFocusTopics.some(t => svcTopics.has(t));
+        }
+      }
+      if (etMatch && bsMatch && modMatch && phaseMatch && supercatMatch && advancedLoSMatch && foundationalMatch && maxFocusMatch) { seen.add(svc.code); return true; }
       return false;
     }).slice(0, 500);
 
@@ -445,13 +532,14 @@ router.get('/metadata', async (req, res) => {
       const db = require('../store/db');
       db.getPool();
 
-      const [syncRes, bsRes, modRes, etRes, phaseRes, supercatRes] = await Promise.all([
+      const [syncRes, bsRes, modRes, etRes, phaseRes, supercatRes, maxTopicRes] = await Promise.all([
         db.query('SELECT last_updated, service_count FROM catalog_sync ORDER BY id DESC LIMIT 1'),
         db.query('SELECT code, name FROM catalog_services WHERE service_object=\'Business Scenario\' ORDER BY name'),
         db.query('SELECT h.parent_code AS bs_code, s.code AS mod_code, s.name AS mod_name FROM catalog_hierarchy h JOIN catalog_services s ON s.code = h.child_code WHERE s.service_object = \'Business Scenario module\' ORDER BY s.name'),
         db.query('SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key=\'engagementType\' ORDER BY feature_value'),
         db.query('SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key=\'sapActivateProjectPhase\' ORDER BY feature_value'),
-        db.query('SELECT DISTINCT category_name FROM catalog_supercategories ORDER BY category_name')
+        db.query('SELECT DISTINCT category_name FROM catalog_supercategories ORDER BY category_name'),
+        db.query('SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key=\'maxFocusTopic\' ORDER BY feature_value')
       ]);
 
       if (syncRes.rows.length) {
@@ -468,7 +556,8 @@ router.get('/metadata', async (req, res) => {
           bsMap, moduleMap, bsToMods,
           engagementTypes: etRes.rows.map(r => r.feature_value),
           phases: phaseRes.rows.map(r => r.feature_value),
-          supercategories: supercatRes.rows.map(r => r.category_name)
+          supercategories: supercatRes.rows.map(r => r.category_name),
+          maxFocusTopics: maxTopicRes.rows.map(r => r.feature_value)
         });
       }
     } catch(dbErr) {

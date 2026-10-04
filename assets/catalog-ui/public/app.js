@@ -12,7 +12,7 @@ const AGENT_BASE_URL  = window.AGENT_BASE_URL  || 'http://localhost:5000';
 let state = {
   currentPage: 'catalog',
   catalog: { services: [], lastUpdated: null, loading: false, error: null },
-  filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', deckName: '', namingType: '' },
+  filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', maxFocusTopics: [], maxFocusTopicsMode: 'merge', deckName: '', namingType: '' },
   filteredServices: [],
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
   selectedServices: new Set(),
@@ -45,6 +45,7 @@ async function loadCatalog() {
     state.catalog.engagementTypes = data.engagementTypes || [];
     state.catalog.phases = data.phases || [];
     state.catalog.supercategories = data.supercategories || [];
+    state.catalog.maxFocusTopics = data.maxFocusTopics || [];
     state.catalog.lastUpdated = data.lastUpdated;
     state.catalog.serviceCount = data.serviceCount;
     state.catalog.services = []; // not loaded upfront
@@ -79,12 +80,14 @@ async function applyFilters() {
   const advancedLoSMode = state.filters.advancedLoSMode || 'merge';
   const foundationalCats = state.filters.foundationalCats || [];
   const foundationalCatsMode = state.filters.foundationalCatsMode || 'merge';
+  const maxFocusTopics  = state.filters.maxFocusTopics || [];
+  const maxFocusTopicsMode = state.filters.maxFocusTopicsMode || 'merge';
 
   // Combine foundational supercats and keep advancedLoS separate for mode handling
   const allSupercats = [...new Set([...supercats])];
 
   // Nothing selected — clear results and show prompt
-  if (!query && !engagementType && !businessScenario && !mod && mods.length === 0 && phases.length === 0 && allSupercats.length === 0 && advancedLoS.length === 0 && foundationalCats.length === 0) {
+  if (!query && !engagementType && !businessScenario && !mod && mods.length === 0 && phases.length === 0 && allSupercats.length === 0 && advancedLoS.length === 0 && foundationalCats.length === 0 && maxFocusTopics.length === 0) {
     state.filteredServices = [];
     state.catalog.hasSearched = false;
     patchResults(); return;
@@ -113,6 +116,9 @@ async function applyFilters() {
     // foundational cats — sent separately so the backend can apply the right mode
     foundationalCats.forEach(s => params.append('foundationalCat', s));
     if (foundationalCats.length > 0) params.set('foundationalCatsMode', foundationalCatsMode);
+    // max focus topics
+    maxFocusTopics.forEach(t => params.append('maxFocusTopic', t));
+    if (maxFocusTopics.length > 0) params.set('maxFocusTopicsMode', maxFocusTopicsMode);
 
     const url = query
       ? `${CAP_BACKEND_URL}/api/catalog/searchServices?${params}`
@@ -150,7 +156,7 @@ function engagementBadge(et) {
 // ── Pages ─────────────────────────────────────────────────────────────────────
 
 function renderCatalogFilters() {
-  const { error, lastUpdated, moduleMap = {}, bsMap = {}, engagementTypes = [], phases = [], supercategories = [] } = state.catalog;
+  const { error, lastUpdated, moduleMap = {}, bsMap = {}, engagementTypes = [], phases = [], supercategories = [], maxFocusTopics: allMaxTopics = [] } = state.catalog;
 
   const ET_OPTIONS = [
     { value: 'Max Success Plan',      label: 'Max Success Plan' },
@@ -179,9 +185,23 @@ function renderCatalogFilters() {
   const selectedMods = state.filters.modules || [];
   const showNamingFilter = !!state.filters.businessScenario;
 
+  // Section 3 is enabled when query or BS filter has a value
+  const sec3Active = !!(state.filters.query || state.filters.businessScenario);
+  const sec3Style = sec3Active ? '' : 'opacity:0.45;pointer-events:none';
+
+  const advancedLoSItems = supercategories.filter(s => s.startsWith('Success Plans for'));
+  const foundationalItems = supercategories.filter(s => !s.startsWith('Success Plans for'));
+
+  const et = state.filters.engagementType;
+  // Each checkbox filter shows badge only when relevant ET is explicitly selected
+  const showAdvancedBadge = et === 'Advanced Success Plan';
+  const showFoundationalBadge = et === 'Enterprise Support';
+  const showMaxBadge = et === 'Max Success Plan';
+
   return `
     ${error ? `<div class="error-strip">⚠ ${error}</div>` : ''}
     <div class="filter-row">
+      <!-- Section 1: Search + ET -->
       <div class="fl-field" style="min-width:220px">
         <input type="search" id="filter-query" placeholder=" " value="${state.filters.query}"
           oninput="updateFilter('query', this.value)" />
@@ -195,6 +215,10 @@ function renderCatalogFilters() {
         </select>
         <label>Engagement Type</label>
       </div>
+
+      <div style="width:1px;min-height:80px;background:#e0e0e0;margin:0;flex-shrink:0"></div>
+
+      <!-- Section 2: BS + Module -->
       <div class="fl-field" style="min-width:280px">
         <select id="filter-bs" ${!state.filters.businessScenario ? 'data-empty="true"' : ''}
           onchange="updateFilter('businessScenario', this.value); this.dataset.empty = this.value ? 'false' : 'true'">
@@ -215,95 +239,112 @@ function renderCatalogFilters() {
         <label>Module</label>
       </div>
       <span class="filter-hint" style="align-self:center">Hold Ctrl to select multiple</span>` : ''}
-      ${phases.length > 0 ? `
-      <div class="filter-group">
-        <label>SAP Activate Phase</label>
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-          <div class="mode-switch">
-            <button class="${(state.filters.phaseMode||'merge')==='merge'?'active':''}" onclick="updateFilter('phaseMode','merge')">Merge</button>
-            <button class="${state.filters.phaseMode==='intersect'?'active':''}" onclick="updateFilter('phaseMode','intersect')">Intersect</button>
+
+      <div style="width:1px;min-height:80px;background:#e0e0e0;margin:0;flex-shrink:0"></div>
+
+      <!-- Section 3: 4 checkbox filters (greyed out until query/BS active) -->
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;${sec3Style}">
+        ${phases.length > 0 ? `
+        <div class="filter-group">
+          <label>Activate Phases</label>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <div class="mode-switch">
+              <button class="${(state.filters.phaseMode||'merge')==='merge'?'active':''}" onclick="updateFilter('phaseMode','merge')">Merge</button>
+              <button class="${state.filters.phaseMode==='intersect'?'active':''}" onclick="updateFilter('phaseMode','intersect')">Intersect</button>
+            </div>
+            ${(state.filters.phases||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('phases')">✕</button>` : ''}
           </div>
-          ${(state.filters.phases||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear phases" onclick="updateCheckboxFilter._clearKey('phases')">✕</button>` : ''}
-        </div>
-        <div class="check-panel">
-          ${phases.map(p => `
-            <label>
-              <input type="checkbox" value="${p}" ${(state.filters.phases||[]).includes(p)?'checked':''}
-                onchange="updateCheckboxFilter('phases', '${p}', this.checked)" />
-              ${p}
-            </label>`).join('')}
-        </div>
-      </div>` : ''}
-      ${(() => {
-        const advancedLoS = supercategories.filter(s => s.startsWith('Success Plans for'));
-        const foundationalCats = supercategories.filter(s => !s.startsWith('Success Plans for'));
-        const et = state.filters.engagementType;
-        const showAdvanced = !et || et === 'Advanced Success Plan';
-        const showFoundational = !et || et === 'Enterprise Support';
-        let html = '';
-        if (showAdvanced && advancedLoS.length > 0) {
-          html += `
-          <div class="filter-group">
-            <label>Advanced LoS</label>
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-              <div class="mode-switch">
-                <button class="${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}" onclick="updateFilter('advancedLoSMode','merge')">Merge</button>
-                <button class="${state.filters.advancedLoSMode==='intersect'?'active':''}" onclick="updateFilter('advancedLoSMode','intersect')">Intersect</button>
-              </div>
-              ${(state.filters.advancedLoS||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear LoS" onclick="updateCheckboxFilter._clearKey('advancedLoS')">✕</button>` : ''}
+          <div class="check-panel">
+            ${phases.map(p => `
+              <label>
+                <input type="checkbox" value="${p}" ${(state.filters.phases||[]).includes(p)?'checked':''}
+                  onchange="updateCheckboxFilter('phases', '${p}', this.checked)" />
+                ${p}
+              </label>`).join('')}
+          </div>
+        </div>` : ''}
+
+        ${advancedLoSItems.length > 0 ? `
+        <div class="filter-group">
+          <label>Advanced LoB${showAdvancedBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Advanced)</span>'}</label>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <div class="mode-switch">
+              <button class="${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}" onclick="updateFilter('advancedLoSMode','merge')">Merge</button>
+              <button class="${state.filters.advancedLoSMode==='intersect'?'active':''}" onclick="updateFilter('advancedLoSMode','intersect')">Intersect</button>
             </div>
-            <div class="check-panel">
-              ${advancedLoS.map(s => `
-                <label>
-                  <input type="checkbox" value="${s}" ${(state.filters.advancedLoS||[]).includes(s)?'checked':''}
-                    onchange="updateCheckboxFilter('advancedLoS', '${s.replace(/'/g,"\\'")}', this.checked)" />
-                  ${s.replace('Success Plans for ', '')}
-                </label>`).join('')}
+            ${(state.filters.advancedLoS||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('advancedLoS')">✕</button>` : ''}
+          </div>
+          <div class="check-panel">
+            ${advancedLoSItems.map(s => `
+              <label>
+                <input type="checkbox" value="${s}" ${(state.filters.advancedLoS||[]).includes(s)?'checked':''}
+                  onchange="updateCheckboxFilter('advancedLoS', '${s.replace(/'/g,"\\'")}', this.checked)" />
+                ${s.replace('Success Plans for ', '')}
+              </label>`).join('')}
+          </div>
+        </div>` : ''}
+
+        ${foundationalItems.length > 0 ? `
+        <div class="filter-group">
+          <label>Foundation subcategories${showFoundationalBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Foundation)</span>'}</label>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <div class="mode-switch">
+              <button class="${(state.filters.foundationalCatsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('foundationalCatsMode','merge')">Merge</button>
+              <button class="${state.filters.foundationalCatsMode==='intersect'?'active':''}" onclick="updateFilter('foundationalCatsMode','intersect')">Intersect</button>
             </div>
-          </div>`;
-        }
-        if (showFoundational && foundationalCats.length > 0) {
-          html += `
-          <div class="filter-group">
-            <label>Foundationals</label>
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-              <div class="mode-switch">
-                <button class="${(state.filters.foundationalCatsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('foundationalCatsMode','merge')">Merge</button>
-                <button class="${state.filters.foundationalCatsMode==='intersect'?'active':''}" onclick="updateFilter('foundationalCatsMode','intersect')">Intersect</button>
-              </div>
-              ${(state.filters.foundationalCats||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear foundationals" onclick="updateCheckboxFilter._clearKey('foundationalCats')">✕</button>` : ''}
+            ${(state.filters.foundationalCats||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('foundationalCats')">✕</button>` : ''}
+          </div>
+          <div class="check-panel">
+            ${foundationalItems.map(s => `
+              <label>
+                <input type="checkbox" value="${s}" ${(state.filters.foundationalCats||[]).includes(s)?'checked':''}
+                  onchange="updateCheckboxFilter('foundationalCats', '${s.replace(/'/g,"\\'")}', this.checked)" />
+                ${s}
+              </label>`).join('')}
+          </div>
+        </div>` : ''}
+
+        ${allMaxTopics.length > 0 ? `
+        <div class="filter-group">
+          <label>Max Focus Topics${showMaxBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Max)</span>'}</label>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <div class="mode-switch">
+              <button class="${(state.filters.maxFocusTopicsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('maxFocusTopicsMode','merge')">Merge</button>
+              <button class="${state.filters.maxFocusTopicsMode==='intersect'?'active':''}" onclick="updateFilter('maxFocusTopicsMode','intersect')">Intersect</button>
             </div>
-            <div class="check-panel">
-              ${foundationalCats.map(s => `
-                <label>
-                  <input type="checkbox" value="${s}" ${(state.filters.foundationalCats||[]).includes(s)?'checked':''}
-                    onchange="updateCheckboxFilter('foundationalCats', '${s.replace(/'/g,"\\'")}', this.checked)" />
-                  ${s}
-                </label>`).join('')}
-            </div>
-          </div>`;
-        }
-        return html;
-      })()}
-      ${showNamingFilter ? `
-      <div class="filter-group">
-        <label>Service Name</label>
-        <div class="toggle-group">
-          <button class="toggle-btn ${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'catalog')">Catalog Name</button>
-          <button class="toggle-btn ${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
-        </div>
-      </div>` : ''}
-      <button class="btn btn-secondary btn-sm" onclick="clearFilters()">Clear</button>
-      ${lastUpdated ? `<span class="last-updated">Last updated: ${new Date(lastUpdated).toLocaleString()}</span>` : ''}
+            ${(state.filters.maxFocusTopics||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('maxFocusTopics')">✕</button>` : ''}
+          </div>
+          <div class="check-panel">
+            ${allMaxTopics.map(t => `
+              <label>
+                <input type="checkbox" value="${t}" ${(state.filters.maxFocusTopics||[]).includes(t)?'checked':''}
+                  onchange="updateCheckboxFilter('maxFocusTopics', '${t.replace(/'/g,"\\'")}', this.checked)" />
+                ${t}
+              </label>`).join('')}
+          </div>
+        </div>` : ''}
+
+        ${showNamingFilter ? `
+        <div class="filter-group">
+          <label>Service Name</label>
+          <div class="toggle-group">
+            <button class="toggle-btn ${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'catalog')">Catalog Name</button>
+            <button class="toggle-btn ${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
+          </div>
+        </div>` : ''}
+      </div>
+
+      <button class="btn btn-secondary btn-sm" style="align-self:flex-end;margin-left:auto" onclick="clearFilters()">Clear</button>
     </div>`;
 }
 
 function renderCatalogPage() {
   const { lastUpdated } = state.catalog;
-  const cartCount = state.exportCart.length;
-
   return `
-    <h2>Catalog Browser</h2>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:0.5rem">
+      <h2 style="margin:0">Catalog Browser</h2>
+      ${lastUpdated ? `<span class="last-updated">Last updated: ${new Date(lastUpdated).toLocaleString()}</span>` : ''}
+    </div>
     <div id="catalog-filters">${renderCatalogFilters()}</div>
     <div id="catalog-results">${renderCatalogResults()}</div>`;
 }
@@ -529,8 +570,8 @@ window.updateFilter = function(key, value) {
   if (key === 'businessScenario') { state.filters.modules = []; state.filters.module = ''; state.filters.deckName = ''; state.filters.namingType = ''; }
   // These keys change filter panel structure — full re-render
   const needsFullRender = key === 'businessScenario' || key === 'engagementType';
-  // Mode-switch keys only need filter panel patch + results
-  const needsFilterPatch = key === 'phaseMode' || key === 'advancedLoSMode' || key === 'foundationalCatsMode' || key === 'namingType';
+  // Mode-switch keys and query-state keys only need filter panel patch + results
+  const needsFilterPatch = key === 'phaseMode' || key === 'advancedLoSMode' || key === 'foundationalCatsMode' || key === 'maxFocusTopicsMode' || key === 'namingType' || key === 'query';
   clearTimeout(window._filterDebounce);
   if (needsFullRender) {
     window._filterDebounce = setTimeout(() => { render(); applyFilters(); }, 300);
@@ -575,7 +616,7 @@ window.updateMultiFilterUI5 = function(key, combobox) {
 };
 
 window.clearFilters = function() {
-  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', deckName: '', namingType: '' };
+  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', maxFocusTopics: [], maxFocusTopicsMode: 'merge', deckName: '', namingType: '' };
   state.filteredServices = [];
   state.catalog.hasSearched = false;
   render();
