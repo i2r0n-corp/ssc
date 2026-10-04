@@ -129,8 +129,11 @@ function mapEtDisplay(val) {
 
 // ── Engagement type badge ─────────────────────────────────────────────────────
 function engagementBadge(et) {
-  const arr = Array.isArray(et) ? et : (et ? [et] : []);
+  let arr = Array.isArray(et) ? et : (et ? [et] : []);
   if (arr.length === 0) return '—';
+  // When an ET filter is active, show only that ET to avoid cross-type confusion
+  const activeET = state.filters.engagementType;
+  if (activeET && arr.includes(activeET)) arr = [activeET];
   return arr.map(val => {
     const display = mapEtDisplay(val);
     const cls = display.includes('Max') ? 'badge-max' : display.includes('Advanced') ? 'badge-adv' : 'badge-ent';
@@ -233,7 +236,7 @@ function renderCatalogPage() {
         const advancedLoS = supercategories.filter(s => s.startsWith('Success Plans for'));
         const foundationalCats = supercategories.filter(s => !s.startsWith('Success Plans for'));
         const et = state.filters.engagementType;
-        const showAdvanced = !et || et === 'Advanced Success Plan' || et === 'Max Success Plan';
+        const showAdvanced = !et || et === 'Advanced Success Plan';
         const showFoundational = !et || et === 'Enterprise Support';
         let html = '';
         if (showAdvanced && advancedLoS.length > 0) {
@@ -508,8 +511,10 @@ window.updateFilter = function(key, value) {
   state.filters[key] = value;
   // Reset cascading filters downstream
   if (key === 'businessScenario') { state.filters.modules = []; state.filters.module = ''; state.filters.deckName = ''; state.filters.namingType = ''; }
+  // businessScenario and engagementType change the filter panel structure — need full re-render
+  const needsFullRender = key === 'businessScenario' || key === 'engagementType';
   clearTimeout(window._filterDebounce);
-  window._filterDebounce = setTimeout(applyFilters, 300);
+  window._filterDebounce = setTimeout(needsFullRender ? () => { render(); applyFilters(); } : applyFilters, 300);
 };
 
 window.updateCheckboxFilter = function(key, value, checked) {
