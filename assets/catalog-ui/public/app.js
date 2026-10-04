@@ -832,7 +832,7 @@ async function loadDebugLog() {
     if (state.debug.bsCode)  params.set('bsCode',  state.debug.bsCode);
     if (state.debug.module)  params.set('module',  state.debug.module);
     if (state.debug.status)  params.set('status',  state.debug.status);
-    const res = await fetch(`/api/catalog/injection-log?${params}`);
+    const res = await fetch(`${CAP_BACKEND_URL}/api/catalog/injection-log?${params}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     state.debug.rows   = data.rows   || [];
@@ -853,8 +853,12 @@ window.updateDebugFilter = function(key, value) {
 function renderDebugPage() {
   const { bsCode, module, status, rows, totals, loading, error } = state.debug;
 
-  const bsOptions = (state.catalog.businessScenarios || [])
-    .map(bs => `<option value="${bs.code}" ${bsCode === bs.code ? 'selected' : ''}>${bs.name || bs.code}</option>`)
+  const bsOptions = Object.entries(state.catalog.bsMap || {})
+    .map(([code, name]) => {
+      const label = name.includes('-') ? name.replace(/^[^-]+-\s*/, '') : name;
+      return `<option value="${code}" ${bsCode === code ? 'selected' : ''}>${label}</option>`;
+    })
+    .sort((a, b) => a.localeCompare(b))
     .join('');
 
   const statusOptions = [
