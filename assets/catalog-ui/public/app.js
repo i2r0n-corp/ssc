@@ -211,7 +211,7 @@ function renderCatalogFilters() {
       <div style="display:flex;gap:0;align-items:stretch">
 
         <!-- Left column -->
-        <div style="display:flex;flex-direction:column;gap:0;flex:1;padding:1rem">
+        <div style="display:flex;flex-direction:column;gap:0;width:50%;padding:1rem">
           <!-- Row 1: Business Scenario -->
           <div class="fl-field" style="min-width:280px;max-width:420px">
             <select id="filter-bs" ${!state.filters.businessScenario ? 'data-empty="true"' : ''}
@@ -244,7 +244,7 @@ function renderCatalogFilters() {
 
         <!-- Right column: Module (only when BS selected) -->
         ${showModuleFilter ? `
-        <div style="border-left:1px solid #e0e0e0;padding:1rem;min-width:260px;display:flex;flex-direction:column;gap:0.25rem">
+        <div style="border-left:1px solid #e0e0e0;padding:1rem;width:50%;display:flex;flex-direction:column;gap:0.25rem">
           <div class="fl-field" style="flex:1">
             <select id="filter-mod" multiple size="${Math.min(uniqueMods.length, 6)}"
               onchange="updateMultiFilter('modules', this)" style="height:auto">
@@ -288,11 +288,7 @@ function renderCatalogFilters() {
         ${allMaxTopics.length > 0 ? `
         <div class="filter-group" style="${maxTopicsActive ? '' : disabledStyle}">
           <label>Max Focus Topics${showMaxBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Max)</span>'}</label>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div class="mode-switch">
-              <button class="${(state.filters.maxFocusTopicsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('maxFocusTopicsMode','merge')">Merge</button>
-              <button class="${state.filters.maxFocusTopicsMode==='intersect'?'active':''}" onclick="updateFilter('maxFocusTopicsMode','intersect')">Intersect</button>
-            </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;min-height:1.6rem">
             ${(state.filters.maxFocusTopics||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('maxFocusTopics')">✕</button>` : ''}
           </div>
           <div class="check-panel">
@@ -406,7 +402,9 @@ function renderCatalogResults() {
     <table class="service-table">
       <thead>
         <tr>
-          <th style="width:2.5rem"><input type="checkbox" title="Select all" onchange="toggleSelectAll(this.checked)" /></th>
+          <th style="width:2.5rem"><input type="checkbox" title="Select all / deselect all"
+            ${state.filteredServices.length > 0 && state.filteredServices.every(s => state.selectedServices.has(s.code)) ? 'checked' : ''}
+            onchange="toggleSelectAll(this.checked)" /></th>
           <th>Service Name</th>
           <th>Short Description</th>
           <th>Engagement Type</th>
@@ -415,7 +413,7 @@ function renderCatalogResults() {
         </tr>
       </thead>
       <tbody>
-        ${state.filteredServices.slice(0, 300).map(svc => {
+        ${state.filteredServices.slice(0, 500).map(svc => {
           const useDeck = state.filters.namingType === 'deck' && state.filters.businessScenario;
           const bsNaming = svc.business_scenario_naming || svc.businessScenarioNaming || {};
           const bsCode = state.filters.businessScenario;
