@@ -1038,7 +1038,7 @@ router.get('/injection-log', async (req, res) => {
 
     const rowsRes = await db.query(`
       SELECT r.id, r.bs_code, r.type, r.status, r.service_code, r.service_name,
-             r.module_code, r.module_name, r.deck_name, r.crm_ids
+             r.module_code, r.module_name, r.deck_name, r.crm_ids, r.created_at
       FROM catalog_matching_log_rows r
       WHERE 1=1 ${where}
       ORDER BY r.bs_code, r.id
@@ -1072,6 +1072,7 @@ router.get('/injection-log', async (req, res) => {
       module_name:  r.module_name,
       deck_name:    r.deck_name,
       crm_ids:      r.crm_ids,
+      created_at:   r.created_at,
       steps:        stepsMap[r.id] || []
     }));
 

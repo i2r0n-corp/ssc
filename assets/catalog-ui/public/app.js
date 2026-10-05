@@ -934,6 +934,7 @@ function renderDebugPage() {
         ['Service Code', r.service_code], ['Service Name', r.service_name],
         ['Module Code', r.module_code], ['Module Name', r.module_name],
         ['Deck Name', r.deck_name], ['CRM IDs', r.crm_ids],
+        ['Created', r.created_at ? new Date(r.created_at).toLocaleString() : null],
       ].filter(([,v]) => v);
       const stepsHtml = (r.steps||[]).length > 0 ? `
         <h4 style="margin:1rem 0 0.5rem;font-size:0.85rem;color:#1D2D3E">Resolution Steps</h4>

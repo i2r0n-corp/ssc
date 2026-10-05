@@ -163,7 +163,8 @@ CREATE TABLE IF NOT EXISTS catalog_matching_log_rows (
   module_code  TEXT,
   module_name  TEXT,
   deck_name    TEXT,
-  crm_ids      TEXT
+  crm_ids      TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_mlr_bs_code ON catalog_matching_log_rows(bs_code);
 CREATE INDEX IF NOT EXISTS idx_mlr_status  ON catalog_matching_log_rows(status);
@@ -188,6 +189,7 @@ async function initSchema() {
     await client.query(SCHEMA_SQL);
     // One-time migration: drop log_rows JSONB column if it still exists
     await client.query(`ALTER TABLE catalog_injection_log DROP COLUMN IF EXISTS log_rows`);
+    await client.query(`ALTER TABLE catalog_matching_log_rows ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`);
     console.log('[db] Schema initialised');
   } finally {
     client.release();
