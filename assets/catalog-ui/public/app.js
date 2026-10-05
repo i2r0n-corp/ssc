@@ -178,7 +178,7 @@ function renderCatalogFilters() {
       const label = name.includes('-') ? name.replace(/^[^-]+-\s*/, '') : name;
       return [code, name, label];
     })
-    .sort((a, b) => a[2].localeCompare(b[2]));
+    .sort((a, b) => a[0].localeCompare(b[0]));
 
   const showModuleFilter = !!state.filters.businessScenario;
   let uniqueMods = [];
