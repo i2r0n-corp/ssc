@@ -514,6 +514,13 @@ async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog
     let matched = 0, unmatched = 0, injected = 0, alreadyLinked = 0, unresolvedMod = 0, unresolvedSvc = 0;
     const logRows = [];
 
+    // Snapshot original API hierarchy children before enrichment modifies childServices
+    const originalModChildren = {};
+    for (const modCode of bsSvc.childServices || []) {
+      const mod = flatIndex[modCode];
+      if (mod) originalModChildren[modCode] = new Set(mod.childServices || []);
+    }
+
     // ── Module membership injection + deck name assignment ────────────────────
     let asgnCount = 0;
     for (const asgn of moduleAssignments) {
@@ -560,18 +567,27 @@ async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog
       }
     }
 
-    // Services in API hierarchy with no module assignment row — log as unmatched (no deck name)
+    // Services in API hierarchy (original, before enrichment) with no deck name assigned — log as unmatched
+    // Build serviceNumber → deck name map to detect catalog duplicates (same serviceNumber, different code)
+    const svcNumToDeckName = {};
+    for (const [, svc] of Object.entries(flatIndex)) {
+      const sn = svc.serviceNumber;
+      const dn = svc.business_scenario_naming && svc.business_scenario_naming[bsCode];
+      if (sn && dn) svcNumToDeckName[String(sn).trim()] = dn;
+    }
+
     for (const modCode of bsSvc.childServices || []) {
-      const mod = flatIndex[modCode];
-      if (!mod) continue;
-      for (const childCode of mod.childServices || []) {
+      const origChildren = originalModChildren[modCode] || new Set();
+      for (const childCode of origChildren) {
         const child = flatIndex[childCode];
         if (!child) continue;
         const hasDeckName = child.business_scenario_naming && child.business_scenario_naming[bsCode];
-        if (!hasDeckName) {
-          unmatched++;
-          logRows.push({ type: 'module_injection', status: 'No Match', deck_name: null, crm_ids: null, service_name: child.name, module_name: null, module_code: modCode, service_code: child.code, detail: 'not in excel module assignments', steps: [] });
-        }
+        if (hasDeckName) continue;
+        // Skip if another service with the same serviceNumber was already matched (catalog duplicate)
+        const sn = child.serviceNumber ? String(child.serviceNumber).trim() : null;
+        if (sn && svcNumToDeckName[sn]) continue;
+        unmatched++;
+        logRows.push({ type: 'module_injection', status: 'No Match', deck_name: null, crm_ids: null, service_name: child.name, module_name: null, module_code: modCode, service_code: child.code, detail: 'not in excel module assignments', steps: [] });
       }
     }
 
