@@ -16,7 +16,7 @@ let state = {
   filteredServices: [],
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
   filtersExpanded: false,
-  debug: { bsCode: '', module: '', status: '', rows: [], totals: null, loading: false, error: null, selectedRow: null },
+  debug: { bsCode: '', module: '', serviceName: '', status: '', rows: [], totals: null, loading: false, error: null, selectedRow: null },
   selectedServices: new Set(),
   incident: { file: null, results: [], loading: false, error: null, selectedCodes: new Set() },
   pptx: { template: 'short-description', generating: false, error: null, downloadUrl: null },
@@ -838,9 +838,10 @@ async function loadDebugLog() {
   state.debug.error = null;
   try {
     const params = new URLSearchParams();
-    if (state.debug.bsCode)  params.set('bsCode',  state.debug.bsCode);
-    if (state.debug.module)  params.set('module',  state.debug.module);
-    if (state.debug.status)  params.set('status',  state.debug.status);
+    if (state.debug.bsCode)       params.set('bsCode',      state.debug.bsCode);
+    if (state.debug.module)       params.set('module',      state.debug.module);
+    if (state.debug.serviceName)  params.set('serviceName', state.debug.serviceName);
+    if (state.debug.status)       params.set('status',      state.debug.status);
     const res = await fetch(`${CAP_BACKEND_URL}/api/catalog/injection-log?${params}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -867,7 +868,7 @@ window.updateDebugFilter = function(key, value, debounce) {
 };
 
 function renderDebugPage() {
-  const { bsCode, module, status, rows, totals, loading, error } = state.debug;
+  const { bsCode, module, serviceName, status, rows, totals, loading, error } = state.debug;
 
   const bsOptions = Object.entries(state.catalog.bsMap || {})
     .map(([code, name]) => {
@@ -913,14 +914,16 @@ function renderDebugPage() {
   };
 
   const rowsHtml = rows.length === 0 && !loading ? `
-    <tr><td colspan="5" style="text-align:center;padding:2rem;color:#6a6a6a;">No records found</td></tr>` :
+    <tr><td colspan="7" style="text-align:center;padding:2rem;color:#6a6a6a;">No records found</td></tr>` :
     rows.map(r => `
       <tr onclick="openDebugRow(${r.id})" style="cursor:pointer">
-        <td style="font-size:0.78rem;color:#556B82">${r.bs_code||''}</td>
+        <td style="font-size:0.78rem;color:#556B82;white-space:nowrap">${r.bs_code||''}</td>
+        <td style="font-size:0.78rem;color:#6a6a6a">${r.crm_ids||''}</td>
+        <td style="font-size:0.78rem;color:#6a6a6a;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(r.deck_name||'').replace(/"/g,'&quot;')}">${r.deck_name||''}</td>
         <td style="font-size:0.82rem">${r.service_name||r.service_code||''}</td>
         <td style="font-size:0.78rem;color:#556B82">${r.module_name||r.module_code||''}</td>
         <td>${statusBadge(r.status)}</td>
-        <td style="font-size:0.78rem;color:#6a6a6a;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(r.deck_name||'').replace(/"/g,'&quot;')}">${r.deck_name||''}</td>
+        <td style="font-size:0.75rem;color:#6a6a6a">${r.service_code||''}</td>
       </tr>`).join('');
 
   return `
@@ -970,6 +973,10 @@ function renderDebugPage() {
         <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600">Module (contains)</label>
         <input type="text" value="${module}" oninput="updateDebugFilter('module',this.value,true)" />
       </div>
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:160px;max-width:240px">
+        <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600">Deck / Service name (contains)</label>
+        <input type="text" value="${serviceName}" oninput="updateDebugFilter('serviceName',this.value,true)" />
+      </div>
       <div style="display:flex;flex-direction:column;gap:4px;min-width:160px;max-width:220px">
         <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600">Status</label>
         <select onchange="updateDebugFilter('status',this.value)">
@@ -985,10 +992,12 @@ function renderDebugPage() {
         <thead>
           <tr>
             <th>BS Code</th>
-            <th>Service</th>
+            <th>Excel CRM ID</th>
+            <th>Deck Name</th>
+            <th>Service Name</th>
             <th>Module</th>
             <th>Status</th>
-            <th>Deck Name</th>
+            <th>Code</th>
           </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>

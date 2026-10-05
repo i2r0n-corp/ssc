@@ -1013,7 +1013,8 @@ router.get('/injection-log', async (req, res) => {
     db.getPool();
 
     const { bsCode, status } = req.query;
-    const moduleFilter = (req.query.module || '').toLowerCase();
+    const moduleFilter      = (req.query.module      || '').toLowerCase();
+    const serviceNameFilter = (req.query.serviceName || '').toLowerCase();
 
     // Aggregate totals
     const totalsRes = await db.query(`
@@ -1030,9 +1031,10 @@ router.get('/injection-log', async (req, res) => {
     const params = [];
     let pIdx = 1;
     let where = '';
-    if (bsCode) { params.push(bsCode); where += ` AND r.bs_code = $${pIdx++}`; }
-    if (status) { params.push(status); where += ` AND r.status = $${pIdx++}`; }
-    if (moduleFilter) { params.push(`%${moduleFilter}%`); where += ` AND (LOWER(r.module_name) LIKE $${pIdx} OR LOWER(r.module_code) LIKE $${pIdx})`; pIdx++; }
+    if (bsCode)           { params.push(bsCode);                  where += ` AND r.bs_code = $${pIdx++}`; }
+    if (status)           { params.push(status);                  where += ` AND r.status = $${pIdx++}`; }
+    if (moduleFilter)     { params.push(`%${moduleFilter}%`);     where += ` AND (LOWER(r.module_name) LIKE $${pIdx} OR LOWER(r.module_code) LIKE $${pIdx})`; pIdx++; }
+    if (serviceNameFilter){ params.push(`%${serviceNameFilter}%`); where += ` AND (LOWER(r.service_name) LIKE $${pIdx} OR LOWER(r.deck_name) LIKE $${pIdx})`; pIdx++; }
 
     const rowsRes = await db.query(`
       SELECT r.id, r.bs_code, r.type, r.status, r.service_code, r.service_name,
