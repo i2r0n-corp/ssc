@@ -586,6 +586,7 @@ async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog
         // Skip if another service with the same serviceNumber was already matched (catalog duplicate)
         const sn = child.serviceNumber ? String(child.serviceNumber).trim() : null;
         if (sn && svcNumToDeckName[sn]) continue;
+        console.log(`[unmatched-debug] ${bsCode} mod=${modCode} child=${childCode} svcNum=${sn} bsNaming=${JSON.stringify(child.business_scenario_naming||null)}`);
         unmatched++;
         logRows.push({ type: 'module_injection', status: 'No Match', deck_name: null, crm_ids: null, service_name: child.name, module_name: null, module_code: modCode, service_code: child.code, detail: 'not in excel module assignments', steps: [] });
       }
