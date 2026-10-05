@@ -1034,10 +1034,13 @@ function render() {
 
   app.innerHTML = `
     <div class="shell-bar">
-      <span class="shell-bar-title">🗂 SSC Intelligence</span>
-      <nav class="shell-nav">
-        ${pages.map(p => `<a href="#" class="shell-nav-item ${state.currentPage===p.id?'active':''}" onclick="navigate('${p.id}');return false">${p.label}</a>`).join('')}
-      </nav>
+      <div style="display:flex;align-items:center;gap:1.5rem;width:100%;max-width:1400px;margin:0 auto">
+        <span class="shell-bar-title">🗂 SSC Intelligence</span>
+        <nav class="shell-nav">
+          ${pages.map(p => `<a href="#" class="shell-nav-item ${state.currentPage===p.id?'active':''}" onclick="navigate('${p.id}');return false">${p.label}</a>`).join('')}
+        </nav>
+        <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" class="btn btn-secondary btn-sm" style="margin-left:auto;color:rgba(255,255,255,0.85);border-color:rgba(255,255,255,0.4);background:transparent">Feedback</a>
+      </div>
     </div>
     <div class="page-content">${content}</div>`;
 }
