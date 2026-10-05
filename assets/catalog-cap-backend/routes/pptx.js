@@ -10,9 +10,34 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const PptxGenJS = require('pptxgenjs');
 const snapshot = require('../store/snapshot');
+const db = require('../store/db');
 
 const PPTX_TMP = path.join(__dirname, '..', 'data', 'pptx-tmp');
 fs.mkdirSync(PPTX_TMP, { recursive: true });
+
+async function _loadFlatIndex() {
+  try {
+    db.getPool();
+    const svcRes = await db.query('SELECT code, raw_data FROM catalog_services');
+    const flatIndex = {};
+    for (const row of svcRes.rows) {
+      if (row.raw_data && row.code) flatIndex[row.code] = row.raw_data;
+    }
+    const hierRes = await db.query('SELECT parent_code, child_code FROM catalog_hierarchy ORDER BY position');
+    for (const row of hierRes.rows) {
+      if (flatIndex[row.parent_code]) {
+        if (!flatIndex[row.parent_code].childServices) flatIndex[row.parent_code].childServices = [];
+        flatIndex[row.parent_code].childServices.push(row.child_code);
+      }
+    }
+    return flatIndex;
+  } catch(e) {
+    // Fall back to snapshot payload for local dev
+    const data = snapshot.load();
+    if (!data || !data.payload) throw new Error('No catalog data available');
+    return JSON.parse(data.payload).flat_index || {};
+  }
+}
 
 // ── Generate PPTX ─────────────────────────────────────────────────────────────
 router.post('/generatePptx', async (req, res) => {
@@ -31,11 +56,8 @@ router.post('/generatePptx', async (req, res) => {
       return res.status(400).json({ error: 'template must be "short-description" or "one-pager"' });
     }
 
-    // Load services from snapshot
-    const data = snapshot.load();
-    if (!data) return res.status(404).json({ error: 'No catalog snapshot available' });
-
-    const flatIndex = JSON.parse(data.payload).flat_index || {};
+    // Load services from DB
+    const flatIndex = await _loadFlatIndex();
     const services = serviceCodes
       .map(code => flatIndex[code])
       .filter(Boolean);
