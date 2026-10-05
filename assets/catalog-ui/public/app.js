@@ -427,6 +427,9 @@ function renderCatalogResults() {
           const deckNameVal = useDeck ? (bsNaming[bsCode] || null) : null;
           const displayName = deckNameVal || svc.name;
           const subName     = deckNameVal && deckNameVal !== svc.name ? svc.name : null;
+          const nameHtml    = svc.url
+            ? `<a href="${svc.url}" target="_blank" rel="noopener" style="color:#0070F2;text-decoration:none;font-weight:700">${displayName}</a>`
+            : `<strong>${displayName}</strong>`;
           return `
           <tr class="${state.selectedServices.has(svc.code) ? 'selected' : ''}">
             <td><input type="checkbox" ${state.selectedServices.has(svc.code)?'checked':''} onchange="toggleSelect('${svc.code}')" /></td>
@@ -435,7 +438,7 @@ function renderCatalogResults() {
               const alt = strip(svc.summary) || strip(svc.keyBenefits) || strip(svc.description) || '';
               return alt.substring(0,300).replace(/"/g,'&quot;');
             })()}">
-              <strong>${displayName}</strong>
+              ${nameHtml}
               ${subName ? `<div style="font-size:0.75rem;color:#6a6a6a">${subName}</div>` : ''}
             </td>
             <td style="max-width:300px;font-size:0.8rem">${(svc.shortDescription||'').substring(0,120)}${(svc.shortDescription||'').length>120?'…':''}</td>
