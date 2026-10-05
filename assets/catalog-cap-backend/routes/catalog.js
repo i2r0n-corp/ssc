@@ -847,6 +847,24 @@ async function processEnrichQueue() {
           }
         }
 
+        // ── Write injected module childServices to catalog_hierarchy ─────────
+        const bsSvc = flatIndex[bsCode];
+        if (bsSvc) {
+          for (const modCode of bsSvc.childServices || []) {
+            const mod = flatIndex[modCode];
+            if (!mod) continue;
+            let pos = 0;
+            for (const childCode of mod.childServices || []) {
+              await db.query(
+                `INSERT INTO catalog_hierarchy (parent_code, child_code, position, source)
+                 VALUES ($1, $2, $3, 'excel')
+                 ON CONFLICT (parent_code, child_code) DO NOTHING`,
+                [modCode, childCode, pos++]
+              );
+            }
+          }
+        }
+
         // ── Stamp processed_at + counts on catalog_excel_files ────────────────
         await db.query(
           `UPDATE catalog_excel_files
