@@ -918,8 +918,8 @@ function renderDebugPage() {
     rows.map(r => `
       <tr onclick="openDebugRow(${r.id})" style="cursor:pointer">
         <td style="font-size:0.78rem;color:#556B82;white-space:nowrap">${r.bs_code||''}</td>
-        <td style="font-size:0.78rem;color:#6a6a6a">${r.crm_ids||''}</td>
-        <td style="font-size:0.78rem;color:#6a6a6a;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(r.deck_name||'').replace(/"/g,'&quot;')}">${r.deck_name||''}</td>
+        <td style="font-size:0.78rem;color:#6a6a6a;white-space:nowrap">${(r.crm_ids||'').substring(0,15)}</td>
+        <td style="font-size:0.82rem;color:#1D2D3E">${r.deck_name||''}</td>
         <td style="font-size:0.82rem">${r.service_name||r.service_code||''}</td>
         <td style="font-size:0.78rem;color:#556B82">${r.module_name||r.module_code||''}</td>
         <td>${statusBadge(r.status)}</td>
