@@ -833,7 +833,6 @@ function scrollChatToBottom() {
 async function loadDebugLog() {
   state.debug.loading = true;
   state.debug.error = null;
-  render();
   try {
     const params = new URLSearchParams();
     if (state.debug.bsCode)  params.set('bsCode',  state.debug.bsCode);
@@ -852,9 +851,16 @@ async function loadDebugLog() {
   render();
 }
 
-window.updateDebugFilter = function(key, value) {
+let _debugFilterTimer = null;
+
+window.updateDebugFilter = function(key, value, debounce) {
   state.debug[key] = value;
-  loadDebugLog();
+  if (debounce) {
+    clearTimeout(_debugFilterTimer);
+    _debugFilterTimer = setTimeout(() => loadDebugLog(), 500);
+  } else {
+    loadDebugLog();
+  }
 };
 
 function renderDebugPage() {
@@ -959,7 +965,7 @@ function renderDebugPage() {
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;min-width:160px;max-width:240px">
         <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600">Module (contains)</label>
-        <input type="text" value="${module}" oninput="updateDebugFilter('module',this.value)" />
+        <input type="text" value="${module}" oninput="updateDebugFilter('module',this.value,true)" />
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;min-width:160px;max-width:220px">
         <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600">Status</label>
