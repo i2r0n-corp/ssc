@@ -990,7 +990,7 @@ function renderDebugPage() {
 // ── Render ─────────────────────────────────────────────────────────────────────
 
 window.openDebugRow = function(id) {
-  const row = state.debug.rows.find(r => r.id === id);
+  const row = state.debug.rows.find(r => String(r.id) === String(id));
   if (row) { state.debug.selectedRow = row; render(); }
 };
 window.closeDebugModal = function() {
