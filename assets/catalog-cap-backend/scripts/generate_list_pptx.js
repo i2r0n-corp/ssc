@@ -319,7 +319,7 @@ function buildSlideXml(templateSlideXml, dataRows, slideTitle, streamBlocks, yea
  */
 function generateListPptxBuffer(services, opts = {}) {
   const templateFile = opts.templateFile ||
-    'C:/Users/I306380/OneDrive - SAP SE/_SC/Manuals&Processes/Skills/SSCI/ListTemplate.pptx';
+    path.join(__dirname, '..', 'data', 'ListTemplate.pptx');
   const title    = opts.title || 'Services Description';
   const groupET  = !!opts.groupByET;
   const bsCode   = opts.bsCode || null;
@@ -494,7 +494,7 @@ if (require.main === module) {
   function hasFlag(n) { return args.includes(n); }
 
   const templateFile = getArg('--template') ||
-    'C:/Users/I306380/OneDrive - SAP SE/_SC/Manuals&Processes/Skills/SSCI/ListTemplate.pptx';
+    path.join(__dirname, '..', 'data', 'ListTemplate.pptx');
   const dataFile  = getArg('--data')  || path.join(__dirname, 'sample_services.json');
   const outFile   = getArg('--out')   || path.join(__dirname, 'output_list.pptx');
   const title     = getArg('--title') || 'Services Description';
