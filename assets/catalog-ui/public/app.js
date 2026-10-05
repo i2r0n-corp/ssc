@@ -20,6 +20,13 @@ let state = {
   selectedServices: new Set(),
   incident: { file: null, results: [], loading: false, error: null, selectedCodes: new Set() },
   pptx: { template: 'short-description', generating: false, error: null, downloadUrl: null },
+  pptxListSettings: {
+    open: false,
+    cols: { stream: true, phases: true, component: true, tier: false, objectives: true },
+    years: false, yearFrom: '2026', yearTo: '2030',
+    groupByET: false, useDeckName: false,
+    title: 'Services Description',
+  },
   chat: { messages: [], loading: false, input: '' }
 };
 
@@ -393,9 +400,11 @@ function renderCatalogResults() {
       <button class="btn btn-secondary btn-sm" onclick="exportExcel()" title="Export selected (or all) to Excel">
         📊 Export Excel ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
-      <button class="btn btn-secondary btn-sm" onclick="generatePptx('short-description')" title="Short description list PPTX">
-        📋 PPTX List ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
-      </button>
+      <span style="display:inline-flex;gap:2px;align-items:stretch">
+        <button class="btn btn-secondary btn-sm" onclick="generatePptx('list')" title="Service list PPTX (template-based)">
+          📋 PPTX List ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
+        </button><button class="btn btn-secondary btn-sm" onclick="openPptxListSettings()" title="Configure PPTX List columns" style="padding:0.3rem 0.55rem;border-left:1px solid #cce0fc">⚙</button>
+      </span>
       <button class="btn btn-primary btn-sm" onclick="generatePptx('one-pager')" title="One-pager per service PPTX">
         📄 PPTX One-Pagers ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
@@ -749,12 +758,24 @@ window.generatePptx = async function(template) {
     ? [...state.selectedServices]
     : state.filteredServices.map(s => s.code);
   if (codes.length === 0) { alert('No services to export.'); return; }
-  if (codes.length > 50) { alert(`Too many services (${codes.length}). Max 50 for PPTX. Please select fewer.`); return; }
+  const isListTemplate = template === 'list';
+  if (!isListTemplate && codes.length > 50) { alert(`Too many services (${codes.length}). Max 50 for PPTX. Please select fewer.`); return; }
   state.pptx.generating = true; state.pptx.error = null; state.pptx.downloadUrl = null; render();
   try {
+    const body = { serviceCodes: codes, template: template || 'short-description' };
+    if (isListTemplate) {
+      const s = state.pptxListSettings;
+      body.listOptions = {
+        cols: { ...s.cols },
+        years: s.years, yearFrom: s.yearFrom, yearTo: s.yearTo,
+        groupByET: s.groupByET, useDeckName: s.useDeckName,
+        title: s.title,
+        bsCode: state.filters.businessScenario || null,
+      };
+    }
     const data = await apiFetch(`${CAP_BACKEND_URL}/api/pptx/generatePptx`, {
       method: 'POST',
-      body: JSON.stringify({ serviceCodes: codes, template: template || 'short-description' })
+      body: JSON.stringify(body)
     });
     state.pptx.downloadUrl = data.downloadUrl;
     const a = document.createElement('a');
@@ -764,6 +785,119 @@ window.generatePptx = async function(template) {
   } catch (e) { state.pptx.error = e.message; }
   state.pptx.generating = false; render();
 };
+
+window.openPptxListSettings = function() {
+  state.pptxListSettings.open = true; render();
+};
+window.closePptxListSettings = function() {
+  state.pptxListSettings.open = false; render();
+};
+window.togglePptxCol = function(col) {
+  state.pptxListSettings.cols[col] = !state.pptxListSettings.cols[col]; render();
+};
+window.setPptxYears = function(checked) {
+  state.pptxListSettings.years = checked; render();
+};
+window.setPptxYearFrom = function(v) {
+  state.pptxListSettings.yearFrom = v.replace(/\D/g,'').slice(0,4); render();
+};
+window.setPptxYearTo = function(v) {
+  state.pptxListSettings.yearTo = v.replace(/\D/g,'').slice(0,4); render();
+};
+window.setPptxGroupET = function(v) {
+  state.pptxListSettings.groupByET = v; render();
+};
+window.setPptxDeckName = function(v) {
+  state.pptxListSettings.useDeckName = v; render();
+};
+window.setPptxTitle = function(v) {
+  state.pptxListSettings.title = v; render();
+};
+
+function renderPptxListSettingsModal() {
+  const s = state.pptxListSettings;
+  if (!s.open) return '';
+  const bsActive = !!state.filters.businessScenario;
+  const yf = parseInt(s.yearFrom,10)||0, yt = parseInt(s.yearTo,10)||0;
+  const yearValid = !s.years || (s.yearFrom.length===4 && s.yearTo.length===4 && yf>=2000 && yf<=2050 && yt>=2000 && yt<=2050 && yf<yt);
+  return `
+  <div class="modal-overlay" onclick="if(event.target===this)closePptxListSettings()">
+    <div class="modal-box" style="max-width:500px">
+      <button class="modal-close" onclick="closePptxListSettings()">✕</button>
+      <h3 style="margin-top:0">⚙ PPTX List — Export Settings</h3>
+
+      <div style="font-size:0.78rem;color:#6a6a6a;margin-bottom:0.75rem">
+        Choose which columns to include. Changes apply to the next export.
+      </div>
+
+      <div style="font-weight:600;font-size:0.8rem;color:#1D2D3E;margin-bottom:0.4rem">Columns</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem 1.5rem;margin-bottom:1rem">
+        ${colCheck('stream',  'Stream',          s.cols.stream,     !bsActive, bsActive?'':'Only available when Business Scenario is selected')}
+        ${colCheck('phases',  'Phases',           s.cols.phases,     false)}
+        ${colCheck('component','Service Component',s.cols.component, false)}
+        ${colCheck('tier',    'Tier (Engagement Type)', s.cols.tier, false)}
+        ${colCheck('objectives','Objectives (Short Description)', s.cols.objectives, false)}
+      </div>
+
+      <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:${s.years?'0.4rem':'1rem'}">
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
+          <input type="checkbox" ${s.years?'checked':''} onchange="setPptxYears(this.checked)"/>
+          Include Year Columns
+        </label>
+      </div>
+      ${s.years ? `
+      <div style="display:flex;gap:0.75rem;align-items:flex-end;margin-bottom:1rem">
+        <div>
+          <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year From</div>
+          <input type="text" maxlength="4" value="${s.yearFrom}" oninput="setPptxYearFrom(this.value)"
+            style="width:80px;padding:0.4rem 0.5rem;font-size:0.875rem;border:1px solid ${!yearValid&&s.yearFrom.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
+            placeholder="2026"/>
+        </div>
+        <div style="padding-bottom:0.5rem;color:#6a6a6a">→</div>
+        <div>
+          <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year To</div>
+          <input type="text" maxlength="4" value="${s.yearTo}" oninput="setPptxYearTo(this.value)"
+            style="width:80px;padding:0.4rem 0.5rem;font-size:0.875rem;border:1px solid ${!yearValid&&s.yearTo.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
+            placeholder="2030"/>
+        </div>
+        ${!yearValid ? `<div style="font-size:0.72rem;color:#dc3545;align-self:flex-end;padding-bottom:0.5rem">First year must be less than second</div>` : ''}
+      </div>` : ''}
+
+      <div style="font-weight:600;font-size:0.8rem;color:#1D2D3E;margin-bottom:0.4rem">Options</div>
+      <div style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:1rem">
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
+          <input type="checkbox" ${s.groupByET?'checked':''} onchange="setPptxGroupET(this.checked)"/>
+          Group rows by Engagement Type within each module (Max → Advanced → Foundational)
+        </label>
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem${!bsActive?' opacity:0.5':''}" ${!bsActive?'title="Only available when Business Scenario is selected"':''}>
+          <input type="checkbox" ${s.useDeckName?'checked':''} ${!bsActive?'disabled':''} onchange="setPptxDeckName(this.checked)"/>
+          Use Deck Names in Service Component column
+        </label>
+      </div>
+
+      <div style="font-weight:600;font-size:0.8rem;color:#1D2D3E;margin-bottom:0.4rem">Slide Title</div>
+      <input type="text" value="${s.title.replace(/"/g,'&quot;')}" oninput="setPptxTitle(this.value)"
+        style="width:100%;margin-bottom:1.25rem" placeholder="Services Description"/>
+
+      <div style="display:flex;gap:0.75rem;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closePptxListSettings()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="closePptxListSettings();generatePptx('list')"
+          ${!yearValid ? 'disabled title="Fix year range first"' : ''}>
+          ⬇ Export Now
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function colCheck(key, label, checked, disabled, title) {
+  const dis = disabled ? 'disabled' : '';
+  const op  = disabled ? 'opacity:0.45;' : '';
+  const tt  = title ? `title="${title}"` : '';
+  return `<label style="display:flex;align-items:center;gap:0.5rem;cursor:${disabled?'not-allowed':'pointer'};font-size:0.875rem;${op}" ${tt}>
+    <input type="checkbox" ${checked?'checked':''} ${dis} onchange="togglePptxCol('${key}')"/> ${label}
+  </label>`;
+}
 
 window.exportExcel = function() {
   const svcs = state.selectedServices.size > 0
@@ -1042,7 +1176,8 @@ function render() {
         <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" class="btn btn-secondary btn-sm" style="margin-left:auto;color:rgba(255,255,255,0.85);border-color:rgba(255,255,255,0.4);background:transparent">Feedback</a>
       </div>
     </div>
-    <div class="page-content">${content}</div>`;
+    <div class="page-content">${content}</div>
+    ${renderPptxListSettingsModal()}`;
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────

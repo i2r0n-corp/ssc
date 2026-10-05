@@ -1,0 +1,112 @@
+[
+  {
+    "code": "MAX00001-1-SVC-001",
+    "name": "Solution Adoption Planning",
+    "short_description": "Structured planning session to define adoption milestones and success criteria for the SAP solution rollout.",
+    "engagement_type": "Max Success Plan",
+    "parent_code": "MAX00001-1",
+    "parent_name": "Module 1: Planning & Governance",
+    "phases": ["Prepare", "Discover"],
+    "business_scenario_naming": { "MAX00001": "Solution Adoption Planning" }
+  },
+  {
+    "code": "MAX00001-1-SVC-002",
+    "name": "Project Charter Review",
+    "short_description": "Review and validate the project charter to ensure alignment with business objectives and SAP best practices.",
+    "engagement_type": "Max Success Plan",
+    "parent_code": "MAX00001-1",
+    "parent_name": "Module 1: Planning & Governance",
+    "phases": ["Prepare"],
+    "business_scenario_naming": { "MAX00001": "Project Charter Review" }
+  },
+  {
+    "code": "MAX00001-1-SVC-003",
+    "name": "Stakeholder Alignment Workshop",
+    "short_description": "Facilitated workshop to align key stakeholders on project scope, timeline, and responsibilities across business and IT teams.",
+    "engagement_type": "Advanced Success Plan",
+    "parent_code": "MAX00001-1",
+    "parent_name": "Module 1: Planning & Governance",
+    "phases": ["Prepare", "Discover"],
+    "business_scenario_naming": { "MAX00001": "Stakeholder Alignment Workshop" }
+  },
+  {
+    "code": "MAX00001-2-SVC-001",
+    "name": "System Landscape Design",
+    "short_description": "Design the target SAP system landscape including integration points, security zones, and infrastructure requirements.",
+    "engagement_type": "Max Success Plan",
+    "parent_code": "MAX00001-2",
+    "parent_name": "Module 2: Architecture & Design",
+    "phases": ["Discover", "Explore"],
+    "business_scenario_naming": { "MAX00001": "System Landscape Design" }
+  },
+  {
+    "code": "MAX00001-2-SVC-002",
+    "name": "Integration Architecture Review",
+    "short_description": "Review existing integration patterns and define target architecture for connecting SAP with third-party systems.",
+    "engagement_type": "Max Success Plan",
+    "parent_code": "MAX00001-2",
+    "parent_name": "Module 2: Architecture & Design",
+    "phases": ["Discover", "Explore", "Realize"],
+    "business_scenario_naming": { "MAX00001": "Integration Architecture Review" }
+  },
+  {
+    "code": "MAX00001-2-SVC-003",
+    "name": "Data Migration Strategy",
+    "short_description": "Define data migration approach including cleansing rules, volume estimates, and cutover strategy for legacy data transition.",
+    "engagement_type": "Advanced Success Plan",
+    "parent_code": "MAX00001-2",
+    "parent_name": "Module 2: Architecture & Design",
+    "phases": ["Explore", "Realize"],
+    "business_scenario_naming": { "MAX00001": "Data Migration Strategy" }
+  },
+  {
+    "code": "MAX00001-2-SVC-004",
+    "name": "Security & Authorization Concept",
+    "short_description": "Develop comprehensive security concept covering role design, authorization objects, and compliance requirements.",
+    "engagement_type": "Enterprise Support",
+    "parent_code": "MAX00001-2",
+    "parent_name": "Module 2: Architecture & Design",
+    "phases": ["Explore", "Realize", "Deploy"],
+    "business_scenario_naming": { "MAX00001": "Security & Authorization Concept" }
+  },
+  {
+    "code": "MAX00001-3-SVC-001",
+    "name": "Hypercare Support",
+    "short_description": "Dedicated go-live support with on-site SAP experts to ensure system stability and rapid issue resolution during hypercare phase.",
+    "engagement_type": "Max Success Plan",
+    "parent_code": "MAX00001-3",
+    "parent_name": "Module 3: Go-Live & Run",
+    "phases": ["Deploy", "Run"],
+    "business_scenario_naming": { "MAX00001": "Hypercare Support" }
+  },
+  {
+    "code": "MAX00001-3-SVC-002",
+    "name": "Performance Optimization Review",
+    "short_description": "Systematic review of system performance metrics post go-live with recommendations for optimization and tuning.",
+    "engagement_type": "Max Success Plan",
+    "parent_code": "MAX00001-3",
+    "parent_name": "Module 3: Go-Live & Run",
+    "phases": ["Run"],
+    "business_scenario_naming": { "MAX00001": "Performance Optimization Review" }
+  },
+  {
+    "code": "MAX00001-3-SVC-003",
+    "name": "User Adoption Measurement",
+    "short_description": "Track and measure user adoption KPIs using SAP Analytics to identify areas for additional training and enablement.",
+    "engagement_type": "Advanced Success Plan",
+    "parent_code": "MAX00001-3",
+    "parent_name": "Module 3: Go-Live & Run",
+    "phases": ["Deploy", "Run"],
+    "business_scenario_naming": { "MAX00001": "User Adoption Measurement" }
+  },
+  {
+    "code": "MAX00001-3-SVC-004",
+    "name": "System Health Check",
+    "short_description": "Comprehensive technical health check covering configuration, performance, security patches, and upgrade readiness.",
+    "engagement_type": "Enterprise Support",
+    "parent_code": "MAX00001-3",
+    "parent_name": "Module 3: Go-Live & Run",
+    "phases": ["Run"],
+    "business_scenario_naming": { "MAX00001": "System Health Check" }
+  }
+]

@@ -1,0 +1,8 @@
+node_modules/
+data/pptx-tmp/
+
+# debug / generated artifacts
+scripts/*.pptx
+scripts/*.xml
+data/*.pptx
+data/*.xml

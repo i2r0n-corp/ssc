@@ -11,6 +11,7 @@ const { v4: uuidv4 } = require('uuid');
 const PptxGenJS = require('pptxgenjs');
 const snapshot = require('../store/snapshot');
 const db = require('../store/db');
+const { generateListPptxBuffer } = require('../scripts/generate_list_pptx');
 
 const PPTX_TMP = path.join(__dirname, '..', 'data', 'pptx-tmp');
 fs.mkdirSync(PPTX_TMP, { recursive: true });
@@ -41,7 +42,7 @@ async function _loadFlatIndex() {
 
 // ── Generate PPTX ─────────────────────────────────────────────────────────────
 router.post('/generatePptx', async (req, res) => {
-  const { serviceCodes, template } = req.body;
+  const { serviceCodes, template, listOptions } = req.body;
   const templateName = template || 'short-description';
 
   try {
@@ -49,11 +50,11 @@ router.post('/generatePptx', async (req, res) => {
     if (!Array.isArray(serviceCodes) || serviceCodes.length === 0) {
       return res.status(400).json({ error: 'serviceCodes must be a non-empty array' });
     }
-    if (serviceCodes.length > 50) {
+    if (templateName !== 'list' && serviceCodes.length > 50) {
       return res.status(400).json({ error: 'Maximum 50 services per export' });
     }
-    if (!['short-description', 'one-pager'].includes(templateName)) {
-      return res.status(400).json({ error: 'template must be "short-description" or "one-pager"' });
+    if (!['short-description', 'one-pager', 'list'].includes(templateName)) {
+      return res.status(400).json({ error: 'template must be "short-description", "one-pager", or "list"' });
     }
 
     // Load services from DB
@@ -66,22 +67,49 @@ router.post('/generatePptx', async (req, res) => {
       return res.status(404).json({ error: 'None of the provided service codes were found in the catalog' });
     }
 
-    // Generate PPTX
-    const pptx = new PptxGenJS();
-    pptx.layout = 'LAYOUT_WIDE';
-
-    if (templateName === 'short-description') {
-      _buildShortDescriptionPptx(pptx, services);
-    } else {
-      _buildOnePagePptx(pptx, services);
-    }
-
-    // Save to temp file
-    const fileId = uuidv4();
+    const fileId  = uuidv4();
     const filename = `catalog-export-${templateName}-${Date.now()}.pptx`;
     const filePath = path.join(PPTX_TMP, `${fileId}.pptx`);
 
-    await pptx.writeFile({ fileName: filePath });
+    if (templateName === 'list') {
+      // Template-based list PPTX — uses generate_list_pptx.js
+      const opts = listOptions || {};
+      const yf = parseInt(opts.yearFrom, 10) || 2026;
+      const yt = parseInt(opts.yearTo, 10)   || 2030;
+      const yearRange = (yf >= 2000 && yt <= 2050 && yf < yt) ? [yf, yt] : [2026, 2030];
+
+      // Map flatIndex services to the shape expected by generate_list_pptx
+      const svcs = services.map(s => ({
+        code:             s.code,
+        name:             s.name,
+        short_description: s.shortDescription || s.short_description || '',
+        engagement_type:  Array.isArray(s.engagementType) ? s.engagementType[0] : (s.engagementType || ''),
+        parent_code:      s.parentCode || s.parent_code || '',
+        parent_name:      s.parentName || s.parent_name || '',
+        phases:           s.sapActivateProjectPhase || s.phases || [],
+        business_scenario_naming: s.businessScenarioNaming || s.business_scenario_naming || {},
+      }));
+
+      const buf = generateListPptxBuffer(svcs, {
+        title:       opts.title || 'Services Description',
+        groupByET:   !!opts.groupByET,
+        bsCode:      opts.bsCode || null,
+        useDeckName: !!opts.useDeckName,
+        yearRange,
+      });
+      fs.writeFileSync(filePath, buf);
+
+    } else {
+      // PptxGenJS templates
+      const pptx = new PptxGenJS();
+      pptx.layout = 'LAYOUT_WIDE';
+      if (templateName === 'short-description') {
+        _buildShortDescriptionPptx(pptx, services);
+      } else {
+        _buildOnePagePptx(pptx, services);
+      }
+      await pptx.writeFile({ fileName: filePath });
+    }
 
     const stat = fs.statSync(filePath);
     const fileSizeKb = Math.round(stat.size / 1024);
