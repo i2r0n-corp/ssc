@@ -502,7 +502,7 @@ async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog
   try {
     const { byCode, byName, moduleAssignments } = parseBsNameMapping(excelBuffer, bsCode);
 
-    const totalMappings = Object.keys(byCode).length + Object.keys(byName).length;
+    const totalMappings = Object.keys(byCode).length + Object.keys(byName).length + moduleAssignments.length;
     if (totalMappings === 0) {
       console.log(`    ⚠️  ${bsCode}: no mappings extracted — skipping`);
       return 0;
@@ -570,7 +570,7 @@ async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog
         const hasDeckName = child.business_scenario_naming && child.business_scenario_naming[bsCode];
         if (!hasDeckName) {
           unmatched++;
-          logRows.push({ type: 'deck_name', status: 'No Match', deck_name: null, crm_ids: null, service_name: child.name, module_name: null, module_code: modCode, service_code: child.code, detail: 'not in excel module assignments', steps: [] });
+          logRows.push({ type: 'module_injection', status: 'No Match', deck_name: null, crm_ids: null, service_name: child.name, module_name: null, module_code: modCode, service_code: child.code, detail: 'not in excel module assignments', steps: [] });
         }
       }
     }
