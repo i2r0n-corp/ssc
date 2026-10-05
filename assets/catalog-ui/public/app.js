@@ -18,6 +18,7 @@ let state = {
   filtersExpanded: false,
   debug: { bsCode: '', module: '', serviceName: '', status: '', rows: [], totals: null, loading: false, error: null, selectedRow: null },
   selectedServices: new Set(),
+  serviceDetail: null,
   incident: { file: null, results: [], loading: false, error: null, selectedCodes: new Set() },
   pptx: { template: 'short-description', generating: false, error: null, downloadUrl: null },
   pptxListSettings: {
@@ -372,7 +373,7 @@ function renderCatalogPage() {
 }
 
 function renderCatalogResults() {
-  const { loading, moduleMap = {} } = state.catalog;
+  const { loading } = state.catalog;
   const hasSearched = state.catalog.hasSearched;
   const et = state.filters.engagementType;
   const namingDisabled = et === 'Max Success Plan' || !state.filters.businessScenario;
@@ -420,9 +421,7 @@ function renderCatalogResults() {
             ${state.filteredServices.length > 0 && state.filteredServices.every(s => state.selectedServices.has(s.code)) ? 'checked' : ''}
             onchange="toggleSelectAll(this.checked)" /></th>
           <th>Service Name</th>
-          <th>Short Description</th>
           <th>Engagement Type</th>
-          <th>Module</th>
           <th>Code</th>
         </tr>
       </thead>
@@ -431,34 +430,65 @@ function renderCatalogResults() {
           const useDeck = state.filters.namingType === 'deck' && state.filters.businessScenario;
           const bsNaming = svc.business_scenario_naming || svc.businessScenarioNaming || {};
           const bsCode = state.filters.businessScenario;
-          // deck name stored by enrichment = actual name used in customer deck from Excel col 0
-          // it is NOT "Foundational"/"Advanced" — those come from col H (engagementType label)
-          // col 0 carry-forward deck name is stored as-is from the Excel
           const deckNameVal = useDeck ? (bsNaming[bsCode] || null) : null;
           const displayName = deckNameVal || svc.name;
           const subName     = deckNameVal && deckNameVal !== svc.name ? svc.name : null;
-          const nameHtml    = svc.url
-            ? `<a href="${svc.url}" target="_blank" rel="noopener" style="color:#0070F2;text-decoration:none;font-weight:700">${displayName}</a>`
-            : `<strong>${displayName}</strong>`;
           return `
           <tr class="${state.selectedServices.has(svc.code) ? 'selected' : ''}">
             <td><input type="checkbox" ${state.selectedServices.has(svc.code)?'checked':''} onchange="toggleSelect('${svc.code}')" /></td>
-            <td title="${(() => {
-              const strip = h => (h||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
-              const alt = strip(svc.summary) || strip(svc.keyBenefits) || strip(svc.description) || '';
-              return alt.substring(0,300).replace(/"/g,'&quot;');
-            })()}">
-              ${nameHtml}
+            <td>
+              <a href="#" onclick="openServiceDetail('${svc.code}');return false"
+                style="color:#0070F2;text-decoration:none;font-weight:700">${displayName}</a>
               ${subName ? `<div style="font-size:0.75rem;color:#6a6a6a">${subName}</div>` : ''}
             </td>
-            <td style="max-width:300px;font-size:0.8rem">${(svc.shortDescription||'').substring(0,120)}${(svc.shortDescription||'').length>120?'…':''}</td>
             <td>${engagementBadge(svc.engagementType)}</td>
-            <td style="font-size:0.8rem">${moduleMap[svc.parentCode] || svc.parentCode || '—'}</td>
             <td style="font-size:0.75rem;color:#6a6a6a">${svc.code}</td>
           </tr>`;
         }).join('')}
       </tbody>
     </table>` : ''}`;
+}
+
+function renderServiceDetailModal() {
+  const svc = state.serviceDetail;
+  if (!svc) return '';
+  const strip = h => (h||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  const field = (label, val) => val ? `
+    <div style="margin-bottom:0.75rem">
+      <div style="font-size:0.72rem;font-weight:600;color:#6a6a6a;text-transform:uppercase;letter-spacing:0.03em;margin-bottom:2px">${label}</div>
+      <div style="font-size:0.875rem;color:#1D2D3E">${val}</div>
+    </div>` : '';
+
+  const phases = (() => {
+    const cf = svc.classificationFeatures || [];
+    return cf.filter(f => f.key === 'sapActivateProjectPhase').map(f => f.value).join(', ');
+  })();
+  const supercats = (() => {
+    const cats = svc.supercategories || [];
+    return cats.map(c => typeof c === 'string' ? c : c.name || '').filter(Boolean).join(', ');
+  })();
+
+  return `
+  <div class="modal-overlay" onclick="if(event.target===this)closeServiceDetail()">
+    <div class="modal-box" style="max-width:680px">
+      <button class="modal-close" onclick="closeServiceDetail()">✕</button>
+      <div style="margin-bottom:1rem">
+        <h3 style="margin:0 0 0.25rem">${svc.name || ''}</h3>
+        ${svc.code ? `<span style="font-size:0.78rem;color:#6a6a6a">${svc.code}</span>` : ''}
+        ${svc.serviceNumber ? `<span style="font-size:0.78rem;color:#6a6a6a;margin-left:1rem">#${svc.serviceNumber}</span>` : ''}
+        ${svc.url ? `<a href="${svc.url}" target="_blank" rel="noopener" style="font-size:0.78rem;color:#0070F2;margin-left:1rem">🔗 Open in SAP</a>` : ''}
+      </div>
+      ${field('Short Description', strip(svc.shortDescription))}
+      ${field('Teaser Text', strip(svc.serviceTeaserText || svc.teaserText))}
+      ${field('Summary', strip(svc.summary))}
+      ${field('Business Needs', strip(svc.businessNeeds))}
+      ${field('Key Benefits', strip(svc.keyBenefits))}
+      ${field('Delivery Approach', strip(svc.deliveryApproach))}
+      ${field('Description', strip(svc.description))}
+      ${field('Phases', phases)}
+      ${field('Supercategories', supercats)}
+    </div>
+  </div>`;
 }
 
 function renderIncidentsPage() {
@@ -784,6 +814,14 @@ window.generatePptx = async function(template) {
     a.click();
   } catch (e) { state.pptx.error = e.message; }
   state.pptx.generating = false; render();
+};
+
+window.openServiceDetail = function(code) {
+  state.serviceDetail = state.filteredServices.find(s => s.code === code) || null;
+  render();
+};
+window.closeServiceDetail = function() {
+  state.serviceDetail = null; render();
 };
 
 window.openPptxListSettings = function() {
@@ -1177,6 +1215,7 @@ function render() {
       </div>
     </div>
     <div class="page-content">${content}</div>
+    ${renderServiceDetailModal()}
     ${renderPptxListSettingsModal()}`;
 }
 
