@@ -219,17 +219,11 @@ function renderCatalogFilters() {
       <!-- Two-column top area -->
       <div class="filter-columns">
 
-        <!-- Left column: BS + naming toggle + hr + Keywords + ET -->
+        <!-- Left column: BS + hr + Keywords + ET -->
         <div class="filter-col-left">
-          <!-- BS field: static label + naming toggle + select -->
+          <!-- BS field: static label + select -->
           <div style="width:100%;display:flex;flex-direction:column;gap:4px">
             <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600">Business Scenario</label>
-            <div style="display:flex;align-items:center;gap:6px;${namingStyle}">
-              <div class="mode-switch" style="margin-bottom:0">
-                <button class="${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'catalog')">Catalog Name</button>
-                <button class="${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
-              </div>
-            </div>
             <select id="filter-bs" ${!state.filters.businessScenario ? 'data-empty="true"' : ''}
               onchange="updateFilter('businessScenario', this.value); this.dataset.empty = this.value ? 'false' : 'true'">
               <option value=""></option>
@@ -265,7 +259,7 @@ function renderCatalogFilters() {
             ${selectedMods.length > 0 ? `<button class="mode-switch-clear" title="Clear modules" onclick="updateCheckboxFilter._clearKey('modules')">✕</button>` : ''}
           </div>
           <!-- Module checkboxes -->
-          <div class="check-panel" style="flex:1;max-height:9.9rem">
+          <div class="check-panel" style="flex:1;max-height:6.6rem">
             ${uniqueMods.map(([code, name]) => {
               const label = name.includes(' // ') ? name.split(' // ').slice(1).join(' // ') : name;
               return `<label>
@@ -386,6 +380,10 @@ function renderCatalogResults() {
         <p>No services found. Try adjusting your filters.</p>
       </div>` : !loading ? `
     <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center;flex-wrap:wrap">
+      <div class="mode-switch" style="margin-bottom:0;${namingStyle}">
+        <button class="${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'catalog')">Catalog Name</button>
+        <button class="${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
+      </div>
       <span class="results-info" style="margin:0;flex:1">${state.filteredServices.length} service(s) found
         ${state.selectedServices.size > 0 ? ` — <strong>${state.selectedServices.size} selected</strong>` : ''}
       </span>
