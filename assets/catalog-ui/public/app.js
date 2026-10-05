@@ -599,7 +599,7 @@ window.updateFilter = function(key, value) {
   // These keys change filter panel structure — full re-render
   const needsFullRender = key === 'businessScenario' || key === 'engagementType';
   // Mode-switch keys and query-state keys only need filter panel patch + results
-  const needsFilterPatch = key === 'phaseMode' || key === 'advancedLoSMode' || key === 'foundationalCatsMode' || key === 'maxFocusTopicsMode' || key === 'namingType' || key === 'query';
+  const needsFilterPatch = key === 'phaseMode' || key === 'advancedLoSMode' || key === 'foundationalCatsMode' || key === 'maxFocusTopicsMode' || key === 'namingType';
   clearTimeout(window._filterDebounce);
   if (needsFullRender) {
     window._filterDebounce = setTimeout(() => { render(); applyFilters(); }, 300);
