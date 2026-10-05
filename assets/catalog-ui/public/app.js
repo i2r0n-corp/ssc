@@ -16,7 +16,7 @@ let state = {
   filteredServices: [],
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
   filtersExpanded: false,
-  debug: { bsCode: '', module: '', status: '', rows: [], loading: false, error: null },
+  debug: { bsCode: '', module: '', status: '', rows: [], totals: null, loading: false, error: null, selectedRow: null },
   selectedServices: new Set(),
   incident: { file: null, results: [], loading: false, error: null, selectedCodes: new Set() },
   pptx: { template: 'short-description', generating: false, error: null, downloadUrl: null },
@@ -906,7 +906,7 @@ function renderDebugPage() {
   const rowsHtml = rows.length === 0 && !loading ? `
     <tr><td colspan="5" style="text-align:center;padding:2rem;color:#6a6a6a;">No records found</td></tr>` :
     rows.map(r => `
-      <tr>
+      <tr onclick="openDebugRow(${r.id})" style="cursor:pointer">
         <td style="font-size:0.78rem;color:#556B82">${r.bs_code||''}</td>
         <td style="font-size:0.82rem">${r.service_name||r.service_code||''}</td>
         <td style="font-size:0.78rem;color:#556B82">${r.module_name||r.module_code||''}</td>
@@ -915,6 +915,39 @@ function renderDebugPage() {
       </tr>`).join('');
 
   return `
+    ${state.debug.selectedRow ? (() => {
+      const r = state.debug.selectedRow;
+      const fields = [
+        ['BS Code', r.bs_code], ['Type', r.type], ['Status', r.status],
+        ['Service Code', r.service_code], ['Service Name', r.service_name],
+        ['Module Code', r.module_code], ['Module Name', r.module_name],
+        ['Deck Name', r.deck_name], ['CRM IDs', r.crm_ids],
+      ].filter(([,v]) => v);
+      const stepsHtml = (r.steps||[]).length > 0 ? `
+        <h4 style="margin:1rem 0 0.5rem;font-size:0.85rem;color:#1D2D3E">Resolution Steps</h4>
+        <table class="steps-table">
+          <thead><tr><th>Type</th><th>Excel Value</th><th>DB Value</th><th>Method</th><th>Threshold</th><th>Result</th></tr></thead>
+          <tbody>${(r.steps||[]).map(s => `
+            <tr class="${s.result}">
+              <td>${s.type||''}</td>
+              <td style="max-width:180px;word-break:break-all">${s.excel_value||''}</td>
+              <td style="max-width:180px;word-break:break-all">${s.db_value||''}</td>
+              <td>${s.method||''}</td>
+              <td>${s.threshold||''}</td>
+              <td><b>${s.result||''}</b></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>` : '<p style="font-size:0.8rem;color:#6a6a6a;margin-top:0.5rem">No resolution steps recorded</p>';
+      return `
+        <div class="modal-overlay" onclick="if(event.target===this)closeDebugModal()">
+          <div class="modal-box">
+            <button class="modal-close" onclick="closeDebugModal()">&#x2715;</button>
+            <h3 style="margin:0 0 1rem">${r.status} &mdash; ${(r.service_name||r.service_code||'').replace(/</g,'&lt;')}</h3>
+            ${fields.map(([k,v]) => `<div style="display:flex;gap:0.5rem;margin-bottom:0.3rem;font-size:0.82rem"><span style="min-width:110px;color:#6a6a6a;font-weight:600">${k}</span><span>${String(v).replace(/</g,'&lt;')}</span></div>`).join('')}
+            ${stepsHtml}
+          </div>
+        </div>`;
+    })() : ''}
     <h2>Matching Debug</h2>
     <div class="filter-row" style="gap:1rem;flex-wrap:wrap;align-items:flex-end">
       <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;max-width:320px">
@@ -955,6 +988,14 @@ function renderDebugPage() {
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────────
+
+window.openDebugRow = function(id) {
+  const row = state.debug.rows.find(r => r.id === id);
+  if (row) { state.debug.selectedRow = row; render(); }
+};
+window.closeDebugModal = function() {
+  state.debug.selectedRow = null; render();
+};
 
 function render() {
   const app = document.getElementById('app');

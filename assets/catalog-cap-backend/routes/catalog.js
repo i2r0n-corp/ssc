@@ -858,19 +858,17 @@ async function processEnrichQueue() {
         // ── Write injection log to catalog_injection_log DB table ─────────────
         await db.query(
           `INSERT INTO catalog_injection_log
-             (bs_code, generated_at, matched, unmatched, injected, already_linked, unresolved_mod, unresolved_svc, log_rows)
-           VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)
+             (bs_code, generated_at, matched, unmatched, injected, already_linked, unresolved_mod, unresolved_svc)
+           VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7)
            ON CONFLICT (bs_code) DO UPDATE SET
              generated_at=NOW(), matched=EXCLUDED.matched, unmatched=EXCLUDED.unmatched,
              injected=EXCLUDED.injected, already_linked=EXCLUDED.already_linked,
-             unresolved_mod=EXCLUDED.unresolved_mod, unresolved_svc=EXCLUDED.unresolved_svc,
-             log_rows=EXCLUDED.log_rows`,
+             unresolved_mod=EXCLUDED.unresolved_mod, unresolved_svc=EXCLUDED.unresolved_svc`,
           [
             bsCode,
             logEntry.matched || 0, logEntry.unmatched || 0,
             logEntry.injected || 0, logEntry.alreadyLinked || 0,
-            logEntry.unresolvedMod || 0, logEntry.unresolvedSvc || 0,
-            JSON.stringify(logEntry.rows || [])
+            logEntry.unresolvedMod || 0, logEntry.unresolvedSvc || 0
           ]
         );
       } catch (dbWriteErr) {
@@ -892,10 +890,10 @@ async function processEnrichQueue() {
         const db = require('../store/db');
         db.getPool();
         await db.query(
-          `INSERT INTO catalog_injection_log (bs_code, generated_at, matched, unmatched, injected, already_linked, unresolved_mod, unresolved_svc, log_rows)
-           VALUES ($1, NOW(), 0, 0, 0, 0, 0, 0, $2)
-           ON CONFLICT (bs_code) DO UPDATE SET generated_at=NOW(), log_rows=EXCLUDED.log_rows`,
-          [bsCode, JSON.stringify([{ error: e.message }])]
+          `INSERT INTO catalog_injection_log (bs_code, generated_at, matched, unmatched, injected, already_linked, unresolved_mod, unresolved_svc)
+           VALUES ($1, NOW(), 0, 0, 0, 0, 0, 0)
+           ON CONFLICT (bs_code) DO UPDATE SET generated_at=NOW()`,
+          [bsCode]
         );
       } catch(e2) { /* non-critical */ }
     }
@@ -999,51 +997,63 @@ router.get('/injection-log', async (req, res) => {
     const { bsCode, status } = req.query;
     const moduleFilter = (req.query.module || '').toLowerCase();
 
+    // Aggregate totals
+    const totalsRes = await db.query(`
+      SELECT
+        SUM(matched) AS matched, SUM(unmatched) AS unmatched,
+        SUM(injected) AS injected, SUM(already_linked) AS already_linked,
+        SUM(unresolved_mod) AS unresolved_mod, SUM(unresolved_svc) AS unresolved_svc
+      FROM catalog_injection_log
+      ${bsCode ? 'WHERE bs_code = $1' : ''}
+    `, bsCode ? [bsCode] : []);
+    const totals = totalsRes.rows[0];
+
+    // Build filter for log rows
     const params = [];
-    let sql = 'SELECT bs_code, generated_at, matched, unmatched, injected, already_linked, unresolved_mod, unresolved_svc, log_rows FROM catalog_injection_log';
-    if (bsCode) { params.push(bsCode); sql += ' WHERE bs_code = $' + params.length; }
-    sql += ' ORDER BY generated_at DESC';
+    let pIdx = 1;
+    let where = '';
+    if (bsCode) { params.push(bsCode); where += ` AND r.bs_code = $${pIdx++}`; }
+    if (status) { params.push(status); where += ` AND r.status = $${pIdx++}`; }
+    if (moduleFilter) { params.push(`%${moduleFilter}%`); where += ` AND (LOWER(r.module_name) LIKE $${pIdx} OR LOWER(r.module_code) LIKE $${pIdx})`; pIdx++; }
 
-    const result = await db.query(sql, params);
+    const rowsRes = await db.query(`
+      SELECT r.id, r.bs_code, r.type, r.status, r.service_code, r.service_name,
+             r.module_code, r.module_name, r.deck_name, r.crm_ids
+      FROM catalog_matching_log_rows r
+      WHERE 1=1 ${where}
+      ORDER BY r.bs_code, r.id
+      LIMIT 2000
+    `, params);
 
-    // Aggregate totals across all matching BS rows
-    const totals = { matched: 0, unmatched: 0, injected: 0, already_linked: 0, unresolved_mod: 0, unresolved_svc: 0 };
-    for (const r of result.rows) {
-      totals.matched       += (r.matched        || 0);
-      totals.unmatched     += (r.unmatched      || 0);
-      totals.injected      += (r.injected       || 0);
-      totals.already_linked += (r.already_linked || 0);
-      totals.unresolved_mod += (r.unresolved_mod || 0);
-      totals.unresolved_svc += (r.unresolved_svc || 0);
-    }
-
-    // Flatten log_rows across all BS entries into a single list
-    const rows = [];
-    for (const r of result.rows) {
-      for (const lr of (r.log_rows || [])) {
-        // Module filter: substring match on module/resolvedModule/moduleRaw
-        if (moduleFilter) {
-          const modFields = [lr.module, lr.resolvedModule, lr.moduleRaw].filter(Boolean).join(' ').toLowerCase();
-          if (!modFields.includes(moduleFilter)) continue;
-        }
-        // Status filter
-        if (status && lr.status !== status) continue;
-
-        rows.push({
-          bs_code:      r.bs_code,
-          type:         lr.type,
-          status:       lr.status,
-          // deck_name rows
-          service_code: lr.svcCode  || lr.resolvedService || null,
-          service_name: lr.svcName  || lr.serviceName     || null,
-          module_code:  lr.module   || lr.resolvedModule  || null,
-          module_name:  lr.moduleRaw || null,
-          deck_name:    lr.deckName || null,
-          detail:       lr.detail   || null,
-          crm_ids:      lr.crmIds   || null,
-        });
+    // Fetch steps for returned rows
+    const rowIds = rowsRes.rows.map(r => r.id);
+    let stepsMap = {};
+    if (rowIds.length > 0) {
+      const stepsRes = await db.query(`
+        SELECT log_row_id, type, excel_value, db_value, method, threshold, result
+        FROM catalog_matching_steps
+        WHERE log_row_id = ANY($1::bigint[])
+        ORDER BY log_row_id, id
+      `, [rowIds]);
+      for (const s of stepsRes.rows) {
+        if (!stepsMap[s.log_row_id]) stepsMap[s.log_row_id] = [];
+        stepsMap[s.log_row_id].push(s);
       }
     }
+
+    const rows = rowsRes.rows.map(r => ({
+      id:           r.id,
+      bs_code:      r.bs_code,
+      type:         r.type,
+      status:       r.status,
+      service_code: r.service_code,
+      service_name: r.service_name,
+      module_code:  r.module_code,
+      module_name:  r.module_name,
+      deck_name:    r.deck_name,
+      crm_ids:      r.crm_ids,
+      steps:        stepsMap[r.id] || []
+    }));
 
     res.json({ count: rows.length, totals, rows });
   } catch (e) {

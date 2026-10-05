@@ -194,10 +194,18 @@
       white-space: nowrap; align-self: center;
     }
     .mode-switch-clear:hover { background: #c0392b; color: #fff; }
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; display:flex; align-items:center; justify-content:center; }
+    .modal-box { background:white; border-radius:8px; padding:1.5rem; max-width:780px; width:90vw; max-height:80vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.25); position:relative; }
+    .modal-close { position:absolute; top:0.75rem; right:1rem; font-size:1.2rem; background:none; border:none; cursor:pointer; color:#556B82; }
+    .steps-table { width:100%; border-collapse:collapse; font-size:0.78rem; margin-top:0.5rem; }
+    .steps-table th { background:#f0f4f8; padding:0.4rem 0.6rem; text-align:left; font-weight:600; color:#1D2D3E; }
+    .steps-table td { padding:0.35rem 0.6rem; border-bottom:1px solid #f0f0f0; vertical-align:top; }
+    .steps-table tr.match td { background:#f0fff4; }
+    .steps-table tr.no_match td { background:#fff8f8; }
   </style>
 </head>
 <body>
   <div id="app"></div>
-  <script type="module" src="/app.js?v=20261005c"></script>
+  <script type="module" src="/app.js?v=20261005d"></script>
 </body>
 </html>

@@ -152,6 +152,33 @@ CREATE TABLE IF NOT EXISTS catalog_injection_log (
   unresolved_svc INTEGER,
   log_rows       JSONB
 );
+
+CREATE TABLE IF NOT EXISTS catalog_matching_log_rows (
+  id           BIGSERIAL PRIMARY KEY,
+  bs_code      TEXT NOT NULL REFERENCES catalog_injection_log(bs_code) ON DELETE CASCADE,
+  type         TEXT NOT NULL,
+  status       TEXT NOT NULL,
+  service_code TEXT,
+  service_name TEXT,
+  module_code  TEXT,
+  module_name  TEXT,
+  deck_name    TEXT,
+  crm_ids      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_mlr_bs_code ON catalog_matching_log_rows(bs_code);
+CREATE INDEX IF NOT EXISTS idx_mlr_status  ON catalog_matching_log_rows(status);
+
+CREATE TABLE IF NOT EXISTS catalog_matching_steps (
+  id          BIGSERIAL PRIMARY KEY,
+  log_row_id  BIGINT NOT NULL REFERENCES catalog_matching_log_rows(id) ON DELETE CASCADE,
+  type        TEXT NOT NULL,
+  excel_value TEXT,
+  db_value    TEXT,
+  method      TEXT,
+  threshold   TEXT,
+  result      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_msteps_log_row_id ON catalog_matching_steps(log_row_id);
 `;
 
 async function initSchema() {
@@ -159,6 +186,8 @@ async function initSchema() {
   const client = await pool.connect();
   try {
     await client.query(SCHEMA_SQL);
+    // One-time migration: drop log_rows JSONB column if it still exists
+    await client.query(`ALTER TABLE catalog_injection_log DROP COLUMN IF EXISTS log_rows`);
     console.log('[db] Schema initialised');
   } finally {
     client.release();

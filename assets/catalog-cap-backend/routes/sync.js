@@ -304,17 +304,21 @@ function parseBsNameMapping(excelBuffer, bsCode) {
 // ── Module code resolution ────────────────────────────────────────────────────
 
 function _resolveModuleCode(moduleRaw, flatIndex, bsCode) {
-  if (!moduleRaw || !moduleRaw.trim()) return [null, 'empty'];
+  if (!moduleRaw || !moduleRaw.trim()) return [null, 'empty', []];
   const cleaned = _clean(moduleRaw);
   const normed  = _norm(moduleRaw);
+  const steps   = [];
 
   // 1. Direct code match
   if (MODULE_CODE_RE.test(moduleRaw.trim())) {
     const candidate = moduleRaw.trim().toUpperCase();
-    if (flatIndex[candidate] && candidate.startsWith(bsCode)) return [candidate, 'exact code'];
+    if (flatIndex[candidate] && candidate.startsWith(bsCode)) {
+      steps.push({ type: 'module', excel_value: moduleRaw, db_value: candidate, method: 'direct code', threshold: null, result: 'match' });
+      return [candidate, 'exact code', steps];
+    }
+    steps.push({ type: 'module', excel_value: moduleRaw, db_value: candidate, method: 'direct code', threshold: null, result: 'no_match' });
   }
 
-  // Build candidates from BS child modules
   const bsNode = flatIndex[bsCode] || {};
   const candidates = {};
   for (const modCode of bsNode.childServices || []) {
@@ -327,67 +331,112 @@ function _resolveModuleCode(moduleRaw, flatIndex, bsCode) {
 
   // 2. Exact cleaned match
   for (const [code, { full, label }] of Object.entries(candidates)) {
-    if (cleaned === full || cleaned === label) return [code, 'exact name'];
+    if (cleaned === full || cleaned === label) {
+      steps.push({ type: 'module', excel_value: moduleRaw, db_value: label, method: 'exact name', threshold: null, result: 'match' });
+      return [code, 'exact name', steps];
+    }
   }
+  steps.push({ type: 'module', excel_value: moduleRaw, db_value: null, method: 'exact name', threshold: null, result: 'no_match' });
+
   // 3. Substring containment
   for (const [code, { full, label }] of Object.entries(candidates)) {
-    if (cleaned.includes(full) || cleaned.includes(label) || label.includes(cleaned)) return [code, 'substring'];
+    if (cleaned.includes(full) || cleaned.includes(label) || label.includes(cleaned)) {
+      steps.push({ type: 'module', excel_value: moduleRaw, db_value: label, method: 'substring', threshold: null, result: 'match' });
+      return [code, 'substring', steps];
+    }
   }
+  steps.push({ type: 'module', excel_value: moduleRaw, db_value: null, method: 'substring', threshold: null, result: 'no_match' });
+
   // 4. Punctuation-stripped
   for (const [code, { full, label, normLabel }] of Object.entries(candidates)) {
     const nFull = _norm(full);
-    if (normed === nFull || normed === normLabel) return [code, 'norm exact'];
-    if (normed.includes(normLabel) || normLabel.includes(normed)) return [code, 'norm substring'];
+    if (normed === nFull || normed === normLabel) {
+      steps.push({ type: 'module', excel_value: moduleRaw, db_value: label, method: 'norm exact', threshold: null, result: 'match' });
+      return [code, 'norm exact', steps];
+    }
+    if (normed.includes(normLabel) || normLabel.includes(normed)) {
+      steps.push({ type: 'module', excel_value: moduleRaw, db_value: label, method: 'norm substring', threshold: null, result: 'match' });
+      return [code, 'norm substring', steps];
+    }
   }
+  steps.push({ type: 'module', excel_value: moduleRaw, db_value: null, method: 'norm exact/substring', threshold: null, result: 'no_match' });
+
   // 5. Fuzzy (threshold 0.60)
   let bestCode = null, bestRatio = 0, bestLabel = '';
   for (const [code, { label, normLabel }] of Object.entries(candidates)) {
     const ratio = _similarity(normed, normLabel);
     if (ratio > bestRatio) { bestRatio = ratio; bestCode = code; bestLabel = label; }
   }
-  if (bestCode && bestRatio >= 0.60) return [bestCode, `fuzzy ${Math.round(bestRatio*100)}% → "${bestLabel}"`];
-  return [null, `no match`];
+  if (bestCode && bestRatio >= 0.60) {
+    steps.push({ type: 'module', excel_value: moduleRaw, db_value: bestLabel, method: 'fuzzy', threshold: '0.60', result: 'match' });
+    return [bestCode, `fuzzy ${Math.round(bestRatio*100)}% → "${bestLabel}"`, steps];
+  }
+  steps.push({ type: 'module', excel_value: moduleRaw, db_value: bestLabel || null, method: 'fuzzy', threshold: '0.60', result: 'no_match' });
+  return [null, 'no match', steps];
 }
 
 // ── Service code resolution ───────────────────────────────────────────────────
 
 function _resolveServiceCode(assignment, flatIndex) {
   const { crmIds = [], catalogName = '', deckName = '' } = assignment;
+  const steps = [];
 
   // 1. Exact flat_index key
-  for (const cid of crmIds) { if (flatIndex[cid]) return [cid, `CRM exact key (${cid})`]; }
+  for (const cid of crmIds) {
+    if (flatIndex[cid]) {
+      steps.push({ type: 'service', excel_value: cid, db_value: cid, method: 'CRM exact key', threshold: null, result: 'match' });
+      return [cid, `CRM exact key (${cid})`, steps];
+    }
+  }
+  if (crmIds.length) steps.push({ type: 'service', excel_value: crmIds.join('/'), db_value: null, method: 'CRM exact key', threshold: null, result: 'no_match' });
 
   // 2. serviceNumber field scan
   if (crmIds.length) {
     const cidSet = new Set(crmIds);
     for (const [code, svc] of Object.entries(flatIndex)) {
       const svcNum = String(svc.serviceNumber || '').trim();
-      if (svcNum && cidSet.has(svcNum)) return [code, `serviceNumber match (${svcNum})`];
+      if (svcNum && cidSet.has(svcNum)) {
+        steps.push({ type: 'service', excel_value: crmIds.join('/'), db_value: svcNum, method: 'serviceNumber match', threshold: null, result: 'match' });
+        return [code, `serviceNumber match (${svcNum})`, steps];
+      }
     }
+    steps.push({ type: 'service', excel_value: crmIds.join('/'), db_value: null, method: 'serviceNumber match', threshold: null, result: 'no_match' });
   }
 
   // 3. Zero-padded 18-digit key
   for (const cid of crmIds) {
     try {
       const padded = String(parseInt(cid)).padStart(18, '0');
-      if (padded !== cid && flatIndex[padded]) return [padded, `zero-padded (${cid}→${padded})`];
+      if (padded !== cid && flatIndex[padded]) {
+        steps.push({ type: 'service', excel_value: cid, db_value: padded, method: 'zero-padded key', threshold: null, result: 'match' });
+        return [padded, `zero-padded (${cid}→${padded})`, steps];
+      }
     } catch(e) {}
   }
+  if (crmIds.length) steps.push({ type: 'service', excel_value: crmIds.join('/'), db_value: null, method: 'zero-padded key', threshold: null, result: 'no_match' });
 
   // 4. Catalog name exact clean match
   const cat = _clean(catalogName);
   if (cat) {
     for (const [code, svc] of Object.entries(flatIndex)) {
-      if (_clean(svc.name || '') === cat) return [code, 'catalog name exact'];
+      if (_clean(svc.name || '') === cat) {
+        steps.push({ type: 'service', excel_value: catalogName, db_value: svc.name, method: 'catalog name exact', threshold: null, result: 'match' });
+        return [code, 'catalog name exact', steps];
+      }
     }
+    steps.push({ type: 'service', excel_value: catalogName, db_value: null, method: 'catalog name exact', threshold: null, result: 'no_match' });
   }
 
   // 5. Deck name exact clean match
   const deck = _clean(deckName);
   if (deck) {
     for (const [code, svc] of Object.entries(flatIndex)) {
-      if (_clean(svc.name || '') === deck) return [code, 'deck name exact'];
+      if (_clean(svc.name || '') === deck) {
+        steps.push({ type: 'service', excel_value: deckName, db_value: svc.name, method: 'deck name exact', threshold: null, result: 'match' });
+        return [code, 'deck name exact', steps];
+      }
     }
+    steps.push({ type: 'service', excel_value: deckName, db_value: null, method: 'deck name exact', threshold: null, result: 'no_match' });
   }
 
   // 6. _norm() exact + fuzzy (expanded abbreviations, leaf services only)
@@ -405,7 +454,6 @@ function _resolveServiceCode(assignment, flatIndex) {
   }
 
   if (searchTerms.length) {
-    // Build normed map — leaf services only (not BS or module nodes)
     const normedMap = {};
     for (const [code, svc] of Object.entries(flatIndex)) {
       if (svc.name && svc.serviceObject !== 'Business Scenario' && !MODULE_CODE_RE.test(code)) {
@@ -413,16 +461,20 @@ function _resolveServiceCode(assignment, flatIndex) {
       }
     }
 
-    // 6a. _norm() exact
+    // 6a. norm exact
     for (const [term, field] of searchTerms) {
       for (const [code, normedName] of Object.entries(normedMap)) {
-        if (term === normedName && !_isBlockedMatch(term, normedName)) return [code, `${field} norm exact`];
+        if (term === normedName && !_isBlockedMatch(term, normedName)) {
+          steps.push({ type: 'service', excel_value: term, db_value: flatIndex[code]?.name, method: `${field} norm exact`, threshold: null, result: 'match' });
+          return [code, `${field} norm exact`, steps];
+        }
       }
     }
+    steps.push({ type: 'service', excel_value: searchTerms.map(t=>t[0]).join('/'), db_value: null, method: 'norm exact', threshold: null, result: 'no_match' });
 
     // 6b. Fuzzy (threshold 0.77) — process in batches to avoid blocking event loop
     const normedEntries = Object.entries(normedMap);
-    let bestCode = null, bestRatio = 0, bestField = '';
+    let bestCode = null, bestRatio = 0, bestField = '', bestName = '';
     const BATCH = 100;
     for (let i = 0; i < normedEntries.length; i += BATCH) {
       const batch = normedEntries.slice(i, i + BATCH);
@@ -430,14 +482,18 @@ function _resolveServiceCode(assignment, flatIndex) {
         for (const [code, normedName] of batch) {
           if (!normedName || _isBlockedMatch(term, normedName)) continue;
           const ratio = _similarity(term, normedName);
-          if (ratio > bestRatio) { bestRatio = ratio; bestCode = code; bestField = field; }
+          if (ratio > bestRatio) { bestRatio = ratio; bestCode = code; bestField = field; bestName = flatIndex[code]?.name || ''; }
         }
       }
     }
-    if (bestCode && bestRatio >= 0.77) return [bestCode, `${bestField} fuzzy ${Math.round(bestRatio*100)}%`];
+    if (bestCode && bestRatio >= 0.77) {
+      steps.push({ type: 'service', excel_value: searchTerms.map(t=>t[0]).join('/'), db_value: bestName, method: `${bestField} fuzzy`, threshold: '0.77', result: 'match' });
+      return [bestCode, `${bestField} fuzzy ${Math.round(bestRatio*100)}%`, steps];
+    }
+    steps.push({ type: 'service', excel_value: searchTerms.map(t=>t[0]).join('/'), db_value: bestName || null, method: 'fuzzy', threshold: '0.77', result: 'no_match' });
   }
 
-  return [null, ''];
+  return [null, '', steps];
 }
 
 // ── Main enrichment ───────────────────────────────────────────────────────────
@@ -455,102 +511,115 @@ async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog
     const bsSvc = flatIndex[bsCode];
     if (!bsSvc) { console.log(`    ⚠️  ${bsCode}: not found in flat_index`); return 0; }
 
-    let matched = 0, unmatched = 0;
+    let matched = 0, unmatched = 0, injected = 0, alreadyLinked = 0, unresolvedMod = 0, unresolvedSvc = 0;
     const logRows = [];
 
-    // ── Step 1: deck name injection onto child services ───────────────────────
+    // ── Module membership injection + deck name assignment ────────────────────
+    let asgnCount = 0;
+    for (const asgn of moduleAssignments) {
+      if (++asgnCount % 10 === 0) await new Promise(r => setTimeout(r, 0));
+
+      const [modCode, modNote, modSteps] = _resolveModuleCode(asgn.moduleRaw, flatIndex, bsCode);
+      if (!modCode) {
+        unresolvedMod++;
+        logRows.push({ type: 'module_injection', status: 'No Module Match', deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: asgn.catalogName, module_name: asgn.moduleRaw, module_code: null, service_code: null, detail: modNote, steps: modSteps });
+        continue;
+      }
+
+      const [svcCode, svcNote, svcSteps] = _resolveServiceCode(asgn, flatIndex);
+      const allSteps = [...modSteps, ...svcSteps];
+
+      if (!svcCode) {
+        unresolvedSvc++;
+        logRows.push({ type: 'module_injection', status: 'No Service Match', deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: asgn.catalogName, module_name: asgn.moduleRaw, module_code: modCode, service_code: null, detail: `module:${modNote}`, steps: allSteps });
+        continue;
+      }
+
+      const modNode = flatIndex[modCode];
+      if (!modNode) {
+        logRows.push({ type: 'module_injection', status: 'Module Not In Flat Index', deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: asgn.catalogName, module_name: asgn.moduleRaw, module_code: modCode, service_code: svcCode, detail: `module:${modNote}|svc:${svcNote}`, steps: allSteps });
+        continue;
+      }
+
+      // Assign deck name — Step 2 owns this now
+      const child = flatIndex[svcCode];
+      if (child) {
+        if (!child.business_scenario_naming) child.business_scenario_naming = {};
+        child.business_scenario_naming[bsCode] = asgn.deckName;
+        matched++;
+      }
+
+      const children = modNode.childServices || (modNode.childServices = []);
+      if (children.includes(svcCode)) {
+        alreadyLinked++;
+        logRows.push({ type: 'module_injection', status: 'Already Linked', deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: (child||{}).name || asgn.catalogName, module_name: asgn.moduleRaw, module_code: modCode, service_code: svcCode, detail: `module:${modNote}|svc:${svcNote}`, steps: allSteps });
+      } else {
+        children.push(svcCode);
+        injected++;
+        logRows.push({ type: 'module_injection', status: 'Added', deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: (child||{}).name || asgn.catalogName, module_name: asgn.moduleRaw, module_code: modCode, service_code: svcCode, detail: `module:${modNote}|svc:${svcNote}`, steps: allSteps });
+      }
+    }
+
+    // Services in API hierarchy with no module assignment row — log as unmatched (no deck name)
     for (const modCode of bsSvc.childServices || []) {
       const mod = flatIndex[modCode];
       if (!mod) continue;
       for (const childCode of mod.childServices || []) {
         const child = flatIndex[childCode];
         if (!child) continue;
-
-        const svcCode = String(child.code || '').trim();
-        const svcNum  = String(child.serviceNumber || '').trim();
-        const svcName = _clean(child.name || '');
-
-        let deckName = null, matchMethod = null;
-
-        // 5-strategy matching (same as original JWD script)
-        if      (byCode[svcCode])              { deckName = byCode[svcCode];              matchMethod = `code:${svcCode}`; }
-        else if (byCode[svcNum])               { deckName = byCode[svcNum];               matchMethod = `svcNum:${svcNum}`; }
-        else if (byCode[svcCode.padStart(18,'0')]) { deckName = byCode[svcCode.padStart(18,'0')]; matchMethod = `paddedCode`; }
-        else if (byCode[svcNum.padStart(18,'0')])  { deckName = byCode[svcNum.padStart(18,'0')];  matchMethod = `paddedNum`; }
-        else if (byName[svcName])              { deckName = byName[svcName];              matchMethod = `catalogName`; }
-
-        if (!child.business_scenario_naming) child.business_scenario_naming = {};
-        if (deckName) {
-          child.business_scenario_naming[bsCode] = deckName;
-          matched++;
-          logRows.push({ type: 'deck_name', svcCode, svcNum, svcName: child.name, module: modCode, deckName, method: matchMethod, status: 'Matched' });
-        } else {
+        const hasDeckName = child.business_scenario_naming && child.business_scenario_naming[bsCode];
+        if (!hasDeckName) {
           unmatched++;
-          logRows.push({ type: 'deck_name', svcCode, svcNum, svcName: child.name, module: modCode, deckName: null, method: null, status: 'No Match' });
+          logRows.push({ type: 'deck_name', status: 'No Match', deck_name: null, crm_ids: null, service_name: child.name, module_name: null, module_code: modCode, service_code: child.code, detail: 'not in excel module assignments', steps: [] });
         }
       }
     }
 
-    console.log(`    ✅ ${bsCode}: ${matched} deck-name matched, ${unmatched} unmatched out of ${matched + unmatched} services`);
-
-    // ── Step 2: module membership injection from Excel ────────────────────────
-    let injected = 0, alreadyLinked = 0, unresolvedMod = 0, unresolvedSvc = 0;
-
-    let asgnCount = 0;
-    for (const asgn of moduleAssignments) {
-      // Yield to event loop every 10 assignments so health check never times out
-      if (++asgnCount % 10 === 0) await new Promise(r => setTimeout(r, 0));
-      const [modCode, modNote] = _resolveModuleCode(asgn.moduleRaw, flatIndex, bsCode);
-      if (!modCode) {
-        unresolvedMod++;
-        logRows.push({ type: 'module_injection', deckName: asgn.deckName, crmIds: asgn.crmIds.join('/'), catalogName: asgn.catalogName, moduleRaw: asgn.moduleRaw, resolvedModule: null, resolvedService: null, status: 'No Module Match', detail: modNote });
-        continue;
-      }
-
-      const [svcCode, svcNote] = _resolveServiceCode(asgn, flatIndex);
-      if (!svcCode) {
-        unresolvedSvc++;
-        logRows.push({ type: 'module_injection', deckName: asgn.deckName, crmIds: asgn.crmIds.join('/'), catalogName: asgn.catalogName, moduleRaw: asgn.moduleRaw, resolvedModule: modCode, resolvedService: null, status: 'No Service Match', detail: `module:${modNote}` });
-        continue;
-      }
-
-      const modNode = flatIndex[modCode];
-      if (!modNode) {
-        logRows.push({ type: 'module_injection', deckName: asgn.deckName, crmIds: asgn.crmIds.join('/'), catalogName: asgn.catalogName, moduleRaw: asgn.moduleRaw, resolvedModule: modCode, resolvedService: svcCode, status: 'Module Not In Flat Index', detail: `module:${modNote}|svc:${svcNote}` });
-        continue;
-      }
-
-      const children = modNode.childServices || (modNode.childServices = []);
-      if (children.includes(svcCode)) {
-        alreadyLinked++;
-        logRows.push({ type: 'module_injection', deckName: asgn.deckName, crmIds: asgn.crmIds.join('/'), catalogName: asgn.catalogName, moduleRaw: asgn.moduleRaw, resolvedModule: modCode, resolvedService: svcCode, serviceName: (flatIndex[svcCode] || {}).name || '', status: 'Already Linked', detail: `module:${modNote}|svc:${svcNote}` });
-      } else {
-        children.push(svcCode);
-        injected++;
-        logRows.push({ type: 'module_injection', deckName: asgn.deckName, crmIds: asgn.crmIds.join('/'), catalogName: asgn.catalogName, moduleRaw: asgn.moduleRaw, resolvedModule: modCode, resolvedService: svcCode, serviceName: (flatIndex[svcCode] || {}).name || '', status: 'Added', detail: `module:${modNote}|svc:${svcNote}` });
-      }
-    }
-
-    if (moduleAssignments.length > 0) {
-      console.log(`    📋 ${bsCode} module injection: ${injected} added, ${alreadyLinked} already linked, ${unresolvedMod} no module, ${unresolvedSvc} no service`);
-    }
-
-    // Sample unmatched deck names for diagnosis
-    const unmatchedSamples = logRows.filter(r => r.type === 'deck_name' && r.status === 'No Match').slice(0, 3);
-    if (unmatchedSamples.length) {
-      console.log(`    Sample unmatched: ${unmatchedSamples.map(r => `"${r.svcName}" (code:${r.svcCode}, num:${r.svcNum})`).join(' | ')}`);
-    }
+    console.log(`    ✅ ${bsCode}: ${matched} deck-name assigned, ${unmatched} unmatched, ${injected} injected, ${alreadyLinked} already linked`);
 
     if (injectionLog) {
-      injectionLog[bsCode] = {
-        matched, unmatched, injected, alreadyLinked, unresolvedMod, unresolvedSvc,
-        rows: logRows
-      };
+      injectionLog[bsCode] = { matched, unmatched, injected, alreadyLinked, unresolvedMod, unresolvedSvc, rows: logRows };
     }
 
-    return matched;
-  } catch (e) {
-    console.error(`    Excel enrichment failed for ${bsCode}: ${e.message}`);
+    // Write to DB tables
+    try {
+      const db = require('../store/db');
+      db.getPool();
+
+      await db.query(
+        `INSERT INTO catalog_injection_log (bs_code, generated_at, matched, unmatched, injected, already_linked, unresolved_mod, unresolved_svc)
+         VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (bs_code) DO UPDATE SET
+           generated_at=NOW(), matched=EXCLUDED.matched, unmatched=EXCLUDED.unmatched,
+           injected=EXCLUDED.injected, already_linked=EXCLUDED.already_linked,
+           unresolved_mod=EXCLUDED.unresolved_mod, unresolved_svc=EXCLUDED.unresolved_svc`,
+        [bsCode, matched, unmatched, injected, alreadyLinked, unresolvedMod, unresolvedSvc]
+      );
+
+      await db.query(`DELETE FROM catalog_matching_log_rows WHERE bs_code = $1`, [bsCode]);
+
+      for (const lr of logRows) {
+        const res = await db.query(
+          `INSERT INTO catalog_matching_log_rows (bs_code, type, status, service_code, service_name, module_code, module_name, deck_name, crm_ids)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+          [bsCode, lr.type, lr.status, lr.service_code||null, lr.service_name||null, lr.module_code||null, lr.module_name||null, lr.deck_name||null, lr.crm_ids||null]
+        );
+        const logRowId = res.rows[0].id;
+        for (const step of (lr.steps || [])) {
+          await db.query(
+            `INSERT INTO catalog_matching_steps (log_row_id, type, excel_value, db_value, method, threshold, result)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+            [logRowId, step.type, step.excel_value||null, step.db_value||null, step.method||null, step.threshold||null, step.result]
+          );
+        }
+      }
+    } catch(e) {
+      console.warn(`[enrich] DB log write failed for ${bsCode}:`, e.message);
+    }
+
+    return matched + injected;
+  } catch(e) {
+    console.error(`[enrich] applyExcelEnrichment failed for ${bsCode}:`, e.message);
     return 0;
   }
 }
