@@ -11,11 +11,16 @@ What it does:
   5. Server handles enrichment via serial queue
   6. Updates last-check timestamp in log
 
+--manual mode:
+  Scans local folder by BS-code prefix instead of manifest filenames.
+  Uploads all found files unconditionally (no mtime/interval check).
+  Does not update lastCheck so regular schedule is unaffected.
+
 Requirements:
-  pip install requests
+  pip install requests openpyxl
 """
 
-import os, sys, json, requests, argparse
+import os, sys, json, re, requests, argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -24,6 +29,58 @@ EXCEL_FOLDER    = r"C:\Users\I306380\SAP SE\Max Success Plan - Service list - re
 CAP_BACKEND_URL = "https://ssc-catalog-cap-backend.cfapps.us10-001.hana.ondemand.com"
 LOG_FILE        = str(Path(__file__).parent / "sync_log.json")
 CHECK_INTERVAL  = 60  # minutes
+
+# Files to never upload regardless of mode
+EXCLUDED_FILES = {
+    "MAX00019_Transform your finance management_Foundational List.xlsx",
+}
+
+# ── STRUCTURE VALIDATION ──────────────────────────────────────────────────────
+def check_excel_structure(filepath):
+    """
+    Returns (ok: bool, reason: str).
+    Replicates the server-side _detectSheetLayout logic:
+    - Needs at least 2 of: CRM/ID header, service/catalog/name header, deck/module header
+    - OR data pattern: col0 text-like + col1 numeric CRM IDs in first 20 rows
+    """
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+        ws = wb.active
+        rows = []
+        for i, row in enumerate(ws.iter_rows(values_only=True)):
+            rows.append([str(c).strip() if c is not None else '' for c in row])
+            if i >= 20:
+                break
+        wb.close()
+    except Exception as e:
+        return False, f"cannot read file: {e}"
+
+    if not rows:
+        return False, "empty file"
+
+    header_signals = set()
+    for row in rows[:5]:
+        for cell in row:
+            s = cell.lower()
+            if re.search(r'crm|^id$', s):      header_signals.add('id')
+            if re.search(r'service|catalog|name', s): header_signals.add('name')
+            if re.search(r'deck|scenario|success.?pack|module', s): header_signals.add('deck')
+    if len(header_signals) >= 2:
+        return True, 'header match'
+
+    deck_like = crm_like = 0
+    for row in rows[1:20]:
+        col0 = row[0] if row else ''
+        col1 = row[1] if len(row) > 1 else ''
+        if col0 and len(col0) > 3 and not col0.isdigit():
+            deck_like += 1
+        if col1 and re.match(r'^\d{6,}$', col1):
+            crm_like += 1
+    if deck_like >= 2 and crm_like >= 1:
+        return True, 'data pattern match'
+
+    return False, f'no recognisable structure (header signals: {header_signals or "none"}, deck-like rows: {deck_like}, CRM-like rows: {crm_like})'
 
 # ── LOGGING ───────────────────────────────────────────────────────────────────
 def read_log():
@@ -113,42 +170,85 @@ def main():
         print(f"❌ Local folder not found: {EXCEL_FOLDER}")
         sys.exit(1)
 
-    uploaded = skipped = errors = missing = 0
+    uploaded = skipped = errors = missing = bad_structure = excluded = 0
 
-    for entry in entries:
-        bs_code  = entry.get("bsCode", "")
-        filename = entry.get("fileName", "")
-        if not bs_code or not filename:
-            continue
+    def upload_file(bs_code, filepath):
+        nonlocal uploaded, errors, bad_structure, excluded
 
-        filepath = Path(EXCEL_FOLDER) / filename
-        if not filepath.exists():
-            print(f"  ⚠️  {bs_code}: file not found locally ({filename})")
-            missing += 1
-            continue
+        if filepath.name in EXCLUDED_FILES:
+            print(f"  🚫 {bs_code}: excluded ({filepath.name})")
+            excluded += 1
+            return
 
-        mtime = datetime.fromtimestamp(filepath.stat().st_mtime, tz=timezone.utc)
-        if last_check and mtime <= last_check:
-            print(f"  ⏭️  {bs_code}: not modified — skipping")
-            skipped += 1
-            continue
+        ok, reason = check_excel_structure(filepath)
+        if not ok:
+            print(f"  ❌ {bs_code}: skipped — bad structure ({reason}) [{filepath.name}]")
+            bad_structure += 1
+            return
 
-        print(f"  📤 {bs_code}: modified {mtime.strftime('%Y-%m-%d %H:%M')} UTC — uploading...")
+        print(f"  📤 {bs_code}: uploading {filepath.name} ...")
         try:
             with open(filepath, 'rb') as f:
                 data = f.read()
             put_resp = requests.put(
                 f"{CAP_BACKEND_URL}/api/catalog/excel/{bs_code}",
                 data=data,
-                headers={"Content-Type": "application/octet-stream"},
+                headers={"Content-Type": "application/octet-stream", "X-Filename": filepath.name},
                 timeout=30
             )
             put_resp.raise_for_status()
-            log_entry(log, f"✅ {bs_code}: uploaded — queued for enrichment")
+            log_entry(log, f"✅ {bs_code}: uploaded {filepath.name} — queued for enrichment")
             uploaded += 1
         except Exception as e:
             log_entry(log, f"❌ {bs_code}: failed — {e}")
             errors += 1
+
+    if args.manual:
+        # Scan folder by BS-code prefix — one file per BS code (pick longest name on tie)
+        print(f"🔍 Scanning local folder by BS-code prefix...\n")
+        all_xlsx = sorted(Path(EXCEL_FOLDER).glob("*.xlsx"), key=lambda p: p.name)
+        bs_code_re = re.compile(r'^(MAX\d{5})', re.IGNORECASE)
+        by_bs: dict[str, list] = {}
+        for f in all_xlsx:
+            m = bs_code_re.match(f.name)
+            if m:
+                code = m.group(1).upper()
+                by_bs.setdefault(code, []).append(f)
+
+        for bs_code, candidates in sorted(by_bs.items()):
+            # Exclude the hardcoded file first; if multiple remain pick the longest name (most descriptive)
+            valid = [c for c in candidates if c.name not in EXCLUDED_FILES]
+            if not valid:
+                print(f"  🚫 {bs_code}: all candidates excluded")
+                excluded += len(candidates)
+                continue
+            if len(valid) > 1:
+                chosen = max(valid, key=lambda p: len(p.name))
+                skipped_names = [c.name for c in valid if c != chosen]
+                print(f"  ℹ️  {bs_code}: multiple files — using '{chosen.name}', skipping {skipped_names}")
+            else:
+                chosen = valid[0]
+            upload_file(bs_code, chosen)
+    else:
+        for entry in entries:
+            bs_code  = entry.get("bsCode", "")
+            filename = entry.get("fileName", "")
+            if not bs_code or not filename:
+                continue
+
+            filepath = Path(EXCEL_FOLDER) / filename
+            if not filepath.exists():
+                print(f"  ⚠️  {bs_code}: file not found locally ({filename})")
+                missing += 1
+                continue
+
+            mtime = datetime.fromtimestamp(filepath.stat().st_mtime, tz=timezone.utc)
+            if last_check and mtime <= last_check:
+                print(f"  ⏭️  {bs_code}: not modified — skipping")
+                skipped += 1
+                continue
+
+            upload_file(bs_code, filepath)
 
     if not args.manual:
         log["lastCheck"] = now.isoformat()
@@ -158,8 +258,11 @@ def main():
     print(f"✅ Uploaded        : {uploaded}")
     print(f"⏭️  Skipped         : {skipped}")
     print(f"⚠️  Missing locally : {missing}")
+    print(f"🚫 Excluded        : {excluded}")
+    print(f"❌ Bad structure   : {bad_structure}")
     print(f"❌ Errors          : {errors}")
-    print(f"Last check saved  : {now.strftime('%Y-%m-%d %H:%M:%S')} UTC")
+    if not args.manual:
+        print(f"Last check saved  : {now.strftime('%Y-%m-%d %H:%M:%S')} UTC")
     print(f"{'='*55}\n")
     if errors > 0: sys.exit(1)
 
