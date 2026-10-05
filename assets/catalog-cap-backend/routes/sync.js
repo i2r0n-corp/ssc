@@ -511,15 +511,8 @@ async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog
     const bsSvc = flatIndex[bsCode];
     if (!bsSvc) { console.log(`    ⚠️  ${bsCode}: not found in flat_index`); return 0; }
 
-    let matched = 0, unmatched = 0, injected = 0, alreadyLinked = 0, unresolvedMod = 0, unresolvedSvc = 0;
+    let matched = 0, injected = 0, alreadyLinked = 0, unresolvedMod = 0, unresolvedSvc = 0;
     const logRows = [];
-
-    // Snapshot original API hierarchy children before enrichment modifies childServices
-    const originalModChildren = {};
-    for (const modCode of bsSvc.childServices || []) {
-      const mod = flatIndex[modCode];
-      if (mod) originalModChildren[modCode] = new Set(mod.childServices || []);
-    }
 
     // ── Module membership injection + deck name assignment ────────────────────
     let asgnCount = 0;
@@ -567,35 +560,10 @@ async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog
       }
     }
 
-    // Services in API hierarchy (original, before enrichment) with no deck name assigned — log as unmatched
-    // Build serviceNumber → deck name map to detect catalog duplicates (same serviceNumber, different code)
-    const svcNumToDeckName = {};
-    for (const [, svc] of Object.entries(flatIndex)) {
-      const sn = svc.serviceNumber;
-      const dn = svc.business_scenario_naming && svc.business_scenario_naming[bsCode];
-      if (sn && dn) svcNumToDeckName[String(sn).trim()] = dn;
-    }
-
-    for (const modCode of bsSvc.childServices || []) {
-      const origChildren = originalModChildren[modCode] || new Set();
-      for (const childCode of origChildren) {
-        const child = flatIndex[childCode];
-        if (!child) continue;
-        const hasDeckName = child.business_scenario_naming && child.business_scenario_naming[bsCode];
-        if (hasDeckName) continue;
-        // Skip if another service with the same serviceNumber was already matched (catalog duplicate)
-        const sn = child.serviceNumber ? String(child.serviceNumber).trim() : null;
-        if (sn && svcNumToDeckName[sn]) continue;
-        console.log(`[unmatched-debug] ${bsCode} mod=${modCode} child=${childCode} svcNum=${sn} bsNaming=${JSON.stringify(child.business_scenario_naming||null)}`);
-        unmatched++;
-        logRows.push({ type: 'module_injection', status: 'No Match', deck_name: null, crm_ids: null, service_name: child.name, module_name: null, module_code: modCode, service_code: child.code, detail: 'not in excel module assignments', steps: [] });
-      }
-    }
-
-    console.log(`    ✅ ${bsCode}: ${matched} deck-name assigned, ${unmatched} unmatched, ${injected} injected, ${alreadyLinked} already linked`);
+    console.log(`    ✅ ${bsCode}: ${matched} deck-name assigned, ${injected} injected, ${alreadyLinked} already linked`);
 
     if (injectionLog) {
-      injectionLog[bsCode] = { matched, unmatched, injected, alreadyLinked, unresolvedMod, unresolvedSvc, rows: logRows };
+      injectionLog[bsCode] = { matched, injected, alreadyLinked, unresolvedMod, unresolvedSvc, rows: logRows };
     }
 
     // Write to DB tables
@@ -610,7 +578,7 @@ async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog
            generated_at=NOW(), matched=EXCLUDED.matched, unmatched=EXCLUDED.unmatched,
            injected=EXCLUDED.injected, already_linked=EXCLUDED.already_linked,
            unresolved_mod=EXCLUDED.unresolved_mod, unresolved_svc=EXCLUDED.unresolved_svc`,
-        [bsCode, matched, unmatched, injected, alreadyLinked, unresolvedMod, unresolvedSvc]
+        [bsCode, matched, 0, injected, alreadyLinked, unresolvedMod, unresolvedSvc]
       );
 
       await db.query(`DELETE FROM catalog_matching_log_rows WHERE bs_code = $1`, [bsCode]);
