@@ -880,8 +880,6 @@ function renderDebugPage() {
 
   const statusOptions = [
     ['',                  'All statuses'],
-    ['Matched',           'Matched'],
-    ['No Match',          'No Match'],
     ['Added',             'Added'],
     ['Already Linked',    'Already Linked'],
     ['No Module Match',   'No Module Match'],
@@ -901,8 +899,6 @@ function renderDebugPage() {
 
   const statusBadge = s => {
     const map = {
-      'Matched':          ['#d4edda','#155724'],
-      'No Match':         ['#f8d7da','#721c24'],
       'Added':            ['#d1ecf1','#0c5460'],
       'Already Linked':   ['#fff3cd','#856404'],
       'No Module Match':  ['#e2e3e5','#383d41'],
