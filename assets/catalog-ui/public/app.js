@@ -367,6 +367,9 @@ function renderCatalogPage() {
 function renderCatalogResults() {
   const { loading, moduleMap = {} } = state.catalog;
   const hasSearched = state.catalog.hasSearched;
+  const et = state.filters.engagementType;
+  const namingDisabled = et === 'Max Success Plan' || !state.filters.businessScenario;
+  const namingStyle = namingDisabled ? 'opacity:0.4;pointer-events:none' : '';
   return `
     ${loading ? '<div class="loading"><div class="loading-spinner"></div> Loading...</div>' : ''}
     ${!hasSearched && !loading ? `
