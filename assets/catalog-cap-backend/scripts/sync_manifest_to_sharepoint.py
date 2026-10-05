@@ -15,7 +15,7 @@ Requirements:
   pip install requests
 """
 
-import os, sys, json, requests
+import os, sys, json, requests, argparse
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -43,6 +43,10 @@ def log_entry(log, message):
 
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--manual', action='store_true', help='Upload all manifest files unconditionally, ignoring interval and mtime checks')
+    args = parser.parse_args()
+
     now = datetime.now(timezone.utc)
     log = read_log()
 
@@ -53,22 +57,26 @@ def main():
 
     last_check_str = log.get("lastCheck")
 
-    # 1. Check if app restarted since last sync — always runs regardless of interval
-    force_reupload = False
-    try:
-        health_resp = requests.get(f"{CAP_BACKEND_URL}/health", timeout=10)
-        health_resp.raise_for_status()
-        app_start_time_str = health_resp.json().get("appStartTime")
-        if app_start_time_str and last_check_str:
-            app_start_time = datetime.fromisoformat(app_start_time_str.replace('Z', '+00:00'))
-            last_check_dt  = datetime.fromisoformat(last_check_str)
-            if last_check_dt.tzinfo is None:
-                last_check_dt = last_check_dt.replace(tzinfo=timezone.utc)
-            if app_start_time > last_check_dt:
-                print(f"🔄 App restarted at {app_start_time.strftime('%Y-%m-%d %H:%M:%S')} UTC — forcing full re-upload.")
-                force_reupload = True
-    except Exception as e:
-        print(f"⚠️  Could not check app start time: {e}")
+    if args.manual:
+        print("🔧 Manual mode — uploading all manifest files unconditionally.")
+        force_reupload = True
+    else:
+        # 1. Check if app restarted since last sync — always runs regardless of interval
+        force_reupload = False
+        try:
+            health_resp = requests.get(f"{CAP_BACKEND_URL}/health", timeout=10)
+            health_resp.raise_for_status()
+            app_start_time_str = health_resp.json().get("appStartTime")
+            if app_start_time_str and last_check_str:
+                app_start_time = datetime.fromisoformat(app_start_time_str.replace('Z', '+00:00'))
+                last_check_dt  = datetime.fromisoformat(last_check_str)
+                if last_check_dt.tzinfo is None:
+                    last_check_dt = last_check_dt.replace(tzinfo=timezone.utc)
+                if app_start_time > last_check_dt:
+                    print(f"🔄 App restarted at {app_start_time.strftime('%Y-%m-%d %H:%M:%S')} UTC — forcing full re-upload.")
+                    force_reupload = True
+        except Exception as e:
+            print(f"⚠️  Could not check app start time: {e}")
 
     # 2. Only apply interval check if NOT force reupload
     last_check = None
@@ -142,7 +150,8 @@ def main():
             log_entry(log, f"❌ {bs_code}: failed — {e}")
             errors += 1
 
-    log["lastCheck"] = now.isoformat()
+    if not args.manual:
+        log["lastCheck"] = now.isoformat()
     write_log(log)
 
     print(f"\n{'='*55}")
