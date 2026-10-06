@@ -17,3 +17,4 @@ applications:
       # SSC_API_KEY: your-api-key
     services:
       - ssc-catalog-xsuaa
+      - ssc-catalog-db
