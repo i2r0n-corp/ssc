@@ -397,21 +397,19 @@ function renderCatalogResults() {
       </div>
       <span class="results-info" style="margin:0;flex:1">${state.filteredServices.length} service(s) found
         ${state.selectedServices.size > 0 ? ` — <strong>${state.selectedServices.size} selected</strong>` : ''}
+        ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="margin-left:0.75rem;color:#155724;font-weight:600">Successfully downloaded</span>` : ''}
       </span>
       <button class="btn btn-secondary btn-sm" onclick="exportExcel()" title="Export selected (or all) to Excel">
         📊 Export Excel ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
-      <span style="display:inline-flex;gap:2px;align-items:stretch">
-        <button class="btn btn-secondary btn-sm" onclick="generatePptx('list')" title="Service list PPTX (template-based)">
-          📋 PPTX List ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
-        </button><button class="btn btn-secondary btn-sm" onclick="openPptxListSettings()" title="Configure PPTX List columns" style="padding:0.3rem 0.55rem;border-left:1px solid #cce0fc">⚙</button>
-      </span>
+      <button class="btn btn-secondary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)">
+        📋 PPTX List ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
+      </button>
       <button class="btn btn-primary btn-sm" onclick="generatePptx('one-pager')" title="One-pager per service PPTX">
         📄 PPTX One-Pagers ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
     </div>
     ${state.pptx.error ? `<div class="error-strip" style="margin-bottom:0.5rem">⚠ ${state.pptx.error}</div>` : ''}
-    ${state.pptx.downloadUrl ? `<div class="success-strip" style="margin-bottom:0.5rem">Successfully downloaded</div>` : ''}
     <table class="service-table">
       <thead>
         <tr>
@@ -539,7 +537,6 @@ function renderExportPage() {
   return `
     <h2>PPTX Export</h2>
     ${state.pptx.error ? `<div class="error-strip">⚠ ${state.pptx.error}</div>` : ''}
-    ${state.pptx.downloadUrl ? `<div class="success-strip">Successfully downloaded</div>` : ''}
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
         <h3 style="margin:0">Export Cart (${cartServices.length} services)</h3>
@@ -1225,6 +1222,19 @@ function render() {
   if (yt && document.activeElement !== yt) yt.value = state.pptxListSettings.yearTo;
   if (yf && !yf.value) yf.value = state.pptxListSettings.yearFrom;
   if (yt && !yt.value) yt.value = state.pptxListSettings.yearTo;
+
+  // Fade out "Successfully downloaded" after 5s then clear state
+  const dlMsg = document.getElementById('pptx-dl-msg');
+  if (dlMsg) {
+    clearTimeout(render._dlTimer);
+    render._dlTimer = setTimeout(() => {
+      const el = document.getElementById('pptx-dl-msg');
+      if (!el) return;
+      el.style.transition = 'opacity 0.8s';
+      el.style.opacity = '0';
+      setTimeout(() => { state.pptx.downloadUrl = null; render(); }, 800);
+    }, 5000);
+  }
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
