@@ -99,36 +99,49 @@ router.post('/generatePptx', async (req, res) => {
 
       // Build per-service module name map when needed
       let svcModuleMap = null;
+      let modPositionMap = {};  // mod_code → position for sorting
       if (fixedModuleName === null) {
         let hierQuery, hierParams;
         const svcCodes = services.map(s => s.code);
         if (selectedModuleCodes) {
           // Scope to selected module codes AND only the exported services
           hierQuery = `
-            SELECT h.child_code AS svc_code, s.name AS mod_name, s.code AS mod_code
+            SELECT h.child_code AS svc_code, s.name AS mod_name, s.code AS mod_code,
+                   (SELECT hh.position FROM catalog_hierarchy hh WHERE hh.child_code = s.code LIMIT 1) AS mod_pos
             FROM catalog_hierarchy h
             JOIN catalog_services s ON s.code = h.parent_code
             WHERE s.service_object = 'Business Scenario module'
               AND s.code = ANY($1)
               AND h.child_code = ANY($2)
+            ORDER BY mod_pos NULLS LAST, s.name
           `;
           hierParams = [selectedModuleCodes, svcCodes];
         } else {
           // No module filter at all — look up across all modules for the exported services
           hierQuery = `
-            SELECT h.child_code AS svc_code, s.name AS mod_name
+            SELECT h.child_code AS svc_code, s.name AS mod_name, s.code AS mod_code,
+                   (SELECT hh.position FROM catalog_hierarchy hh WHERE hh.child_code = s.code LIMIT 1) AS mod_pos
             FROM catalog_hierarchy h
             JOIN catalog_services s ON s.code = h.parent_code
             WHERE s.service_object = 'Business Scenario module'
               AND h.child_code = ANY($1)
+            ORDER BY mod_pos NULLS LAST, s.name
           `;
           hierParams = [svcCodes];
         }
         const hierRows = await db.query(hierQuery, hierParams);
         svcModuleMap = {};
+        // Also track per-service module position for later sort
+        const svcPositionMap = {};
         for (const row of hierRows.rows) {
-          if (!svcModuleMap[row.svc_code]) svcModuleMap[row.svc_code] = row.mod_name;
+          if (!svcModuleMap[row.svc_code]) {
+            svcModuleMap[row.svc_code] = row.mod_name;
+            svcPositionMap[row.svc_code] = row.mod_pos ?? 9999;
+            if (row.mod_code) modPositionMap[row.mod_code] = row.mod_pos ?? 9999;
+          }
         }
+        // Attach position to svcModuleMap lookup for use in sort
+        modPositionMap._bySvc = svcPositionMap;
       }
 
       const svcs = services.map(s => {
@@ -151,14 +164,24 @@ router.post('/generatePptx', async (req, res) => {
         };
       });
 
+      // Sort by module position so generator receives services grouped in correct module order
+      if (svcModuleMap && modPositionMap._bySvc) {
+        const bySvc = modPositionMap._bySvc;
+        svcs.sort((a, b) => (bySvc[a.code] ?? 9999) - (bySvc[b.code] ?? 9999));
+      }
+
       const buf = generateListPptxBuffer(svcs, {
-        title:       opts.title || 'Services Description',
-        groupByET:   !!opts.groupByET,
-        bsCode:      opts.bsCode || null,
-        useDeckName: !!opts.useDeckName,
-        yearFrom:    opts.yearFrom,
-        yearTo:      opts.yearTo,
-        cols:        opts.cols || null,
+        title:              opts.title || 'Services Description',
+        groupByET:          !!opts.groupByET,
+        bsCode:             opts.bsCode || null,
+        bsName:             opts.bsCode ? (flatIndex[opts.bsCode]?._name || '') : '',
+        useDeckName:        !!opts.useDeckName,
+        yearFrom:           opts.yearFrom,
+        yearTo:             opts.yearTo,
+        cols:               opts.cols || null,
+        streamMode:         opts.streamMode || null,
+        streamCustom:       opts.streamCustom || '',
+        truncateObjectives: !!opts.truncateObjectives,
       });
       fs.writeFileSync(filePath, buf);
 

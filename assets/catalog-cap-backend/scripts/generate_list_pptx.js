@@ -313,6 +313,10 @@ function generateListPptxBuffer(services, opts = {}) {
   const groupET  = !!opts.groupByET;
   const bsCode   = opts.bsCode || null;
   const useDeck  = !!opts.useDeckName;
+  const streamMode   = opts.streamMode || (bsCode ? 'bsAndModule' : 'moduleOnly');
+  const streamCustom = (opts.streamCustom || '').slice(0, 64);
+  const truncateObj  = !!opts.truncateObjectives;
+  const bsName       = opts.bsName || '';
 
   // Column visibility — all on by default
   const cols = {
@@ -355,9 +359,22 @@ function generateListPptxBuffer(services, opts = {}) {
 
   function getObjectives(svc) {
     const et = svc.engagement_type || '';
-    if (et.includes('Max'))       return svc.key_benefits      || svc.keyBenefits      || svc.short_description || '';
-    if (et.includes('Advanced'))  return svc.summary           || svc.short_description || '';
-    return                               svc.description       || svc.short_description || '';
+    let text = '';
+    if (et.includes('Max'))       text = svc.key_benefits      || svc.keyBenefits      || svc.short_description || '';
+    else if (et.includes('Advanced'))  text = svc.summary      || svc.short_description || '';
+    else                               text = svc.description  || svc.short_description || '';
+    if (truncateObj && text) {
+      const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+      text = sentences.slice(0, 3).join(' ').trim();
+    }
+    return text;
+  }
+
+  function getStreamText(modName, bsName) {
+    if (streamMode === 'custom' || streamMode === 'customNoBS') return streamCustom || modName;
+    if (streamMode === 'moduleOnly') return modName;
+    // bsAndModule: "BS Name > Module Name"
+    return bsName ? `${bsName} > ${modName}` : modName;
   }
 
   function stripHtml(s) {
@@ -444,11 +461,12 @@ function generateListPptxBuffer(services, opts = {}) {
     function flushSlide(rows) {
       if (rows.length === 0) return;
       slideNum++;
+      const streamText = getStreamText(mod.name, bsName);
       // Assign rowSpan for the stream block on this slide
       if (cols.stream) rows[0].isStreamStart = true;
       if (cols.stream) rows[0].streamRowSpan = rows.length;
       const streamBlocks = cols.stream
-        ? [{ text: mod.name, rowOffset: 0, rowCount: rows.length }]
+        ? [{ text: streamText, rowOffset: 0, rowCount: rows.length }]
         : [];
       outFiles[`ppt/slides/slide${slideNum}.xml`] = buildSlideXml(
         templateSlide, rows, title, streamBlocks, cols, objW, yearCount, yearFrom
@@ -461,7 +479,8 @@ function generateListPptxBuffer(services, opts = {}) {
     }
 
     for (const svc of mod.services) {
-      const row = getSvcRow(svc, mod.name, false, 1);
+      const streamText = getStreamText(mod.name, bsName);
+      const row = getSvcRow(svc, streamText, false, 1);
       if (pageRows.length > 0 && pageH + row.rowH > AVAIL_H) {
         flushSlide(pageRows);
         pageRows = [];

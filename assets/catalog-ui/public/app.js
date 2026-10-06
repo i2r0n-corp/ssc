@@ -21,12 +21,16 @@ let state = {
   serviceDetail: null,
   incident: { file: null, results: [], loading: false, error: null, selectedCodes: new Set() },
   pptx: { template: 'short-description', generating: false, error: null, downloadUrl: null },
+  sort: { col: null, dir: 'asc' },
   pptxListSettings: {
     open: false,
     cols: { stream: true, phases: true, component: true, tier: false, objectives: true },
     years: false, yearFrom: '2026', yearTo: '2030',
     groupByET: false, useDeckName: false,
     title: 'Services Description',
+    streamMode: 'bsAndModule',  // 'bsAndModule' | 'moduleOnly' | 'custom' | 'customNoBS'
+    streamCustom: '',
+    truncateObjectives: false,
   },
   chat: { messages: [], loading: false, input: '' }
 };
@@ -399,9 +403,6 @@ function renderCatalogResults() {
         ${state.selectedServices.size > 0 ? ` — <strong>${state.selectedServices.size} selected</strong>` : ''}
         ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="margin-left:0.75rem;color:#155724;font-weight:600">Successfully downloaded</span>` : ''}
       </span>
-      <button class="btn btn-secondary btn-sm" onclick="exportExcel()" title="Export selected (or all) to Excel">
-        📊 Export Excel ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
-      </button>
       <button class="btn btn-secondary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)">
         📋 PPTX List ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
@@ -411,6 +412,13 @@ function renderCatalogResults() {
         </button>
         <span style="font-size:0.68rem;color:#dc3545;font-weight:600">under construction</span>
       </div>
+      <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px">
+        ${state.selectedServices.size > 0
+          ? `<button class="btn btn-secondary btn-sm" onclick="exportExcel()" title="Export selected to Excel">📊 Export Excel (${state.selectedServices.size})</button>`
+          : `<button class="btn btn-secondary btn-sm" disabled style="opacity:0.45;cursor:not-allowed" title="Select services to export">📊 Export Excel (all)</button>`
+        }
+        ${state.selectedServices.size === 0 ? `<span style="font-size:0.68rem;color:#dc3545;font-weight:600">under construction</span>` : ''}
+      </div>
     </div>
     ${state.pptx.error ? `<div class="error-strip" style="margin-bottom:0.5rem">⚠ ${state.pptx.error}</div>` : ''}
     <table class="service-table">
@@ -419,13 +427,26 @@ function renderCatalogResults() {
           <th style="width:2.5rem"><input type="checkbox" title="Select all / deselect all"
             ${state.filteredServices.length > 0 && state.filteredServices.every(s => state.selectedServices.has(s.code)) ? 'checked' : ''}
             onchange="toggleSelectAll(this.checked)" /></th>
-          <th>Service Name</th>
-          <th>Engagement Type</th>
+          <th style="cursor:pointer;user-select:none" onclick="toggleSort('name')">
+            Service Name ${state.sort.col==='name' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}
+          </th>
+          <th style="cursor:pointer;user-select:none" onclick="toggleSort('et')">
+            Engagement Type ${state.sort.col==='et' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}
+          </th>
           <th>Code</th>
         </tr>
       </thead>
       <tbody>
-        ${state.filteredServices.slice(0, 2000).map(svc => {
+        ${(() => {
+          let svcs = state.filteredServices.slice(0, 2000);
+          if (state.sort.col) {
+            svcs = [...svcs].sort((a, b) => {
+              const va = state.sort.col === 'name' ? (a.name||'') : (Array.isArray(a.engagementType)?a.engagementType[0]:a.engagementType||'');
+              const vb = state.sort.col === 'name' ? (b.name||'') : (Array.isArray(b.engagementType)?b.engagementType[0]:b.engagementType||'');
+              return state.sort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+            });
+          }
+          return svcs.map(svc => {
           const useDeck = state.filters.namingType === 'deck' && state.filters.businessScenario;
           const bsNaming = svc.business_scenario_naming || svc.businessScenarioNaming || {};
           const bsCode = state.filters.businessScenario;
@@ -443,7 +464,8 @@ function renderCatalogResults() {
             <td>${engagementBadge(svc.engagementType)}</td>
             <td style="font-size:0.75rem;color:#6a6a6a">${svc.code}</td>
           </tr>`;
-        }).join('')}
+        }).join('');
+        })()}
       </tbody>
     </table>` : ''}`;
 }
@@ -775,6 +797,12 @@ window.toggleSelectAll = function(checked) {
   patchResults();
 };
 
+window.toggleSort = function(col) {
+  if (state.sort.col === col) state.sort.dir = state.sort.dir === 'asc' ? 'desc' : 'asc';
+  else { state.sort.col = col; state.sort.dir = 'asc'; }
+  patchResults();
+};
+
 window.generatePptx = async function(template) {
   const codes = state.selectedServices.size > 0
     ? [...state.selectedServices]
@@ -787,26 +815,38 @@ window.generatePptx = async function(template) {
     const body = { serviceCodes: codes, template: template || 'short-description' };
     if (isListTemplate) {
       const s = state.pptxListSettings;
+      const bsCode = state.filters.businessScenario || null;
+      const mods = state.filters.modules || [];
+      // Resolve stream label for PPTX
+      let resolvedStreamMode = s.streamMode;
+      let resolvedStreamCustom = s.streamCustom;
+      if (!bsCode && resolvedStreamMode !== 'customNoBS') {
+        resolvedStreamMode = 'moduleOnly';
+      }
+      // Build selectedModuleCodes: explicit selection, or all BS modules when BS selected + none checked
+      const selectedModuleCodes = (() => {
+        if (mods.length > 1) return mods;
+        if (mods.length === 1) return mods;
+        if (mods.length === 0 && state.filters.module) return [state.filters.module];
+        if (mods.length === 0 && bsCode) return (state.catalog.bsToMods || {})[bsCode] || null;
+        return null;
+      })();
       body.listOptions = {
         cols: { ...s.cols },
         yearFrom: s.years ? s.yearFrom : '0',
         yearTo:   s.years ? s.yearTo   : '0',
         groupByET: s.groupByET, useDeckName: s.useDeckName,
         title: s.title,
-        bsCode: state.filters.businessScenario || null,
+        bsCode,
+        streamMode: resolvedStreamMode,
+        streamCustom: resolvedStreamCustom,
+        truncateObjectives: s.truncateObjectives,
         moduleName: (() => {
-          const mods = state.filters.modules || [];
           if (mods.length === 1) return state.catalog.moduleMap[mods[0]] || mods[0];
           if (mods.length === 0 && state.filters.module) return state.catalog.moduleMap[state.filters.module] || state.filters.module;
           return null;
         })(),
-        // When multiple modules selected, send their codes so backend can scope the hierarchy lookup
-        selectedModuleCodes: (() => {
-          const mods = state.filters.modules || [];
-          if (mods.length > 1) return mods;
-          if (mods.length === 0 && state.filters.module) return [state.filters.module];
-          return null;
-        })(),
+        selectedModuleCodes,
       };
     }
     const data = await apiFetch(`${CAP_BACKEND_URL}/api/pptx/generatePptx`, {
@@ -857,8 +897,21 @@ window.setPptxGroupET = function(v) {
 window.setPptxDeckName = function(v) {
   state.pptxListSettings.useDeckName = v; render();
 };
+let _titleDebounce = null;
 window.setPptxTitle = function(v) {
-  state.pptxListSettings.title = v; render();
+  state.pptxListSettings.title = v;
+  clearTimeout(_titleDebounce); _titleDebounce = setTimeout(render, 1000);
+};
+window.setPptxStreamMode = function(v) {
+  state.pptxListSettings.streamMode = v; render();
+};
+let _streamCustomDebounce = null;
+window.setPptxStreamCustom = function(v) {
+  state.pptxListSettings.streamCustom = v.slice(0, 64);
+  clearTimeout(_streamCustomDebounce); _streamCustomDebounce = setTimeout(render, 1000);
+};
+window.setPptxTruncateObjectives = function(v) {
+  state.pptxListSettings.truncateObjectives = v; render();
 };
 
 function renderPptxListSettingsModal() {
@@ -867,6 +920,39 @@ function renderPptxListSettingsModal() {
   const bsActive = !!state.filters.businessScenario;
   const yf = parseInt(s.yearFrom,10)||0, yt = parseInt(s.yearTo,10)||0;
   const yearValid = !s.years || (s.yearFrom.length===4 && s.yearTo.length===4 && yf>=2000 && yf<=2050 && yt>=2000 && yt<=2050 && yf<yt);
+
+  const streamSection = s.cols.stream ? `
+    <div style="font-weight:600;font-size:0.8rem;color:#1D2D3E;margin-bottom:0.4rem">Stream Label</div>
+    <div style="display:flex;flex-direction:column;gap:0.35rem;margin-bottom:1rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0">
+      ${bsActive ? `
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
+          <input type="radio" name="streamMode" value="bsAndModule" ${s.streamMode==='bsAndModule'?'checked':''} onchange="setPptxStreamMode('bsAndModule')"/>
+          Business Scenario + Module Name
+        </label>
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
+          <input type="radio" name="streamMode" value="moduleOnly" ${s.streamMode==='moduleOnly'?'checked':''} onchange="setPptxStreamMode('moduleOnly')"/>
+          Only Module Name
+        </label>
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
+          <input type="radio" name="streamMode" value="custom" ${s.streamMode==='custom'?'checked':''} onchange="setPptxStreamMode('custom')"/>
+          Custom
+        </label>
+        ${s.streamMode==='custom' ? `
+        <input type="text" id="pptx-stream-custom" maxlength="64" oninput="setPptxStreamCustom(this.value)"
+          style="margin-left:1.5rem;width:calc(100% - 1.5rem);padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid #8696A9;border-radius:4px"
+          placeholder="Custom stream label (max 64 chars)"/>` : ''}
+      ` : `
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
+          <input type="checkbox" ${s.streamMode==='customNoBS'?'checked':''} onchange="setPptxStreamMode(this.checked?'customNoBS':'moduleOnly')"/>
+          Custom label
+        </label>
+        ${s.streamMode==='customNoBS' ? `
+        <input type="text" id="pptx-stream-custom" maxlength="64" oninput="setPptxStreamCustom(this.value)"
+          style="margin-left:1.5rem;width:calc(100% - 1.5rem);padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid #8696A9;border-radius:4px"
+          placeholder="Custom stream label (max 64 chars)"/>` : ''}
+      `}
+    </div>` : '';
+
   return `
   <div class="modal-overlay" onclick="if(event.target===this)closePptxListSettings()">
     <div class="modal-box" style="max-width:500px">
@@ -885,6 +971,8 @@ function renderPptxListSettingsModal() {
         ${colCheck('tier',    'Tier (Engagement Type)', s.cols.tier, false)}
         ${colCheck('objectives','Objectives (Short Description)', s.cols.objectives, false)}
       </div>
+
+      ${streamSection}
 
       <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:${s.years?'0.4rem':'1rem'}">
         <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
@@ -920,10 +1008,14 @@ function renderPptxListSettingsModal() {
           <input type="checkbox" ${s.useDeckName?'checked':''} ${!bsActive?'disabled':''} onchange="setPptxDeckName(this.checked)"/>
           Use Deck Names in Service Component column
         </label>
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
+          <input type="checkbox" ${s.truncateObjectives?'checked':''} onchange="setPptxTruncateObjectives(this.checked)"/>
+          Truncate objectives description to 3 sentences
+        </label>
       </div>
 
       <div style="font-weight:600;font-size:0.8rem;color:#1D2D3E;margin-bottom:0.4rem">Slide Title</div>
-      <input type="text" value="${s.title.replace(/"/g,'&quot;')}" oninput="setPptxTitle(this.value)"
+      <input type="text" id="pptx-slide-title" value="${s.title.replace(/"/g,'&quot;')}" oninput="setPptxTitle(this.value)"
         style="width:100%;margin-bottom:1.25rem" placeholder="Services Description"/>
 
       <div style="display:flex;gap:0.75rem;justify-content:flex-end">
@@ -1214,7 +1306,7 @@ function render() {
   app.innerHTML = `
     <div class="shell-bar">
       <div style="display:flex;align-items:center;gap:1.5rem;width:100%;max-width:1400px;margin:0 auto">
-        <span class="shell-bar-title">🗂 SSC Intelligence</span>
+        <span class="shell-bar-title">🗂 Success Plans Catalogue Intelligence</span>
         <nav class="shell-nav">
           ${pages.map(p => `<a href="#" class="shell-nav-item ${state.currentPage===p.id?'active':''}" onclick="navigate('${p.id}');return false">${p.label}</a>`).join('')}
         </nav>

@@ -547,7 +547,7 @@ router.get('/metadata', async (req, res) => {
       const [syncRes, bsRes, modRes, etRes, phaseRes, supercatRes, maxTopicRes] = await Promise.all([
         db.query('SELECT last_updated, service_count FROM catalog_sync ORDER BY id DESC LIMIT 1'),
         db.query('SELECT code, name FROM catalog_services WHERE service_object=\'Business Scenario\' ORDER BY name'),
-        db.query('SELECT h.parent_code AS bs_code, s.code AS mod_code, s.name AS mod_name FROM catalog_hierarchy h JOIN catalog_services s ON s.code = h.child_code WHERE s.service_object = \'Business Scenario module\' ORDER BY s.name'),
+        db.query('SELECT h.parent_code AS bs_code, s.code AS mod_code, s.name AS mod_name FROM catalog_hierarchy h JOIN catalog_services s ON s.code = h.child_code WHERE s.service_object = \'Business Scenario module\' ORDER BY h.position'),
         db.query('SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key=\'engagementType\' ORDER BY feature_value'),
         db.query('SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key=\'sapActivateProjectPhase\' ORDER BY feature_value'),
         db.query('SELECT DISTINCT category_name FROM catalog_supercategories ORDER BY category_name'),
