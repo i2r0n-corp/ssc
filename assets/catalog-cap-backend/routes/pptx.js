@@ -24,22 +24,9 @@ async function _loadFlatIndex() {
     for (const row of svcRes.rows) {
       if (!row.code) continue;
       const obj = row.raw_data || {};
-      obj._name = row.name;
-      // engagement_type stored as plain text in DB
+      obj._name           = row.name;
       obj._engagementType = row.engagement_type || '';
       flatIndex[row.code] = obj;
-    }
-    // Build parent lookup: service code → module name, via catalog_hierarchy + catalog_services
-    // hierarchy: BS → module → service (two levels deep)
-    // We need the module (direct parent of the service)
-    const hierRes = await db.query(`
-      SELECT h.child_code AS svc_code, s.name AS mod_name
-      FROM catalog_hierarchy h
-      JOIN catalog_services s ON s.code = h.parent_code
-      WHERE s.service_object = 'Business Scenario module'
-    `);
-    for (const row of hierRes.rows) {
-      if (flatIndex[row.svc_code]) flatIndex[row.svc_code]._parentName = row.mod_name;
     }
     // Build phases from catalog_classification
     const cfRes = await db.query(
@@ -53,6 +40,13 @@ async function _loadFlatIndex() {
     }
     for (const [code, phases] of Object.entries(phasesMap)) {
       if (flatIndex[code]) flatIndex[code]._phases = [...new Set(phases)];
+    }
+    // Build deck names from catalog_bs_naming
+    const bsNamingRes = await db.query('SELECT service_code, bs_code, deck_name FROM catalog_bs_naming');
+    for (const row of bsNamingRes.rows) {
+      if (!flatIndex[row.service_code]) continue;
+      if (!flatIndex[row.service_code]._bsNaming) flatIndex[row.service_code]._bsNaming = {};
+      flatIndex[row.service_code]._bsNaming[row.bs_code] = row.deck_name;
     }
     return flatIndex;
   } catch(e) {
@@ -94,16 +88,34 @@ router.post('/generatePptx', async (req, res) => {
     const filePath = path.join(PPTX_TMP, `${fileId}.pptx`);
 
     if (templateName === 'list') {
-      // Template-based list PPTX — uses generate_list_pptx.js
       const opts = listOptions || {};
 
-      // Map flatIndex services to the shape expected by generate_list_pptx
+      // module name: if UI sent a single selected module name, use it for all services
+      // (avoids N-to-N hierarchy scattering services across multiple stream blocks).
+      // If null (no/multiple modules selected), look up each service's module from hierarchy.
+      const fixedModuleName = (opts.moduleName != null) ? opts.moduleName : null;
+
+      // Build per-service module name map when needed
+      let svcModuleMap = null;
+      if (fixedModuleName === null) {
+        const hierRows = await db.query(`
+          SELECT h.child_code AS svc_code, s.name AS mod_name
+          FROM catalog_hierarchy h
+          JOIN catalog_services s ON s.code = h.parent_code
+          WHERE s.service_object = 'Business Scenario module'
+        `);
+        svcModuleMap = {};
+        for (const row of hierRows.rows) {
+          if (!svcModuleMap[row.svc_code]) svcModuleMap[row.svc_code] = row.mod_name;
+        }
+      }
+
       const svcs = services.map(s => {
-        const parentName = s._parentName || '';
-        const phases     = s._phases || [];
-        const et         = s._engagementType || '';
-        // business_scenario_naming: keyed by BS code → deck name for that service
-        const bsNaming = s.businessScenarioNaming || s.business_scenario_naming || s.businessScenarios || {};
+        const phases = s._phases || [];
+        const et     = s._engagementType || '';
+        const parentName = fixedModuleName !== null
+          ? fixedModuleName
+          : (svcModuleMap[s.code] || '');
         return {
           code:             s.code,
           name:             s._name || s.name,
@@ -114,7 +126,7 @@ router.post('/generatePptx', async (req, res) => {
           engagement_type:  et,
           parent_name:      parentName,
           phases,
-          business_scenario_naming: bsNaming,
+          business_scenario_naming: s._bsNaming || {},
         };
       });
 
@@ -127,12 +139,6 @@ router.post('/generatePptx', async (req, res) => {
         yearTo:      opts.yearTo,
         cols:        opts.cols || null,
       });
-      // Debug: log first svc to check deck names and grouping
-      if (svcs.length > 0) {
-        const s0 = svcs[0];
-        console.log(`[pptx] opts: groupByET=${opts.groupByET} useDeckName=${opts.useDeckName} bsCode=${opts.bsCode}`);
-        console.log(`[pptx] svc[0]: name=${s0.name} parent_name=${s0.parent_name} et=${s0.engagement_type} bsNamingKeys=${Object.keys(s0.business_scenario_naming||{}).slice(0,3).join(',')}`);
-      }
       fs.writeFileSync(filePath, buf);
 
     } else {

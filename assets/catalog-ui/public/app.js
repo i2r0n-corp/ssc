@@ -794,6 +794,12 @@ window.generatePptx = async function(template) {
         groupByET: s.groupByET, useDeckName: s.useDeckName,
         title: s.title,
         bsCode: state.filters.businessScenario || null,
+        moduleName: (() => {
+          const mods = state.filters.modules || [];
+          if (mods.length === 1) return state.catalog.moduleMap[mods[0]] || mods[0];
+          if (mods.length === 0 && state.filters.module) return state.catalog.moduleMap[state.filters.module] || state.filters.module;
+          return null;  // multiple or no module selected — backend groups per-service
+        })(),
       };
     }
     const data = await apiFetch(`${CAP_BACKEND_URL}/api/pptx/generatePptx`, {
