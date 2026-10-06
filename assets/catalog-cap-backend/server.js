@@ -28,7 +28,9 @@ if (process.env.VCAP_SERVICES) {
   const vcap = JSON.parse(process.env.VCAP_SERVICES);
   const xsuaaCredentials = (vcap['xsuaa'] || vcap['user-provided'] || [])[0]?.credentials;
   if (xsuaaCredentials) {
-    passport.use('JWT', new XssecPassportStrategy(xsuaaCredentials));
+    const { XssecPassportStrategy, createService } = require('@sap/xssec');
+    const service = createService(xsuaaCredentials);
+    passport.use('JWT', new XssecPassportStrategy(service));
     app.use(passport.initialize());
     app.use('/api', passport.authenticate('JWT', { session: false }));
   }
