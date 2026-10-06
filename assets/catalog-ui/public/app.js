@@ -798,7 +798,14 @@ window.generatePptx = async function(template) {
           const mods = state.filters.modules || [];
           if (mods.length === 1) return state.catalog.moduleMap[mods[0]] || mods[0];
           if (mods.length === 0 && state.filters.module) return state.catalog.moduleMap[state.filters.module] || state.filters.module;
-          return null;  // multiple or no module selected — backend groups per-service
+          return null;
+        })(),
+        // When multiple modules selected, send their codes so backend can scope the hierarchy lookup
+        selectedModuleCodes: (() => {
+          const mods = state.filters.modules || [];
+          if (mods.length > 1) return mods;
+          if (mods.length === 0 && state.filters.module) return [state.filters.module];
+          return null;
         })(),
       };
     }

@@ -90,20 +90,41 @@ router.post('/generatePptx', async (req, res) => {
     if (templateName === 'list') {
       const opts = listOptions || {};
 
-      // module name: if UI sent a single selected module name, use it for all services
-      // (avoids N-to-N hierarchy scattering services across multiple stream blocks).
-      // If null (no/multiple modules selected), look up each service's module from hierarchy.
+      // module name: if UI sent a single selected module name, use it for all services.
+      // If null (multiple modules selected), look up each service's module from hierarchy
+      // scoped to only the selected module codes so services map to the correct stream label.
       const fixedModuleName = (opts.moduleName != null) ? opts.moduleName : null;
+      const selectedModuleCodes = Array.isArray(opts.selectedModuleCodes) && opts.selectedModuleCodes.length > 0
+        ? opts.selectedModuleCodes : null;
 
       // Build per-service module name map when needed
       let svcModuleMap = null;
       if (fixedModuleName === null) {
-        const hierRows = await db.query(`
-          SELECT h.child_code AS svc_code, s.name AS mod_name
-          FROM catalog_hierarchy h
-          JOIN catalog_services s ON s.code = h.parent_code
-          WHERE s.service_object = 'Business Scenario module'
-        `);
+        let hierQuery, hierParams;
+        const svcCodes = services.map(s => s.code);
+        if (selectedModuleCodes) {
+          // Scope to selected module codes AND only the exported services
+          hierQuery = `
+            SELECT h.child_code AS svc_code, s.name AS mod_name, s.code AS mod_code
+            FROM catalog_hierarchy h
+            JOIN catalog_services s ON s.code = h.parent_code
+            WHERE s.service_object = 'Business Scenario module'
+              AND s.code = ANY($1)
+              AND h.child_code = ANY($2)
+          `;
+          hierParams = [selectedModuleCodes, svcCodes];
+        } else {
+          // No module filter at all — look up across all modules for the exported services
+          hierQuery = `
+            SELECT h.child_code AS svc_code, s.name AS mod_name
+            FROM catalog_hierarchy h
+            JOIN catalog_services s ON s.code = h.parent_code
+            WHERE s.service_object = 'Business Scenario module'
+              AND h.child_code = ANY($1)
+          `;
+          hierParams = [svcCodes];
+        }
+        const hierRows = await db.query(hierQuery, hierParams);
         svcModuleMap = {};
         for (const row of hierRows.rows) {
           if (!svcModuleMap[row.svc_code]) svcModuleMap[row.svc_code] = row.mod_name;
