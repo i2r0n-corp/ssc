@@ -10,15 +10,19 @@
   },
   "jest": {
     "testEnvironment": "node",
-    "testMatch": ["**/tests/**/*.test.js"]
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ]
   },
   "dependencies": {
+    "@sap/xssec": "^4.15.0",
     "express": "^4.18.2",
     "multer": "^1.4.5-lts.1",
-    "uuid": "^9.0.0",
+    "passport": "^0.7.0",
+    "pg": "^8.11.3",
     "pptxgenjs": "^3.12.0",
-    "xlsx": "^0.18.5",
-    "pg": "^8.11.3"
+    "uuid": "^9.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "jest": "*",

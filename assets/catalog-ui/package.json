@@ -4,7 +4,8 @@
   "description": "SSC Catalog Intelligence UI — React + SAP UI5 Web Components visual interface",
   "private": true,
   "scripts": {
-    "start": "node server.js",
+    "start": "node node_modules/@sap/approuter/approuter.js",
+    "start:local": "node server.js",
     "build": "node -e \"console.log('Build complete — static files in public/')\"",
     "dev": "node server.js",
     "test": "jest --forceExit --testTimeout=10000"
@@ -14,7 +15,8 @@
     "testMatch": ["**/tests/**/*.test.js"]
   },
   "dependencies": {
-    "express": "^4.22.3"
+    "express": "^4.22.3",
+    "@sap/approuter": "^16"
   },
   "license": "ISC",
   "devDependencies": {
@@ -22,3 +24,4 @@
     "supertest": "^7.3.0"
   }
 }
+

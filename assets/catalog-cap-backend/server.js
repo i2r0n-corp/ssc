@@ -6,6 +6,9 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const passport = require('passport');
+const { JWTStrategy } = require('@sap/xssec');
+const xsenv = require('@sap/xsenv');
 
 const app = express();
 
@@ -20,6 +23,14 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.raw({ type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/octet-stream'], limit: '20mb' }));
+
+// XSUAA auth — only active when bound to CF (VCAP_SERVICES present)
+if (process.env.VCAP_SERVICES) {
+  const xsuaaService = xsenv.getServices({ xsuaa: { tag: 'xsuaa' } }).xsuaa;
+  passport.use('JWT', new JWTStrategy(xsuaaService));
+  app.use(passport.initialize());
+  app.use('/api', passport.authenticate('JWT', { session: false }));
+}
 
 // Mount routers
 app.use('/api/catalog', require('./routes/catalog'));

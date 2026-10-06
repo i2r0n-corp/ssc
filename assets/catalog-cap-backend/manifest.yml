@@ -15,3 +15,5 @@ applications:
       # Add your SSC credentials here:
       # SSC_BASE_URL: https://your-ssc-instance.com
       # SSC_API_KEY: your-api-key
+    services:
+      - ssc-catalog-xsuaa

@@ -1,0 +1,18 @@
+{
+  "xsappname": "ssc-catalog-intelligence",
+  "tenant-mode": "dedicated",
+  "scopes": [
+    { "name": "$XSAPPNAME.user", "description": "Access SSC Catalog" }
+  ],
+  "role-templates": [
+    { "name": "SSCUser", "description": "SSC Catalog User", "scope-references": ["$XSAPPNAME.user"] }
+  ],
+  "role-collections": [
+    { "name": "SSC Catalog User", "role-template-references": ["$XSAPPNAME.SSCUser"] }
+  ],
+  "oauth2-configuration": {
+    "redirect-uris": [
+      "https://ssc-catalog-ui.cfapps.us10-001.hana.ondemand.com/**"
+    ]
+  }
+}
