@@ -19,27 +19,29 @@ fs.mkdirSync(PPTX_TMP, { recursive: true });
 async function _loadFlatIndex() {
   try {
     db.getPool();
-    const svcRes = await db.query('SELECT code, raw_data FROM catalog_services');
+    // Select dedicated columns alongside raw_data so parent_code is always reliable
+    const svcRes = await db.query('SELECT code, name, parent_code, raw_data FROM catalog_services');
     const flatIndex = {};
     for (const row of svcRes.rows) {
-      if (row.raw_data && row.code) flatIndex[row.code] = row.raw_data;
+      if (!row.code) continue;
+      const obj = row.raw_data || {};
+      obj._name       = row.name;
+      obj._parentCode = row.parent_code;
+      flatIndex[row.code] = obj;
     }
-    const hierRes = await db.query('SELECT parent_code, child_code FROM catalog_hierarchy ORDER BY position');
-    for (const row of hierRes.rows) {
-      if (flatIndex[row.parent_code]) {
-        if (!flatIndex[row.parent_code].childServices) flatIndex[row.parent_code].childServices = [];
-        flatIndex[row.parent_code].childServices.push(row.child_code);
-      }
-    }
-    // Build module name index — modules are not in catalog_services, look them up from matching log
-    const modRes = await db.query(
-      'SELECT DISTINCT module_code, module_name FROM catalog_matching_log_rows WHERE module_code IS NOT NULL AND module_name IS NOT NULL'
+    // Build phases from catalog_classification (reliable, one row per phase value)
+    const cfRes = await db.query(
+      "SELECT service_code, feature_value FROM catalog_classification WHERE feature_key = 'sapActivateProjectPhase'"
     );
-    const moduleNames = {};
-    for (const row of modRes.rows) moduleNames[row.module_code] = row.module_name;
-    // Inject module names as synthetic entries so pptx route can look them up
-    for (const [code, name] of Object.entries(moduleNames)) {
-      if (!flatIndex[code]) flatIndex[code] = { code, name };
+    const phasesMap = {};
+    for (const row of cfRes.rows) {
+      if (!phasesMap[row.service_code]) phasesMap[row.service_code] = [];
+      // feature_value may be a comma-separated string from the API — split it
+      const vals = row.feature_value.split(',').map(v => v.trim()).filter(Boolean);
+      phasesMap[row.service_code].push(...vals);
+    }
+    for (const [code, phases] of Object.entries(phasesMap)) {
+      if (flatIndex[code]) flatIndex[code]._phases = [...new Set(phases)];
     }
     return flatIndex;
   } catch(e) {
@@ -87,16 +89,15 @@ router.post('/generatePptx', async (req, res) => {
 
       // Map flatIndex services to the shape expected by generate_list_pptx
       const svcs = services.map(s => {
-        const cf = s.classificationFeatures || [];
-        const phases = cf.filter(f => f.key === 'sapActivateProjectPhase').map(f => f.value);
-        const et = cf.filter(f => f.key === 'engagementType').map(f => f.value)[0]
+        // Use DB-sourced fields (prefixed _) — reliable vs raw_data which may be incomplete
+        const parentCode = s._parentCode || s.parentCode || '';
+        const parentName = (flatIndex[parentCode] && (flatIndex[parentCode]._name || flatIndex[parentCode].name)) || parentCode || '';
+        const phases     = s._phases || [];
+        const et = (s.classificationFeatures || []).filter(f => f.key === 'engagementType').map(f => f.value)[0]
           || (Array.isArray(s.engagementType) ? s.engagementType[0] : s.engagementType) || '';
-        // module name: look up parent in flatIndex
-        const parentCode = s.parentCode || '';
-        const parentName = (flatIndex[parentCode] && flatIndex[parentCode].name) || parentCode || '';
         return {
           code:             s.code,
-          name:             s.name,
+          name:             s._name || s.name,
           short_description: s.shortDescription || '',
           summary:          s.summary || '',
           key_benefits:     s.keyBenefits || '',

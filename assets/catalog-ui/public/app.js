@@ -837,11 +837,14 @@ window.togglePptxCol = function(col) {
 window.setPptxYears = function(checked) {
   state.pptxListSettings.years = checked; render();
 };
+let _yearDebounce = null;
 window.setPptxYearFrom = function(v) {
-  state.pptxListSettings.yearFrom = v.replace(/\D/g,'').slice(0,4); render();
+  state.pptxListSettings.yearFrom = v.replace(/\D/g,'').slice(0,4);
+  clearTimeout(_yearDebounce); _yearDebounce = setTimeout(render, 1000);
 };
 window.setPptxYearTo = function(v) {
-  state.pptxListSettings.yearTo = v.replace(/\D/g,'').slice(0,4); render();
+  state.pptxListSettings.yearTo = v.replace(/\D/g,'').slice(0,4);
+  clearTimeout(_yearDebounce); _yearDebounce = setTimeout(render, 1000);
 };
 window.setPptxGroupET = function(v) {
   state.pptxListSettings.groupByET = v; render();
