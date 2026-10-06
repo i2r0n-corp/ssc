@@ -1,20 +1,3 @@
-/**
- * PPTX List generator — clones template slide, replaces table rows with service data.
- * No external dependencies.
- *
- * Usage:
- *   node generate_list_pptx.js [options]
- *
- * Options:
- *   --template <path>    Path to ListTemplate.pptx (default: OneDrive path)
- *   --data <path>        Path to services JSON (default: ./sample_services.json)
- *   --out <path>         Output path (default: ./output_list.pptx)
- *   --title <text>       Slide title (default: "Services Description")
- *   --groupByET          Sort within module: Max→Advanced→Foundational
- *   --bsCode <code>      BS code for deck name lookup
- *   --deckName           Use deck names in Service Component column
- */
-
 'use strict';
 
 const fs   = require('fs');
@@ -42,10 +25,6 @@ function readZip(buf) {
   return entries;
 }
 
-function writeZip(files, outPath) {
-  fs.writeFileSync(outPath, writeZipBuffer(files));
-}
-
 function writeZipBuffer(files) {
   function crc32(buf) {
     const t = new Uint32Array(256);
@@ -56,18 +35,16 @@ function writeZipBuffer(files) {
   }
   function u16(n){const b=Buffer.alloc(2);b.writeUInt16LE(n>>>0,0);return b;}
   function u32(n){const b=Buffer.alloc(4);b.writeUInt32LE(n>>>0,0);return b;}
-
   const chunks=[], dir=[];
   let off=0;
   for(const [name,content] of Object.entries(files)){
-    const nb  = Buffer.from(name,'utf8');
-    const db  = Buffer.isBuffer(content) ? content : Buffer.from(content,'utf8');
-    const crc = crc32(db);
-    const sz  = db.length;
-    const lfh = Buffer.concat([Buffer.from([0x50,0x4B,0x03,0x04]),u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(sz),u32(sz),u16(nb.length),u16(0)]);
+    const nb=Buffer.from(name,'utf8');
+    const db=Buffer.isBuffer(content)?content:Buffer.from(content,'utf8');
+    const crc=crc32(db), sz=db.length;
+    const lfh=Buffer.concat([Buffer.from([0x50,0x4B,0x03,0x04]),u16(20),u16(0),u16(0),u16(0),u16(0),u32(crc),u32(sz),u32(sz),u16(nb.length),u16(0)]);
     dir.push({nb,crc,sz,off});
     chunks.push(lfh,nb,db);
-    off += lfh.length+nb.length+sz;
+    off+=lfh.length+nb.length+sz;
   }
   const cdc=[];
   for(const e of dir) cdc.push(Buffer.concat([Buffer.from([0x50,0x4B,0x01,0x02]),u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),u32(e.crc),u32(e.sz),u32(e.sz),u16(e.nb.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(e.off)]),e.nb);
@@ -80,15 +57,31 @@ function writeZipBuffer(files) {
 
 const PHASE_ORDER = ['Prepare','Discover','Explore','Realize','Deploy','Run'];
 const ET_ORDER    = ['Max Success Plan','Advanced Success Plan','Enterprise Support','Embedded Launch Activities','Cloud Prepackaged Services'];
-const ET_LABEL    = {'Max Success Plan':'Max','Advanced Success Plan':'Advanced','Enterprise Support':'Foundational','Embedded Launch Activities':'Foundational','Cloud Prepackaged Services':'Foundational'};
-const ROWS_PER_SLIDE = 8;
 
-// Table layout constants (EMU) — measured from template
-const TABLE_X          = 506781;
-const TABLE_Y          = 1080130;
-const STREAM_COL_W     = 1019472;
-const HEADER_H         = 893048;  // row0 (410840) + row1 (482208)
-const DATA_ROW_H       = 368094;  // height matching template data rows
+// Table layout (EMU) — measured from template
+const TABLE_X        = 506781;
+const TABLE_Y        = 1080130;
+const TABLE_W        = 10765232;  // fixed, never changes
+const HEADER_H       = 893048;   // row0 (410840) + row1 (482208)
+const SLIDE_H        = 6858000;  // standard widescreen slide height
+const AVAIL_H        = SLIDE_H - TABLE_Y - HEADER_H;  // 4884822 EMU for data rows
+
+// Fixed column widths (EMU) — from template gridCol measurements
+const COL_W = {
+  stream:    1019472,
+  phases:     810822,
+  component: 1232132,
+  tier:       810822,  // same as phases — short labels
+  year:       400000,  // confirmed by user
+};
+
+// Cell padding from template (marL/marR/marT/marB)
+const PAD_L = 9523, PAD_R = 9523, PAD_T = 9523, PAD_B = 0;
+
+// Font metrics: 72 Brand 8pt
+const FONT_SZ_EMU   = 8 * 12700;          // 101600 EMU
+const LINE_H_EMU    = Math.round(FONT_SZ_EMU * 1.2);  // 121920 EMU
+const AVG_CHAR_W    = Math.round(FONT_SZ_EMU * 0.50); // 50800 EMU — slightly narrower than 0.55 for safety
 
 // ── XML escape ────────────────────────────────────────────────────────────────
 
@@ -96,16 +89,15 @@ function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
 }
 
-// ── Cell builders — exact XML cloned from template ────────────────────────────
-// Every tcPr, every ln element, every attribute is copied verbatim from the
-// extracted template cells. Only text content and rowSpan numbers change.
+// ── Run properties ────────────────────────────────────────────────────────────
 
 const RPR_DATA = `<a:rPr lang="en-GB" sz="800" b="0" i="0" u="none" strike="noStrike" dirty="0"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:effectLst/><a:latin typeface="72 Brand" panose="020B0504030603020204" pitchFamily="34" charset="0"/></a:rPr>`;
-const RPR_DATA_BOLD = `<a:rPr lang="en-GB" sz="1100" b="1" i="0" u="none" strike="noStrike" dirty="0"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:effectLst/><a:latin typeface="72 Brand" panose="020B0504030603020204" pitchFamily="34" charset="0"/></a:rPr>`;
+const RPR_BOLD = `<a:rPr lang="en-GB" sz="1100" b="1" i="0" u="none" strike="noStrike" dirty="0"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:effectLst/><a:latin typeface="72 Brand" panose="020B0504030603020204" pitchFamily="34" charset="0"/></a:rPr>`;
 
-// tcPr for data cell — exact from template
+// ── Cell builders ─────────────────────────────────────────────────────────────
+
 const TCPR_DATA =
-  `<a:tcPr marL="9523" marR="9523" marT="9523" marB="0" anchor="ctr">` +
+  `<a:tcPr marL="${PAD_L}" marR="${PAD_R}" marT="${PAD_T}" marB="${PAD_B}" anchor="t">` +
   `<a:lnL w="12700" cmpd="sng"><a:noFill/></a:lnL>` +
   `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr"><a:noFill/><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>` +
   `<a:lnT w="12700" cap="flat" cmpd="sng" algn="ctr"><a:noFill/><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnT>` +
@@ -114,7 +106,6 @@ const TCPR_DATA =
   `<a:lnBlToTr w="12700" cmpd="sng"><a:noFill/><a:prstDash val="solid"/></a:lnBlToTr>` +
   `<a:noFill/></a:tcPr>`;
 
-// tcPr for stream rowSpan cell — exact from template + anchor="ctr" for vertical centering
 const TCPR_STREAM =
   `<a:tcPr marL="91416" marR="91416" marT="45708" marB="45708" anchor="ctr">` +
   `<a:lnL w="12700" cmpd="sng"><a:noFill/></a:lnL>` +
@@ -123,216 +114,234 @@ const TCPR_STREAM =
   `<a:lnB w="12700" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnB>` +
   `</a:tcPr>`;
 
-// vMerge cell for stream continuation — exact from template
 const CELL_STREAM_VMERGE =
   `<a:tc vMerge="1"><a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="en-GB"/></a:p></a:txBody>` +
   `<a:tcPr><a:lnT w="12700" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnT></a:tcPr></a:tc>`;
 
 function cellStream(rowSpan) {
-  // Stream column: empty cell, borders only — text is overlaid as a rotated floating textbox
   return `<a:tc rowSpan="${rowSpan}">` +
     `<a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="en-GB"/></a:p></a:txBody>` +
     TCPR_STREAM + `</a:tc>`;
 }
 
-function cellData(text) {
+function cellData(text, algn) {
+  const align = algn || 'l';
   return `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>` +
-    `<a:p><a:pPr algn="l" rtl="0" fontAlgn="ctr"><a:buNone/></a:pPr>` +
+    `<a:p><a:pPr algn="${align}" rtl="0"><a:buNone/></a:pPr>` +
     (text ? `<a:r>${RPR_DATA}<a:t>${esc(text)}</a:t></a:r>` : `<a:endParaRPr lang="en-GB"/>`) +
     `</a:p></a:txBody>${TCPR_DATA}</a:tc>`;
 }
 
-// ── Row builder ───────────────────────────────────────────────────────────────
-
-function buildRows(dataRows, yearCount) {
-  const nYears = yearCount || 5;
-  return dataRows.map(dr => {
-    const streamCell = dr.isStreamStart
-      ? cellStream(dr.streamRowSpan)
-      : CELL_STREAM_VMERGE;
-    return `<a:tr h="${DATA_ROW_H}">` +
-      streamCell +
-      cellData(dr.phases) +
-      cellData(dr.component) +
-      cellData(dr.objectives) +
-      Array(nYears).fill(cellData('')).join('') +
-      `</a:tr>`;
-  }).join('');
-}
-
-// Helper: build a year header cell matching template style
-function headerYearCell(yearText) {
+function headerCell(text, algn) {
+  const align = algn || 'ctr';
   return `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>` +
-    `<a:p><a:pPr algn="ctr"><a:buNone/></a:pPr>` +
-    (yearText ? `<a:r>${RPR_DATA}<a:t>${esc(yearText)}</a:t></a:r>` : `<a:endParaRPr lang="en-GB"/>`) +
+    `<a:p><a:pPr algn="${align}"><a:buNone/></a:pPr>` +
+    (text ? `<a:r>${RPR_DATA}<a:t>${esc(text)}</a:t></a:r>` : `<a:endParaRPr lang="en-GB"/>`) +
     `</a:p></a:txBody>${TCPR_DATA}</a:tc>`;
 }
 
-// ── Stream overlay: rotated floating textbox for module label ─────────────────
-// Since vert="vert270" is ignored in table cells, we place a separate shape
-// rotated 270° (rot=16200000) overlapping the stream column area.
-// The shape pivot = shape center, so:
-//   cx (unrotated) = visual height of the span = rowCount * DATA_ROW_H
-//   cy (unrotated) = visual width = STREAM_COL_W
-//   x = center_x_of_stream_col - cx/2
-//   y = top_of_span - cy/2 + span_height/2
-// Stream column center x ≈ TABLE_X + STREAM_COL_W/2 = 506781 + 509736 = 1016517
-// After rotation the visual width becomes cy and visual height becomes cx.
+// ── Row height calculation ────────────────────────────────────────────────────
 
-function buildStreamOverlays(streamBlocks) {
-  // streamBlocks: [{ text, rowOffset, rowCount }]
-  // rowOffset = number of data rows above this block on this slide
-  const STREAM_CENTER_X = TABLE_X + Math.floor(STREAM_COL_W / 2); // 1016517
+function calcRowHeight(objText, objColWidth) {
+  const textWidth = objColWidth - PAD_L - PAD_R;
+  const charsPerLine = Math.max(1, Math.floor(textWidth / AVG_CHAR_W));
+  const lines = Math.max(1, Math.ceil((objText || '').length / charsPerLine));
+  return lines * LINE_H_EMU + PAD_T;
+}
+
+// ── Stream overlay (rotated floating textbox) ─────────────────────────────────
+
+function buildStreamOverlays(streamBlocks, colW, rowHeights, tableX) {
+  const STREAM_CENTER_X = tableX + Math.floor(colW / 2);
+  let rowTop = TABLE_Y + HEADER_H;
   return streamBlocks.map((blk, i) => {
-    const spanH = blk.rowCount * DATA_ROW_H;                    // visual height
-    const cx    = spanH;                                         // unrotated cx = visual height
-    const cy    = STREAM_COL_W;                                  // unrotated cy = visual width
-    const shapeX = STREAM_CENTER_X - Math.floor(cx / 2);
-    const spanTopY = TABLE_Y + HEADER_H + blk.rowOffset * DATA_ROW_H;
-    const spanCtrY = spanTopY + Math.floor(spanH / 2);
-    const shapeY  = spanCtrY - Math.floor(cy / 2);
+    // sum heights of rows in this block
+    const blockHeights = rowHeights.slice(blk.rowOffset, blk.rowOffset + blk.rowCount);
+    const spanH = blockHeights.reduce((a,b)=>a+b, 0);
+    const cx    = spanH;
+    const cy    = colW;
+    const shapeX  = STREAM_CENTER_X - Math.floor(cx / 2);
+    const spanCtrY = rowTop + Math.floor(spanH / 2);
+    const shapeY   = spanCtrY - Math.floor(cy / 2);
+    rowTop += spanH;
     const id = 200 + i;
     return `<p:sp>` +
-      `<p:nvSpPr>` +
-      `<p:cNvPr id="${id}" name="StreamLabel${id}"/>` +
-      `<p:cNvSpPr txBox="1"/>` +
-      `<p:nvPr/>` +
-      `</p:nvSpPr>` +
-      `<p:spPr>` +
-      `<a:xfrm rot="16200000">` +
-      `<a:off x="${shapeX}" y="${shapeY}"/>` +
-      `<a:ext cx="${cx}" cy="${cy}"/>` +
-      `</a:xfrm>` +
-      `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>` +
-      `<a:noFill/>` +
-      `</p:spPr>` +
+      `<p:nvSpPr><p:cNvPr id="${id}" name="StreamLabel${id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>` +
+      `<p:spPr><a:xfrm rot="16200000"><a:off x="${shapeX}" y="${shapeY}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>` +
+      `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>` +
       `<p:txBody>` +
       `<a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0" rtlCol="0"><a:spAutoFit/></a:bodyPr>` +
       `<a:lstStyle/>` +
-      `<a:p>` +
-      `<a:pPr algn="ctr"><a:buNone/></a:pPr>` +
-      `<a:r>${RPR_DATA_BOLD}<a:t>${esc(blk.text)}</a:t></a:r>` +
-      `</a:p>` +
-      `</p:txBody>` +
-      `</p:sp>`;
+      `<a:p><a:pPr algn="ctr"><a:buNone/></a:pPr><a:r>${RPR_BOLD}<a:t>${esc(blk.text)}</a:t></a:r></a:p>` +
+      `</p:txBody></p:sp>`;
   }).join('');
 }
 
-// ── Slide XML: replace rows in template slide ─────────────────────────────────
+// ── Column layout calculator ──────────────────────────────────────────────────
 
-function buildSlideXml(templateSlideXml, dataRows, slideTitle, streamBlocks, yearRange) {
-  const [yearFrom, yearTo] = yearRange || [2026, 2030];
-  const yearCount   = yearTo - yearFrom + 1;    // total year cols we want
-  const extraCols   = Math.max(0, yearCount - 3); // template has 3 year cols (2027/2028/2029)
+function calcLayout(cols, yearCount) {
+  // cols: { stream, phases, component, tier, objectives } — booleans
+  // yearCount: 0..6
+  let used = 0;
+  if (cols.stream)    used += COL_W.stream;
+  if (cols.phases)    used += COL_W.phases;
+  if (cols.component) used += COL_W.component;
+  if (cols.tier)      used += COL_W.tier;
+  used += yearCount * COL_W.year;
+  const objW = Math.max(500000, TABLE_W - used);  // objectives gets the rest, min 500k EMU
+  return { objW, yearCount };
+}
+
+// ── Build tblGrid XML ─────────────────────────────────────────────────────────
+
+function buildTblGrid(cols, objW, yearCount) {
+  let g = '';
+  if (cols.stream)    g += `<a:gridCol w="${COL_W.stream}"/>`;
+  if (cols.phases)    g += `<a:gridCol w="${COL_W.phases}"/>`;
+  if (cols.component) g += `<a:gridCol w="${COL_W.component}"/>`;
+  if (cols.tier)      g += `<a:gridCol w="${COL_W.tier}"/>`;
+  g += `<a:gridCol w="${objW}"/>`;
+  for (let i=0; i<yearCount; i++) g += `<a:gridCol w="${COL_W.year}"/>`;
+  return `<a:tblGrid>${g}</a:tblGrid>`;
+}
+
+// ── Build header rows XML ─────────────────────────────────────────────────────
+
+function buildHeaderRows(cols, objW, yearCount, yearFrom) {
+  const ROW0_H = 410840, ROW1_H = 482208;
+
+  // Row 0: spans — Stream spans 2 rows in the template but we rebuild from scratch
+  // Row 0 is a grouping row (blank cells under stream/phases/component/tier/objectives, year blanks)
+  // Row 1 is the label row
+  // We keep it simple: row0 = all blank, row1 = column labels + year numbers
+
+  const blankCell = headerCell('');
+  const colCount = (cols.stream?1:0)+(cols.phases?1:0)+(cols.component?1:0)+(cols.tier?1:0)+1+yearCount;
+
+  const row0 = `<a:tr h="${ROW0_H}">${Array(colCount).fill(blankCell).join('')}</a:tr>`;
+
+  let row1cells = '';
+  if (cols.stream)    row1cells += headerCell('Stream');
+  if (cols.phases)    row1cells += headerCell('Activate Phase');
+  if (cols.component) row1cells += headerCell('Service Component');
+  if (cols.tier)      row1cells += headerCell('Tier');
+  row1cells += headerCell('Objectives');
+  for (let i=0; i<yearCount; i++) row1cells += headerCell(String(yearFrom + i));
+  const row1 = `<a:tr h="${ROW1_H}">${row1cells}</a:tr>`;
+
+  return row0 + row1;
+}
+
+// ── Build data rows XML ───────────────────────────────────────────────────────
+
+function buildDataRows(dataRows, cols, objW, yearCount) {
+  return dataRows.map(dr => {
+    let cells = '';
+    if (cols.stream) {
+      cells += dr.isStreamStart ? cellStream(dr.streamRowSpan) : CELL_STREAM_VMERGE;
+    }
+    if (cols.phases)    cells += cellData(dr.phases);
+    if (cols.component) cells += cellData(dr.component);
+    if (cols.tier)      cells += cellData(dr.tier);
+    cells += cellData(dr.objectives);
+    for (let i=0; i<yearCount; i++) cells += cellData('', 'ctr');
+    return `<a:tr h="${dr.rowH}">${cells}</a:tr>`;
+  }).join('');
+}
+
+// ── Slide XML builder ─────────────────────────────────────────────────────────
+
+function buildSlideXml(templateSlideXml, dataRows, slideTitle, streamBlocks, cols, objW, yearCount, yearFrom) {
   let xml = templateSlideXml;
 
-  // 1. Replace title text
+  // 1. Replace title
   xml = xml.replace(
     /(<p:cNvPr[^>]*name="Title 3"[^>]*\/>[\s\S]*?<a:t>)([^<]*)(<\/a:t>)/,
     `$1${esc(slideTitle)}$3`
   );
 
-  // 2. Replace all rows (after </a:tblGrid>) with our generated rows
-  //    Keep header rows 0 and 1 from template, replace rows 2+ with our data
-  const gridEnd = xml.indexOf('</a:tblGrid>') + 12;
-  const tblEnd  = xml.indexOf('</a:tbl>');
-
-  // Extract header rows (first 2 <a:tr> blocks)
-  let pos = gridEnd, headerRows = '';
-  for (let i = 0; i < 2; i++) {
-    const rs = xml.indexOf('<a:tr ', pos);
-    if (rs < 0) break;
-    const re = xml.indexOf('</a:tr>', rs) + 7;
-    headerRows += xml.slice(rs, re);
-    pos = re;
-  }
-
-  // Rebuild: everything before rows + header rows + our data rows + close
-  xml = xml.slice(0, gridEnd) + headerRows + buildRows(dataRows, yearCount) + xml.slice(tblEnd);
-
-  // 3. Expand year columns: template has 3 (2027/2028/2029)
-  //    3a. Add extra gridCol entries
-  if (extraCols > 0) {
-    const extra = Array(extraCols).fill('<a:gridCol w="516700"/>').join('');
-    xml = xml.replace(/(<\/a:tblGrid>)/, extra + '$1');
-  }
-
-  // 3b. Relabel template year cells to start from yearFrom
-  xml = xml.replace(/>2027</g, `>${yearFrom}<`)
-           .replace(/>2028</g, `>${yearFrom+1}<`)
-           .replace(/>2029</g, `>${yearFrom+2}<`);
-
-  // 3c. Add remaining year cells to header row 1
-  if (extraCols > 0) {
-    const extraYearCells = Array.from({length:extraCols},(_,i) => headerYearCell(String(yearFrom+3+i))).join('');
-    xml = xml.replace(/((?:>${yearFrom}<|>${yearFrom+1}<|>${yearFrom+2}<)[\s\S]*?<\/a:tr>)/, m =>
-      m.replace('</a:tr>', extraYearCells + '</a:tr>')
-    );
-  }
-
-  // 3d. Add extra blank cells to header row 0
-  if (extraCols > 0) {
-    let p = xml.indexOf('</a:tblGrid>') + 12;
-    const r0s = xml.indexOf('<a:tr ', p);
-    const r0e = xml.indexOf('</a:tr>', r0s) + 7;
-    const blanks = Array(extraCols).fill(headerYearCell('')).join('');
-    const patchedR0 = xml.slice(r0s, r0e).replace('</a:tr>', blanks + '</a:tr>');
-    xml = xml.slice(0, r0s) + patchedR0 + xml.slice(r0e);
-  }
-
-  // 4. Fix table graphicFrame dimensions
-  const actualTableCx = 10765232 + extraCols * 516700;
-  const actualTableCy = HEADER_H + dataRows.length * DATA_ROW_H;
-  xml = xml.replace(/(<p:xfrm>[\s\S]*?<a:ext cx=")10765232(" cy=")[^"]*(")/,
-    `$1${actualTableCx}$2${actualTableCy}$3`);
-
-  // 4. Remove think-cell graphicFrame
+  // 2. Strip think-cell artifacts
   xml = xml.replace(/<p:graphicFrame>[\s\S]*?think-cell data[\s\S]*?<\/p:graphicFrame>/g, '');
-
-  // 4. Remove "Business as usual" textbox (TextBox 2) and any custDataLst on shapes
   xml = xml.replace(/<p:sp>[\s\S]*?name="TextBox 2"[\s\S]*?<\/p:sp>/g, '');
   xml = xml.replace(/<p:custDataLst>[\s\S]*?<\/p:custDataLst>/g, '');
 
-  // 5. Inject stream overlay textboxes before </p:spTree>
-  if (streamBlocks && streamBlocks.length > 0) {
-    const overlays = buildStreamOverlays(streamBlocks);
+  // 3. Replace entire table content (tblGrid + all rows)
+  const tblGridStart = xml.indexOf('<a:tblGrid>');
+  const tblGridEnd   = xml.indexOf('</a:tblGrid>') + 12;
+  const tblEnd       = xml.indexOf('</a:tbl>');
+
+  const rowHeights = dataRows.map(r => r.rowH);
+  const totalDataH = rowHeights.reduce((a,b)=>a+b, 0);
+  const tableCy    = HEADER_H + totalDataH;
+
+  const newGrid    = buildTblGrid(cols, objW, yearCount);
+  const headerRows = buildHeaderRows(cols, objW, yearCount, yearFrom);
+  const dataRowXml = buildDataRows(dataRows, cols, objW, yearCount);
+
+  xml = xml.slice(0, tblGridStart) + newGrid + headerRows + dataRowXml + xml.slice(tblEnd);
+
+  // 4. Fix table frame dimensions — width always TABLE_W, height = computed
+  xml = xml.replace(
+    /(<p:xfrm>[\s\S]*?<a:ext cx=")[^"]*(" cy=")[^"]*(")/,
+    `$1${TABLE_W}$2${tableCy}$3`
+  );
+
+  // 5. Stream overlays (only if stream column visible)
+  if (cols.stream && streamBlocks && streamBlocks.length > 0) {
+    const overlays = buildStreamOverlays(streamBlocks, COL_W.stream, rowHeights, TABLE_X);
     xml = xml.replace('</p:spTree>', overlays + '</p:spTree>');
   }
 
   return xml;
 }
 
-// ── Core generator (usable as library) ───────────────────────────────────────
+// ── Core generator ────────────────────────────────────────────────────────────
 
 /**
- * Generate a PPTX list from service data and return the file as a Buffer.
- *
- * @param {object[]} services  - Array of service objects (same shape as the JSON data file)
- * @param {object}   opts      - Options (all optional)
- * @param {string}   opts.templateFile - Path to ListTemplate.pptx
- * @param {string}   opts.title        - Slide title
- * @param {boolean}  opts.groupByET    - Sort within module by ET order
- * @param {string}   opts.bsCode       - BS code for deck name lookup
- * @param {boolean}  opts.useDeckName  - Use deck names in component column
- * @param {number[]} opts.yearRange    - [fromYear, toYear] — override default 2026-2030
- * @returns {Buffer} PPTX file buffer
+ * @param {object[]} services
+ * @param {object}   opts
+ * @param {string}   opts.templateFile
+ * @param {string}   opts.title
+ * @param {boolean}  opts.groupByET
+ * @param {string}   opts.bsCode
+ * @param {boolean}  opts.useDeckName
+ * @param {number}   opts.yearFrom    — 0 = no years
+ * @param {number}   opts.yearTo
+ * @param {object}   opts.cols        — { stream, phases, component, tier, objectives }
  */
 function generateListPptxBuffer(services, opts = {}) {
-  const templateFile = opts.templateFile ||
-    path.join(__dirname, '..', 'data', 'ListTemplate.pptx');
+  const templateFile = opts.templateFile || path.join(__dirname, '..', 'data', 'ListTemplate.pptx');
   const title    = opts.title || 'Services Description';
   const groupET  = !!opts.groupByET;
   const bsCode   = opts.bsCode || null;
   const useDeck  = !!opts.useDeckName;
-  const yearRange = opts.yearRange || [2026, 2030];
+
+  // Column visibility — all on by default
+  const cols = {
+    stream:    opts.cols ? !!opts.cols.stream    : true,
+    phases:    opts.cols ? !!opts.cols.phases    : true,
+    component: opts.cols ? !!opts.cols.component : true,
+    tier:      opts.cols ? !!opts.cols.tier      : false,
+    objectives:opts.cols ? !!opts.cols.objectives: true,
+  };
+
+  // Year range — 0 yearCount means no year columns
+  const yf = parseInt(opts.yearFrom, 10);
+  const yt  = parseInt(opts.yearTo, 10);
+  const yearFrom  = (yf >= 2000 && yf <= 2050) ? yf : 0;
+  const yearTo    = (yt >= 2000 && yt <= 2050) ? yt : 0;
+  const yearCount = (yearFrom && yearTo && yearFrom <= yearTo) ? Math.min(6, yearTo - yearFrom + 1) : 0;
 
   if (!fs.existsSync(templateFile)) throw new Error('ListTemplate.pptx not found: ' + templateFile);
 
-  // Group by module
+  // Column widths
+  const { objW } = calcLayout(cols, yearCount);
+
+  // ── Parse services into modules ───────────────────────────────────────────
   const moduleMap = new Map();
   for (const svc of services) {
     const key = svc.parent_code || '__none__';
-    if (!moduleMap.has(key)) moduleMap.set(key, { name: svc.parent_name || key, services: [] });
+    if (!moduleMap.has(key)) moduleMap.set(key, { name: svc.parent_name || svc.parentName || key, services: [] });
     moduleMap.get(key).services.push(svc);
   }
   const modules = [...moduleMap.values()];
@@ -341,94 +350,124 @@ function generateListPptxBuffer(services, opts = {}) {
     for (const mod of modules) {
       mod.services.sort((a,b) => {
         const ai = ET_ORDER.indexOf(a.engagement_type), bi = ET_ORDER.indexOf(b.engagement_type);
-        return (ai<0?99:ai)-(bi<0?99:bi);
+        return (ai<0?99:ai) - (bi<0?99:bi);
       });
     }
   }
 
+  function getObjectives(svc) {
+    const et = svc.engagement_type || '';
+    if (et.includes('Max'))       return svc.key_benefits      || svc.keyBenefits      || svc.short_description || '';
+    if (et.includes('Advanced'))  return svc.summary           || svc.short_description || '';
+    return                               svc.description       || svc.short_description || '';
+  }
+
+  function stripHtml(s) {
+    return (s||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  }
+
   function getSvcRow(svc, streamText, isStreamStart, streamRowSpan) {
     const name = useDeck && bsCode && svc.business_scenario_naming?.[bsCode]
-      ? svc.business_scenario_naming[bsCode] : svc.name;
-    const phases = (svc.phases||[]).sort((a,b)=>PHASE_ORDER.indexOf(a)-PHASE_ORDER.indexOf(b));
-    const allPhases = phases.length === PHASE_ORDER.length;
+      ? svc.business_scenario_naming[bsCode] : (svc.name || '');
+    const phases = (svc.phases||[]).slice().sort((a,b)=>PHASE_ORDER.indexOf(a)-PHASE_ORDER.indexOf(b));
+    const allPhases = PHASE_ORDER.every(p => phases.includes(p));
+    const objText = cols.objectives ? stripHtml(getObjectives(svc)) : '';
+    const tierLabel = ET_LABEL[svc.engagement_type] || svc.engagement_type || '';
+    const rowH = cols.objectives ? calcRowHeight(objText, objW) : LINE_H_EMU + PAD_T;
     return {
-      isStreamStart,
-      streamRowSpan,
-      streamText,
-      phases:     allPhases ? 'All' : phases.join(', '),
-      component:  name,
-      objectives: svc.short_description || '',
+      isStreamStart, streamRowSpan, streamText,
+      phases:    allPhases ? 'All' : phases.join(', '),
+      component: name,
+      tier:      tierLabel,
+      objectives: objText,
+      rowH,
     };
   }
 
-  // Build slides
+  // ── Load template ─────────────────────────────────────────────────────────
   const templateBuf   = fs.readFileSync(templateFile);
   const templateFiles = readZip(templateBuf);
   const templateSlide = templateFiles['ppt/slides/slide1.xml'].toString('utf8');
 
   const outFiles = {};
   const SKIP = new Set(['ppt/presentation.xml','ppt/_rels/presentation.xml.rels','[Content_Types].xml']);
+
   for (const [name, data] of Object.entries(templateFiles)) {
-    if (/^ppt\/slides\//.test(name)) continue;
-    if (/^ppt\/notesSlides\//.test(name)) continue;
+    if (/^ppt\/slides\//.test(name))       continue;
+    if (/^ppt\/notesSlides\//.test(name))  continue;
     if (/^ppt\/notesMasters\//.test(name)) continue;
     if (/^ppt\/changesInfos\//.test(name)) continue;
-    if (/^ppt\/tags\//.test(name)) continue;
-    if (/^ppt\/embeddings\//.test(name)) continue;
-    if (/\.emf$/.test(name)) continue;
-    if (SKIP.has(name)) continue;
+    if (/^ppt\/tags\//.test(name))         continue;
+    if (/^ppt\/embeddings\//.test(name))   continue;
+    if (/\.emf$/.test(name))               continue;
+    if (SKIP.has(name))                    continue;
 
     if (name === 'ppt/slideMasters/slideMaster1.xml') {
       let xml = data.toString('utf8');
       xml = xml.replace(/<p:graphicFrame>[\s\S]*?think-cell[\s\S]*?<\/p:graphicFrame>/g, '');
       xml = xml.replace(/<p:custDataLst>[\s\S]*?<\/p:custDataLst>/g, '');
-      outFiles[name] = xml;
-      continue;
+      outFiles[name] = xml; continue;
     }
-
     if (name === 'ppt/slideMasters/_rels/slideMaster1.xml.rels') {
       let xml = data.toString('utf8');
       xml = xml.replace(/<Relationship [^>]*\/relationships\/tags[^>]*\/>/g, '');
       xml = xml.replace(/<Relationship [^>]*\/relationships\/oleObject[^>]*\/>/g, '');
       xml = xml.replace(/<Relationship [^>]*\/relationships\/image[^>]*\/>/g, '');
-      outFiles[name] = xml;
-      continue;
+      outFiles[name] = xml; continue;
     }
-
     if (/^ppt\/slideLayouts\/_rels\//.test(name)) {
       let xml = data.toString('utf8');
       xml = xml.replace(/<Relationship [^>]*\/relationships\/tags[^>]*\/>/g, '');
       xml = xml.replace(/<Relationship [^>]*notesMaster[^>]*\/>/g, '');
       xml = xml.replace(/<Relationship [^>]*image6\.png[^>]*\/>/g, '');
-      outFiles[name] = xml;
-      continue;
+      outFiles[name] = xml; continue;
     }
-
     outFiles[name] = data;
   }
 
-  // Generate one slide per module page
-  const slideCount = { n: 0 };
+  // ── Paginate and build slides ─────────────────────────────────────────────
+  let slideNum = 0;
+
   for (const mod of modules) {
-    for (let i = 0; i < mod.services.length; i += ROWS_PER_SLIDE) {
-      const page = mod.services.slice(i, i + ROWS_PER_SLIDE);
-      const dataRows = page.map((svc, idx) =>
-        getSvcRow(svc, mod.name, idx === 0, page.length)
+    // Pack rows onto slides — each module starts a new slide
+    let pageRows = [];
+    let pageH    = 0;
+
+    function flushSlide(rows) {
+      if (rows.length === 0) return;
+      slideNum++;
+      // Assign rowSpan for the stream block on this slide
+      if (cols.stream) rows[0].isStreamStart = true;
+      if (cols.stream) rows[0].streamRowSpan = rows.length;
+      const streamBlocks = cols.stream
+        ? [{ text: mod.name, rowOffset: 0, rowCount: rows.length }]
+        : [];
+      outFiles[`ppt/slides/slide${slideNum}.xml`] = buildSlideXml(
+        templateSlide, rows, title, streamBlocks, cols, objW, yearCount, yearFrom
       );
-      const streamBlocks = [{ text: mod.name, rowOffset: 0, rowCount: page.length }];
-      const slideNum = ++slideCount.n;
-      outFiles[`ppt/slides/slide${slideNum}.xml`] = buildSlideXml(templateSlide, dataRows, title, streamBlocks, yearRange);
       outFiles[`ppt/slides/_rels/slide${slideNum}.xml.rels`] =
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
         `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
         `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>` +
         `</Relationships>`;
     }
+
+    for (const svc of mod.services) {
+      const row = getSvcRow(svc, mod.name, false, 1);
+      if (pageRows.length > 0 && pageH + row.rowH > AVAIL_H) {
+        flushSlide(pageRows);
+        pageRows = [];
+        pageH    = 0;
+      }
+      pageRows.push(row);
+      pageH += row.rowH;
+    }
+    flushSlide(pageRows);
   }
 
-  const N = slideCount.n;
+  const N = slideNum;
 
-  // Rebuild presentation.xml — keep template's master/theme/props rels, replace slide list
+  // ── Rebuild presentation.xml ──────────────────────────────────────────────
   const origPres     = templateFiles['ppt/presentation.xml'].toString('utf8');
   const origPresRels = templateFiles['ppt/_rels/presentation.xml.rels'].toString('utf8');
 
@@ -437,8 +476,8 @@ function generateListPptxBuffer(services, opts = {}) {
   for (const m of origPresRels.matchAll(/<Relationship ([^>]+)\/>/g)) {
     const attrs = m[1];
     if (attrs.includes('relationships/slide"')) continue;
-    if (attrs.includes('notesMaster')) continue;
-    if (attrs.includes('changesInfo')) continue;
+    if (attrs.includes('notesMaster'))          continue;
+    if (attrs.includes('changesInfo'))          continue;
     keepRels.push(`<Relationship ${attrs.replace(/Id="[^"]*"/, `Id="rId${relId++}"`)}/>`);
   }
   const slideRelIdStart = relId;
@@ -449,24 +488,18 @@ function generateListPptxBuffer(services, opts = {}) {
   outFiles['ppt/_rels/presentation.xml.rels'] =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n` +
     `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-    keepRels.join('') + slideRels +
-    `</Relationships>`;
+    keepRels.join('') + slideRels + `</Relationships>`;
 
   const smRel = keepRels.find(r => r.includes('slideMaster'));
   const smRid = smRel && smRel.match(/Id="(rId\d+)"/)[1];
-
   let presXml = origPres;
-  if (smRid) {
-    presXml = presXml.replace(/<p:sldMasterId[^>]*r:id="[^"]*"/, m => m.replace(/r:id="[^"]*"/, `r:id="${smRid}"`));
-  }
+  if (smRid) presXml = presXml.replace(/<p:sldMasterId[^>]*r:id="[^"]*"/, m => m.replace(/r:id="[^"]*"/, `r:id="${smRid}"`));
   presXml = presXml.replace(/<p:notesMasterIdLst>[\s\S]*?<\/p:notesMasterIdLst>/g, '');
-  const sldIdLst = Array.from({length:N},(_,i)=>
-    `<p:sldId id="${256+i}" r:id="rId${slideRelIdStart+i}"/>`
-  ).join('');
+  const sldIdLst = Array.from({length:N},(_,i)=>`<p:sldId id="${256+i}" r:id="rId${slideRelIdStart+i}"/>`).join('');
   presXml = presXml.replace(/<p:sldIdLst>[\s\S]*?<\/p:sldIdLst>/, `<p:sldIdLst>${sldIdLst}</p:sldIdLst>`);
   outFiles['ppt/presentation.xml'] = presXml;
 
-  // Rebuild [Content_Types].xml
+  // ── Rebuild [Content_Types].xml ───────────────────────────────────────────
   const origCt = templateFiles['[Content_Types].xml'].toString('utf8');
   const slideCtypes = Array.from({length:N},(_,i)=>
     `<Override PartName="/ppt/slides/slide${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`
@@ -485,28 +518,31 @@ function generateListPptxBuffer(services, opts = {}) {
   return writeZipBuffer(outFiles);
 }
 
+const ET_LABEL = {'Max Success Plan':'Max','Advanced Success Plan':'Advanced','Enterprise Support':'Foundational','Embedded Launch Activities':'Foundational','Cloud Prepackaged Services':'Foundational'};
+
 module.exports = { generateListPptxBuffer };
 
-// ── CLI (only when run directly) ──────────────────────────────────────────────
+// ── CLI ───────────────────────────────────────────────────────────────────────
 if (require.main === module) {
   const args = process.argv.slice(2);
   function getArg(n) { const i = args.indexOf(n); return i !== -1 ? args[i+1] : null; }
   function hasFlag(n) { return args.includes(n); }
 
-  const templateFile = getArg('--template') ||
-    path.join(__dirname, '..', 'data', 'ListTemplate.pptx');
-  const dataFile  = getArg('--data')  || path.join(__dirname, 'sample_services.json');
-  const outFile   = getArg('--out')   || path.join(__dirname, 'output_list.pptx');
-  const title     = getArg('--title') || 'Services Description';
-  const groupByET = hasFlag('--groupByET');
-  const bsCode    = getArg('--bsCode') || null;
+  const templateFile = getArg('--template') || path.join(__dirname, '..', 'data', 'ListTemplate.pptx');
+  const dataFile   = getArg('--data')  || path.join(__dirname, 'sample_services.json');
+  const outFile    = getArg('--out')   || path.join(__dirname, 'output_list.pptx');
+  const title      = getArg('--title') || 'Services Description';
+  const groupByET  = hasFlag('--groupByET');
+  const bsCode     = getArg('--bsCode') || null;
   const useDeckName = hasFlag('--deckName');
+  const yearFrom   = parseInt(getArg('--yearFrom')||'2026', 10);
+  const yearTo     = parseInt(getArg('--yearTo')  ||'2030', 10);
 
   if (!fs.existsSync(dataFile)) { console.error('Data not found:', dataFile); process.exit(1); }
   const services = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
   console.log(`Loaded ${services.length} services`);
 
-  const buf = generateListPptxBuffer(services, { templateFile, title, groupByET, bsCode, useDeckName });
+  const buf = generateListPptxBuffer(services, { templateFile, title, groupByET, bsCode, useDeckName, yearFrom, yearTo });
   fs.writeFileSync(outFile, buf);
   console.log(`Done → ${outFile}`);
 }

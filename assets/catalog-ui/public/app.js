@@ -797,7 +797,8 @@ window.generatePptx = async function(template) {
       const s = state.pptxListSettings;
       body.listOptions = {
         cols: { ...s.cols },
-        years: s.years, yearFrom: s.yearFrom, yearTo: s.yearTo,
+        yearFrom: s.years ? s.yearFrom : '0',
+        yearTo:   s.years ? s.yearTo   : '0',
         groupByET: s.groupByET, useDeckName: s.useDeckName,
         title: s.title,
         bsCode: state.filters.businessScenario || null,

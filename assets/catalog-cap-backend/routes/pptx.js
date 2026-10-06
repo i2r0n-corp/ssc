@@ -74,28 +74,39 @@ router.post('/generatePptx', async (req, res) => {
     if (templateName === 'list') {
       // Template-based list PPTX — uses generate_list_pptx.js
       const opts = listOptions || {};
-      const yf = parseInt(opts.yearFrom, 10) || 2026;
-      const yt = parseInt(opts.yearTo, 10)   || 2030;
-      const yearRange = (yf >= 2000 && yt <= 2050 && yf < yt) ? [yf, yt] : [2026, 2030];
 
       // Map flatIndex services to the shape expected by generate_list_pptx
-      const svcs = services.map(s => ({
-        code:             s.code,
-        name:             s.name,
-        short_description: s.shortDescription || s.short_description || '',
-        engagement_type:  Array.isArray(s.engagementType) ? s.engagementType[0] : (s.engagementType || ''),
-        parent_code:      s.parentCode || s.parent_code || '',
-        parent_name:      s.parentName || s.parent_name || '',
-        phases:           s.sapActivateProjectPhase || s.phases || [],
-        business_scenario_naming: s.businessScenarioNaming || s.business_scenario_naming || {},
-      }));
+      const svcs = services.map(s => {
+        const cf = s.classificationFeatures || [];
+        const phases = cf.filter(f => f.key === 'sapActivateProjectPhase').map(f => f.value);
+        const et = cf.filter(f => f.key === 'engagementType').map(f => f.value)[0]
+          || (Array.isArray(s.engagementType) ? s.engagementType[0] : s.engagementType) || '';
+        // module name: look up parent in flatIndex
+        const parentCode = s.parentCode || '';
+        const parentName = (flatIndex[parentCode] && flatIndex[parentCode].name) || parentCode || '';
+        return {
+          code:             s.code,
+          name:             s.name,
+          short_description: s.shortDescription || '',
+          summary:          s.summary || '',
+          key_benefits:     s.keyBenefits || '',
+          description:      s.description || '',
+          engagement_type:  et,
+          parent_code:      parentCode,
+          parent_name:      parentName,
+          phases,
+          business_scenario_naming: s.businessScenarioNaming || s.business_scenario_naming || {},
+        };
+      });
 
       const buf = generateListPptxBuffer(svcs, {
         title:       opts.title || 'Services Description',
         groupByET:   !!opts.groupByET,
         bsCode:      opts.bsCode || null,
         useDeckName: !!opts.useDeckName,
-        yearRange,
+        yearFrom:    opts.yearFrom,
+        yearTo:      opts.yearTo,
+        cols:        opts.cols || null,
       });
       fs.writeFileSync(filePath, buf);
 
