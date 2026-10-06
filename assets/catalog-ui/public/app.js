@@ -812,7 +812,12 @@ window.generatePptx = async function(template) {
   if (!isListTemplate && codes.length > 50) { alert(`Too many services (${codes.length}). Max 50 for PPTX. Please select fewer.`); return; }
   state.pptx.generating = true; state.pptx.error = null; state.pptx.downloadUrl = null; render();
   try {
-    const body = { serviceCodes: codes, template: template || 'short-description' };
+    const body = {
+      serviceCodes: codes,
+      template: template || 'short-description',
+      filterEt:    state.filters.engagementType || null,
+      filterQuery: state.filters.query          || null,
+    };
     if (isListTemplate) {
       const s = state.pptxListSettings;
       const bsCode = state.filters.businessScenario || null;

@@ -169,7 +169,22 @@ CREATE TABLE IF NOT EXISTS catalog_matching_log_rows (
 CREATE INDEX IF NOT EXISTS idx_mlr_bs_code ON catalog_matching_log_rows(bs_code);
 CREATE INDEX IF NOT EXISTS idx_mlr_status  ON catalog_matching_log_rows(status);
 
-CREATE TABLE IF NOT EXISTS catalog_matching_steps (
+CREATE TABLE IF NOT EXISTS catalog_export_log (
+  id             BIGSERIAL PRIMARY KEY,
+  logged_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  user_id        TEXT,
+  logon_name     TEXT,
+  export_type    TEXT NOT NULL,
+  service_count  INTEGER,
+  filter_bs      TEXT,
+  filter_et      TEXT,
+  filter_modules TEXT[],
+  filter_query   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_export_log_logged_at  ON catalog_export_log(logged_at DESC);
+CREATE INDEX IF NOT EXISTS idx_export_log_logon_name ON catalog_export_log(logon_name);
+
+
   id          BIGSERIAL PRIMARY KEY,
   log_row_id  BIGINT NOT NULL REFERENCES catalog_matching_log_rows(id) ON DELETE CASCADE,
   type        TEXT NOT NULL,
@@ -218,4 +233,17 @@ async function transaction(fn) {
   }
 }
 
-module.exports = { getPool, initSchema, query, transaction };
+async function logExport({ userId, logonName, exportType, serviceCount, filterBs, filterEt, filterModules, filterQuery }) {
+  try {
+    await query(
+      `INSERT INTO catalog_export_log (user_id, logon_name, export_type, service_count, filter_bs, filter_et, filter_modules, filter_query)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [userId || null, logonName || null, exportType, serviceCount || 0,
+       filterBs || null, filterEt || null, filterModules || null, filterQuery || null]
+    );
+  } catch (e) {
+    console.error('[export-log] Failed to write log entry:', e.message);
+  }
+}
+
+module.exports = { getPool, initSchema, query, transaction, logExport };

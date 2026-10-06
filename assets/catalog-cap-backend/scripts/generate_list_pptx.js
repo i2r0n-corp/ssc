@@ -253,7 +253,7 @@ function buildHeaderRows(cols, objW, yearCount, yearFrom, yearBorders) {
   for (let i = 0; i < yearCount; i++) {
     const isLast = i === yearCount - 1;
     cells += yearBorders
-      ? cellYear(String(yearFrom + i), true, isLast, true)
+      ? cellYear(String(yearFrom + i), true, false, true)
       : headerCell(String(yearFrom + i));
   }
   return `<a:tr h="${ROW_H}">${cells}</a:tr>`;
@@ -272,8 +272,7 @@ function buildDataRows(dataRows, cols, objW, yearCount, yearBorders) {
     if (cols.tier)      cells += cellData(dr.tier);
     cells += cellData(dr.objectives);
     for (let i=0; i<yearCount; i++) {
-      const isLast = i === yearCount - 1;
-      cells += cellYear('', yearBorders, yearBorders && isLast);
+      cells += cellYear('', yearBorders, false);
     }
     return `<a:tr h="${dr.rowH}">${cells}</a:tr>`;
   }).join('');

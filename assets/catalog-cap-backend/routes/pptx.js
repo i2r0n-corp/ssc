@@ -201,6 +201,20 @@ router.post('/generatePptx', async (req, res) => {
     const stat = fs.statSync(filePath);
     const fileSizeKb = Math.round(stat.size / 1024);
 
+    // Log export event
+    const token = req.user;
+    const opts = listOptions || {};
+    db.logExport({
+      userId:        token?.userId       || null,
+      logonName:     token?.logonName    || null,
+      exportType:    templateName,
+      serviceCount:  services.length,
+      filterBs:      opts.bsCode        || null,
+      filterEt:      req.body?.filterEt || null,
+      filterModules: Array.isArray(opts.selectedModuleCodes) && opts.selectedModuleCodes.length ? opts.selectedModuleCodes : null,
+      filterQuery:   req.body?.filterQuery || null,
+    });
+
     console.log(`[M4.achieved]: PPTX generated — template="${templateName}" service_count=${services.length} file_size_kb=${fileSizeKb}`);
 
     res.json({
