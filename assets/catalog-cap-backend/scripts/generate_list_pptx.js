@@ -62,17 +62,17 @@ const ET_ORDER    = ['Max Success Plan','Advanced Success Plan','Enterprise Supp
 const TABLE_X        = 506781;
 const TABLE_Y        = 1080130;
 const TABLE_W        = 10765232;  // fixed, never changes
-const HEADER_H       = 893048;   // row0 (410840) + row1 (482208)
+const HEADER_H       = 482208;   // single header row
 const SLIDE_H        = 6858000;  // standard widescreen slide height
-const AVAIL_H        = SLIDE_H - TABLE_Y - HEADER_H;  // 4884822 EMU for data rows
+const AVAIL_H        = SLIDE_H - TABLE_Y - HEADER_H;  // available height for data rows
 
-// Fixed column widths (EMU) — from template gridCol measurements
+// Fixed column widths (EMU)
 const COL_W = {
-  stream:    1019472,
-  phases:     810822,
+  stream:     509736,  // half of template value (1019472 / 2)
+  phases:     540000,  // ~2/3 of template value (810822)
   component: 1232132,
-  tier:       810822,  // same as phases — short labels
-  year:       400000,  // confirmed by user
+  tier:       810822,
+  year:       400000,
 };
 
 // Cell padding from template (marL/marR/marT/marB)
@@ -93,6 +93,7 @@ function esc(s) {
 
 const RPR_DATA = `<a:rPr lang="en-GB" sz="800" b="0" i="0" u="none" strike="noStrike" dirty="0"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:effectLst/><a:latin typeface="72 Brand" panose="020B0504030603020204" pitchFamily="34" charset="0"/></a:rPr>`;
 const RPR_BOLD = `<a:rPr lang="en-GB" sz="1100" b="1" i="0" u="none" strike="noStrike" dirty="0"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:effectLst/><a:latin typeface="72 Brand" panose="020B0504030603020204" pitchFamily="34" charset="0"/></a:rPr>`;
+const RPR_HDR  = `<a:rPr lang="en-GB" sz="800" b="1" i="0" u="none" strike="noStrike" dirty="0"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/><a:latin typeface="72 Brand" panose="020B0504030603020204" pitchFamily="34" charset="0"/></a:rPr>`;
 
 // ── Cell builders ─────────────────────────────────────────────────────────────
 
@@ -105,6 +106,16 @@ const TCPR_DATA =
   `<a:lnTlToBr w="12700" cmpd="sng"><a:noFill/><a:prstDash val="solid"/></a:lnTlToBr>` +
   `<a:lnBlToTr w="12700" cmpd="sng"><a:noFill/><a:prstDash val="solid"/></a:lnBlToTr>` +
   `<a:noFill/></a:tcPr>`;
+
+const TCPR_HDR =
+  `<a:tcPr marL="${PAD_L}" marR="${PAD_R}" marT="${PAD_T}" marB="${PAD_B}" anchor="ctr">` +
+  `<a:lnL w="12700" cmpd="sng"><a:noFill/></a:lnL>` +
+  `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr"><a:noFill/><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>` +
+  `<a:lnT w="12700" cap="flat" cmpd="sng" algn="ctr"><a:noFill/><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnT>` +
+  `<a:lnB w="12700" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnB>` +
+  `<a:lnTlToBr w="12700" cmpd="sng"><a:noFill/><a:prstDash val="solid"/></a:lnTlToBr>` +
+  `<a:lnBlToTr w="12700" cmpd="sng"><a:noFill/><a:prstDash val="solid"/></a:lnBlToTr>` +
+  `<a:solidFill><a:srgbClr val="003366"/></a:solidFill></a:tcPr>`;
 
 const TCPR_STREAM =
   `<a:tcPr marL="91416" marR="91416" marT="45708" marB="45708" anchor="ctr">` +
@@ -136,8 +147,8 @@ function headerCell(text, algn) {
   const align = algn || 'ctr';
   return `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>` +
     `<a:p><a:pPr algn="${align}"><a:buNone/></a:pPr>` +
-    (text ? `<a:r>${RPR_DATA}<a:t>${esc(text)}</a:t></a:r>` : `<a:endParaRPr lang="en-GB"/>`) +
-    `</a:p></a:txBody>${TCPR_DATA}</a:tc>`;
+    (text ? `<a:r>${RPR_HDR}<a:t>${esc(text)}</a:t></a:r>` : `<a:endParaRPr lang="en-GB"/>`) +
+    `</a:p></a:txBody>${TCPR_HDR}</a:tc>`;
 }
 
 // ── Row height calculation ────────────────────────────────────────────────────
@@ -208,28 +219,15 @@ function buildTblGrid(cols, objW, yearCount) {
 // ── Build header rows XML ─────────────────────────────────────────────────────
 
 function buildHeaderRows(cols, objW, yearCount, yearFrom) {
-  const ROW0_H = 410840, ROW1_H = 482208;
-
-  // Row 0: spans — Stream spans 2 rows in the template but we rebuild from scratch
-  // Row 0 is a grouping row (blank cells under stream/phases/component/tier/objectives, year blanks)
-  // Row 1 is the label row
-  // We keep it simple: row0 = all blank, row1 = column labels + year numbers
-
-  const blankCell = headerCell('');
-  const colCount = (cols.stream?1:0)+(cols.phases?1:0)+(cols.component?1:0)+(cols.tier?1:0)+1+yearCount;
-
-  const row0 = `<a:tr h="${ROW0_H}">${Array(colCount).fill(blankCell).join('')}</a:tr>`;
-
-  let row1cells = '';
-  if (cols.stream)    row1cells += headerCell('Stream');
-  if (cols.phases)    row1cells += headerCell('Activate Phase');
-  if (cols.component) row1cells += headerCell('Service Component');
-  if (cols.tier)      row1cells += headerCell('Tier');
-  row1cells += headerCell('Objectives');
-  for (let i=0; i<yearCount; i++) row1cells += headerCell(String(yearFrom + i));
-  const row1 = `<a:tr h="${ROW1_H}">${row1cells}</a:tr>`;
-
-  return row0 + row1;
+  const ROW_H = 482208;  // single header row
+  let cells = '';
+  if (cols.stream)    cells += headerCell('Stream');
+  if (cols.phases)    cells += headerCell('Activate Phase');
+  if (cols.component) cells += headerCell('Service Component');
+  if (cols.tier)      cells += headerCell('Tier');
+  cells += headerCell('Objectives');
+  for (let i = 0; i < yearCount; i++) cells += headerCell(String(yearFrom + i));
+  return `<a:tr h="${ROW_H}">${cells}</a:tr>`;
 }
 
 // ── Build data rows XML ───────────────────────────────────────────────────────
@@ -372,7 +370,9 @@ function generateListPptxBuffer(services, opts = {}) {
     const phases = (svc.phases||[]).slice().sort((a,b)=>PHASE_ORDER.indexOf(a)-PHASE_ORDER.indexOf(b));
     const allPhases = PHASE_ORDER.every(p => phases.includes(p));
     const objText = cols.objectives ? stripHtml(getObjectives(svc)) : '';
-    const tierLabel = ET_LABEL[svc.engagement_type] || svc.engagement_type || '';
+    const tierLabel = (svc.engagement_type || '').includes('Enterprise Support')
+      ? 'Foundational'
+      : (ET_LABEL[svc.engagement_type] || svc.engagement_type || '');
     const rowH = cols.objectives ? calcRowHeight(objText, objW) : LINE_H_EMU + PAD_T;
     return {
       isStreamStart, streamRowSpan, streamText,
