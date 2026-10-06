@@ -411,9 +411,7 @@ function renderCatalogResults() {
       </button>
     </div>
     ${state.pptx.error ? `<div class="error-strip" style="margin-bottom:0.5rem">⚠ ${state.pptx.error}</div>` : ''}
-    ${state.pptx.downloadUrl ? `<div class="success-strip" style="margin-bottom:0.5rem">
-      ✅ Ready! <a href="${CAP_BACKEND_URL}${state.pptx.downloadUrl}" download class="btn btn-primary btn-sm" style="margin-left:1rem">⬇ Download PPTX</a>
-    </div>` : ''}
+    ${state.pptx.downloadUrl ? `<div class="success-strip" style="margin-bottom:0.5rem">Successfully downloaded</div>` : ''}
     <table class="service-table">
       <thead>
         <tr>
@@ -541,13 +539,7 @@ function renderExportPage() {
   return `
     <h2>PPTX Export</h2>
     ${state.pptx.error ? `<div class="error-strip">⚠ ${state.pptx.error}</div>` : ''}
-    ${state.pptx.downloadUrl ? `
-    <div class="success-strip">
-      ✅ Your PowerPoint is ready!
-      <a href="${CAP_BACKEND_URL}${state.pptx.downloadUrl}" download class="btn btn-primary btn-sm" style="margin-left:1rem">
-        ⬇ Download
-      </a>
-    </div>` : ''}
+    ${state.pptx.downloadUrl ? `<div class="success-strip">Successfully downloaded</div>` : ''}
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
         <h3 style="margin:0">Export Cart (${cartServices.length} services)</h3>
@@ -891,14 +883,14 @@ function renderPptxListSettingsModal() {
       <div style="display:flex;gap:0.75rem;align-items:flex-end;margin-bottom:1rem">
         <div>
           <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year From</div>
-          <input type="text" maxlength="4" value="${s.yearFrom}" oninput="setPptxYearFrom(this.value)"
+          <input type="text" id="pptx-year-from" maxlength="4" oninput="setPptxYearFrom(this.value)"
             style="width:80px;padding:0.4rem 0.5rem;font-size:0.875rem;border:1px solid ${!yearValid&&s.yearFrom.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
             placeholder="2026"/>
         </div>
         <div style="padding-bottom:0.5rem;color:#6a6a6a">→</div>
         <div>
           <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year To</div>
-          <input type="text" maxlength="4" value="${s.yearTo}" oninput="setPptxYearTo(this.value)"
+          <input type="text" id="pptx-year-to" maxlength="4" oninput="setPptxYearTo(this.value)"
             style="width:80px;padding:0.4rem 0.5rem;font-size:0.875rem;border:1px solid ${!yearValid&&s.yearTo.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
             placeholder="2030"/>
         </div>
@@ -1221,6 +1213,14 @@ function render() {
     <div class="page-content">${content}</div>
     ${renderServiceDetailModal()}
     ${renderPptxListSettingsModal()}`;
+
+  // Restore year input values without disturbing focus — the inputs use no value= attr
+  const yf = document.getElementById('pptx-year-from');
+  const yt = document.getElementById('pptx-year-to');
+  if (yf && document.activeElement !== yf) yf.value = state.pptxListSettings.yearFrom;
+  if (yt && document.activeElement !== yt) yt.value = state.pptxListSettings.yearTo;
+  if (yf && !yf.value) yf.value = state.pptxListSettings.yearFrom;
+  if (yt && !yt.value) yt.value = state.pptxListSettings.yearTo;
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────

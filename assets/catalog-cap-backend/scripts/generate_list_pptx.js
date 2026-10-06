@@ -64,7 +64,7 @@ const TABLE_Y        = 1080130;
 const TABLE_W        = 10765232;  // fixed, never changes
 const HEADER_H       = 482208;   // single header row
 const SLIDE_H        = 6858000;  // standard widescreen slide height
-const AVAIL_H        = SLIDE_H - TABLE_Y - HEADER_H;  // available height for data rows
+const AVAIL_H        = Math.round((SLIDE_H - TABLE_Y - HEADER_H) * 0.95);  // −5% safety margin
 
 // Fixed column widths (EMU)
 const COL_W = {
