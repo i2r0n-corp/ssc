@@ -909,10 +909,9 @@ window.setPptxTitle = function(v) {
 window.setPptxStreamMode = function(v) {
   state.pptxListSettings.streamMode = v; render();
 };
-let _streamCustomDebounce = null;
 window.setPptxStreamCustom = function(v) {
   state.pptxListSettings.streamCustom = v.slice(0, 64);
-  clearTimeout(_streamCustomDebounce); _streamCustomDebounce = setTimeout(render, 1000);
+  // No render() — value= attr keeps input in sync, re-render would reset cursor
 };
 window.setPptxTruncateObjectives = function(v) {
   state.pptxListSettings.truncateObjectives = v; render();
@@ -950,12 +949,14 @@ function renderPptxListSettingsModal() {
       </label>
       ${s.streamMode==='custom' ? `
       <input type="text" id="pptx-stream-custom" maxlength="64" ${disAttr} oninput="setPptxStreamCustom(this.value)"
+        value="${s.streamCustom.replace(/"/g,'&quot;')}"
         style="margin-left:1.5rem;width:calc(100% - 1.5rem);padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid #8696A9;border-radius:4px"
         placeholder="Custom stream label (max 64 chars)"/>` : ''}
     </div>` : `
     <div style="display:flex;flex-direction:column;gap:0.35rem">
       <input type="text" id="pptx-stream-custom" maxlength="64" ${disAttr}
         oninput="setPptxStreamCustom(this.value)"
+        value="${s.streamCustom.replace(/"/g,'&quot;')}"
         style="width:100%;padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid #8696A9;border-radius:4px"
         placeholder="Custom stream label (max 64 chars)"/>
     </div>`;
@@ -1009,7 +1010,7 @@ function renderPptxListSettingsModal() {
         </div>
         <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
           <input type="checkbox" ${s.yearBorders?'checked':''} onchange="setPptxYearBorders(this.checked)"/>
-          Show column borders (left of first, between, right of last)
+          Show year's column borders
         </label>
       </div>
 
