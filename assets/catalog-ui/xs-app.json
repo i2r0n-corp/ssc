@@ -7,7 +7,8 @@
       "source": "^/api/(.*)$",
       "target": "/api/$1",
       "destination": "ssc-catalog-backend",
-      "authenticationType": "xsuaa"
+      "authenticationType": "xsuaa",
+      "csrfProtection": false
     },
     {
       "source": "^/(.*)$",
