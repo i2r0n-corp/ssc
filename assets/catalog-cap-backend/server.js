@@ -7,7 +7,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const passport = require('passport');
-const { JWTStrategy } = require('@sap/xssec');
+const { XssecPassportStrategy } = require('@sap/xssec');
 
 const app = express();
 
@@ -28,7 +28,7 @@ if (process.env.VCAP_SERVICES) {
   const vcap = JSON.parse(process.env.VCAP_SERVICES);
   const xsuaaCredentials = (vcap['xsuaa'] || vcap['user-provided'] || [])[0]?.credentials;
   if (xsuaaCredentials) {
-    passport.use('JWT', new JWTStrategy(xsuaaCredentials));
+    passport.use('JWT', new XssecPassportStrategy(xsuaaCredentials));
     app.use(passport.initialize());
     app.use('/api', passport.authenticate('JWT', { session: false }));
   }
