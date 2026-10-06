@@ -360,10 +360,13 @@ function generateListPptxBuffer(services, opts = {}) {
   function getObjectives(svc) {
     const et = svc.engagement_type || '';
     let text = '';
-    if (et.includes('Max'))       text = svc.key_benefits      || svc.keyBenefits      || svc.short_description || '';
+    if (et.includes('Max'))            text = svc.key_benefits || svc.keyBenefits || svc.short_description || '';
     else if (et.includes('Advanced'))  text = svc.summary      || svc.short_description || '';
     else                               text = svc.description  || svc.short_description || '';
-    if (truncateObj && text) {
+    // Truncate to 3 sentences only for EGI-named Foundational services
+    const isFoundational = !et.includes('Max') && !et.includes('Advanced');
+    const isEGI = (svc.name || '').toUpperCase().startsWith('EGI');
+    if (truncateObj && text && isFoundational && isEGI) {
       const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
       text = sentences.slice(0, 3).join(' ').trim();
     }
@@ -372,9 +375,12 @@ function generateListPptxBuffer(services, opts = {}) {
 
   function getStreamText(modName, bsName) {
     if (streamMode === 'custom' || streamMode === 'customNoBS') return streamCustom || modName;
-    if (streamMode === 'moduleOnly') return modName;
-    // bsAndModule: "BS Name > Module Name"
-    return bsName ? `${bsName} > ${modName}` : modName;
+    if (streamMode === 'moduleOnly') {
+      const sep = modName.indexOf(' // ');
+      return sep !== -1 ? modName.slice(sep + 4) : modName;
+    }
+    // bsAndModule: use full string as-is (already "BS Name // Module Name" from DB)
+    return modName;
   }
 
   function stripHtml(s) {

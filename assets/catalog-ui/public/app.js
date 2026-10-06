@@ -921,37 +921,40 @@ function renderPptxListSettingsModal() {
   const yf = parseInt(s.yearFrom,10)||0, yt = parseInt(s.yearTo,10)||0;
   const yearValid = !s.years || (s.yearFrom.length===4 && s.yearTo.length===4 && yf>=2000 && yf<=2050 && yt>=2000 && yt<=2050 && yf<yt);
 
-  const streamSection = s.cols.stream ? `
-    <div style="font-weight:600;font-size:0.8rem;color:#1D2D3E;margin-bottom:0.4rem">Stream Label</div>
-    <div style="display:flex;flex-direction:column;gap:0.35rem;margin-bottom:1rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0">
-      ${bsActive ? `
-        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
-          <input type="radio" name="streamMode" value="bsAndModule" ${s.streamMode==='bsAndModule'?'checked':''} onchange="setPptxStreamMode('bsAndModule')"/>
-          Business Scenario + Module Name
-        </label>
-        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
-          <input type="radio" name="streamMode" value="moduleOnly" ${s.streamMode==='moduleOnly'?'checked':''} onchange="setPptxStreamMode('moduleOnly')"/>
-          Only Module Name
-        </label>
-        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
-          <input type="radio" name="streamMode" value="custom" ${s.streamMode==='custom'?'checked':''} onchange="setPptxStreamMode('custom')"/>
-          Custom
-        </label>
-        ${s.streamMode==='custom' ? `
-        <input type="text" id="pptx-stream-custom" maxlength="64" oninput="setPptxStreamCustom(this.value)"
-          style="margin-left:1.5rem;width:calc(100% - 1.5rem);padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid #8696A9;border-radius:4px"
-          placeholder="Custom stream label (max 64 chars)"/>` : ''}
-      ` : `
-        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
-          <input type="checkbox" ${s.streamMode==='customNoBS'?'checked':''} onchange="setPptxStreamMode(this.checked?'customNoBS':'moduleOnly')"/>
-          Custom label
-        </label>
-        ${s.streamMode==='customNoBS' ? `
-        <input type="text" id="pptx-stream-custom" maxlength="64" oninput="setPptxStreamCustom(this.value)"
-          style="margin-left:1.5rem;width:calc(100% - 1.5rem);padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid #8696A9;border-radius:4px"
-          placeholder="Custom stream label (max 64 chars)"/>` : ''}
-      `}
-    </div>` : '';
+  const activeET = state.filters.engagementType || '';
+  const truncateEnabled = !activeET || activeET.toLowerCase().includes('foundational') || activeET.toLowerCase().includes('enterprise support');
+
+  const streamOn = s.cols.stream;
+  const dimStyle = streamOn ? '' : 'opacity:0.45;pointer-events:none;';
+  const greyText = streamOn ? '' : 'color:#9BA8B0;';
+  const disAttr  = streamOn ? '' : 'disabled';
+  const inputStyle = `width:100%;padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid ${streamOn?'#8696A9':'#c0c0c0'};border-radius:4px;${streamOn?'':'background:#f5f5f5;color:#9BA8B0;'}`;
+
+  const streamOptions = bsActive ? `
+    <div style="${dimStyle}display:flex;flex-direction:column;gap:0.35rem;margin-top:0.5rem">
+      <label style="display:flex;align-items:center;gap:0.5rem;cursor:${streamOn?'pointer':'not-allowed'};font-size:0.875rem;${greyText}">
+        <input type="radio" name="streamMode" value="bsAndModule" ${s.streamMode==='bsAndModule'?'checked':''} ${disAttr} onchange="setPptxStreamMode('bsAndModule')"/>
+        Business Scenario + Module Name
+      </label>
+      <label style="display:flex;align-items:center;gap:0.5rem;cursor:${streamOn?'pointer':'not-allowed'};font-size:0.875rem;${greyText}">
+        <input type="radio" name="streamMode" value="moduleOnly" ${s.streamMode==='moduleOnly'?'checked':''} ${disAttr} onchange="setPptxStreamMode('moduleOnly')"/>
+        Only Module Name
+      </label>
+      <label style="display:flex;align-items:center;gap:0.5rem;cursor:${streamOn?'pointer':'not-allowed'};font-size:0.875rem;${greyText}">
+        <input type="radio" name="streamMode" value="custom" ${s.streamMode==='custom'?'checked':''} ${disAttr} onchange="setPptxStreamMode('custom')"/>
+        Custom
+      </label>
+      ${s.streamMode==='custom' ? `
+      <input type="text" id="pptx-stream-custom" maxlength="64" ${disAttr} oninput="setPptxStreamCustom(this.value)"
+        style="margin-left:1.5rem;width:calc(100% - 1.5rem);padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid ${streamOn?'#8696A9':'#c0c0c0'};border-radius:4px;${streamOn?'':'background:#f5f5f5;color:#9BA8B0;'}"
+        placeholder="Custom stream label (max 64 chars)"/>` : ''}
+    </div>` : `
+    <div style="${dimStyle}display:flex;flex-direction:column;gap:0.35rem;margin-top:0.5rem">
+      <input type="text" id="pptx-stream-custom" maxlength="64" ${disAttr}
+        oninput="setPptxStreamCustom(this.value)"
+        style="${inputStyle}"
+        placeholder="${streamOn ? 'Custom stream label (max 64 chars)' : 'Enable Stream to set label'}"/>
+    </div>`;
 
   return `
   <div class="modal-overlay" onclick="if(event.target===this)closePptxListSettings()">
@@ -965,14 +968,20 @@ function renderPptxListSettingsModal() {
 
       <div style="font-weight:600;font-size:0.8rem;color:#1D2D3E;margin-bottom:0.4rem">Columns</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem 1.5rem;margin-bottom:1rem">
-        ${colCheck('stream',  'Stream',          s.cols.stream,     !bsActive, bsActive?'':'Only available when Business Scenario is selected')}
-        ${colCheck('phases',  'Phases',           s.cols.phases,     false)}
-        ${colCheck('component','Service Component',s.cols.component, false)}
-        ${colCheck('tier',    'Tier (Engagement Type)', s.cols.tier, false)}
-        ${colCheck('objectives','Objectives (Short Description)', s.cols.objectives, false)}
+        ${colCheck('phases',     'Phases',                          s.cols.phases,     false)}
+        ${colCheck('component',  'Service Component',               s.cols.component,  false)}
+        ${colCheck('tier',       'Tier (Engagement Type)',           s.cols.tier,       false)}
+        ${colCheck('objectives', 'Objectives (Short Description)',   s.cols.objectives, false)}
       </div>
 
-      ${streamSection}
+      <div style="font-weight:600;font-size:0.8rem;color:#1D2D3E;margin-bottom:0.4rem">Stream Label</div>
+      <div style="margin-bottom:1rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0">
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem;font-weight:600">
+          <input type="checkbox" ${streamOn?'checked':''} onchange="togglePptxCol('stream')"/>
+          Stream
+        </label>
+        ${streamOptions}
+      </div>
 
       <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:${s.years?'0.4rem':'1rem'}">
         <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
@@ -1004,13 +1013,13 @@ function renderPptxListSettingsModal() {
           <input type="checkbox" ${s.groupByET?'checked':''} onchange="setPptxGroupET(this.checked)"/>
           Group rows by Engagement Type within each module (Max → Advanced → Foundational)
         </label>
-        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem${!bsActive?' opacity:0.5':''}" ${!bsActive?'title="Only available when Business Scenario is selected"':''}>
+        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;${!bsActive?'opacity:0.45;cursor:not-allowed;color:#9BA8B0;':'cursor:pointer;'}" ${!bsActive?'title="Only available when Business Scenario is selected"':''}>
           <input type="checkbox" ${s.useDeckName?'checked':''} ${!bsActive?'disabled':''} onchange="setPptxDeckName(this.checked)"/>
           Use Deck Names in Service Component column
         </label>
-        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
-          <input type="checkbox" ${s.truncateObjectives?'checked':''} onchange="setPptxTruncateObjectives(this.checked)"/>
-          Truncate objectives description to 3 sentences
+        <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;${truncateEnabled?'cursor:pointer;':'opacity:0.45;cursor:not-allowed;color:#9BA8B0;'}" ${truncateEnabled?'':'title="Only applies when ET is unset or Foundational"'}>
+          <input type="checkbox" ${s.truncateObjectives?'checked':''} ${truncateEnabled?'':'disabled'} onchange="setPptxTruncateObjectives(this.checked)"/>
+          Truncate EGIs description to 3 sentences
         </label>
       </div>
 
@@ -1031,7 +1040,7 @@ function renderPptxListSettingsModal() {
 
 function colCheck(key, label, checked, disabled, title) {
   const dis = disabled ? 'disabled' : '';
-  const op  = disabled ? 'opacity:0.45;' : '';
+  const op  = disabled ? 'opacity:0.45;color:#9BA8B0;' : '';
   const tt  = title ? `title="${title}"` : '';
   return `<label style="display:flex;align-items:center;gap:0.5rem;cursor:${disabled?'not-allowed':'pointer'};font-size:0.875rem;${op}" ${tt}>
     <input type="checkbox" ${checked?'checked':''} ${dis} onchange="togglePptxCol('${key}')"/> ${label}
@@ -1304,13 +1313,17 @@ function render() {
   }
 
   app.innerHTML = `
-    <div class="shell-bar">
-      <div style="display:flex;align-items:center;gap:1.5rem;width:100%;max-width:1400px;margin:0 auto">
+    <div class="shell-top">
+      <div class="shell-top-inner">
         <span class="shell-bar-title">🗂 Success Plans Catalogue Intelligence</span>
+        <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" class="btn btn-secondary btn-sm" style="margin-left:auto;font-size:0.8rem">Feedback</a>
+      </div>
+    </div>
+    <div class="shell-bar">
+      <div class="shell-bar-inner">
         <nav class="shell-nav">
           ${pages.map(p => `<a href="#" class="shell-nav-item ${state.currentPage===p.id?'active':''}" onclick="navigate('${p.id}');return false">${p.label}</a>`).join('')}
         </nav>
-        <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" class="btn btn-secondary btn-sm" style="margin-left:auto;color:rgba(255,255,255,0.85);border-color:rgba(255,255,255,0.4);background:transparent">Feedback</a>
       </div>
     </div>
     <div class="page-content">${content}</div>
