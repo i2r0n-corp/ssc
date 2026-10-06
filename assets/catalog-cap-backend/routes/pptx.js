@@ -19,27 +19,35 @@ fs.mkdirSync(PPTX_TMP, { recursive: true });
 async function _loadFlatIndex() {
   try {
     db.getPool();
-    // Select dedicated columns alongside raw_data so parent_code is always reliable
-    const svcRes = await db.query('SELECT code, name, parent_code, raw_data FROM catalog_services');
+    const svcRes = await db.query('SELECT code, name, engagement_type, raw_data FROM catalog_services');
     const flatIndex = {};
-    let withParent = 0, withoutParent = 0;
     for (const row of svcRes.rows) {
       if (!row.code) continue;
       const obj = row.raw_data || {};
-      obj._name       = row.name;
-      obj._parentCode = row.parent_code;
-      if (row.parent_code) withParent++; else withoutParent++;
+      obj._name = row.name;
+      // engagement_type stored as plain text in DB
+      obj._engagementType = row.engagement_type || '';
       flatIndex[row.code] = obj;
     }
-    console.log(`[pptx] _loadFlatIndex: ${Object.keys(flatIndex).length} entries, ${withParent} with parent_code, ${withoutParent} without`);
-    // Build phases from catalog_classification (reliable, one row per phase value)
+    // Build parent lookup: service code → module name, via catalog_hierarchy + catalog_services
+    // hierarchy: BS → module → service (two levels deep)
+    // We need the module (direct parent of the service)
+    const hierRes = await db.query(`
+      SELECT h.child_code AS svc_code, s.name AS mod_name
+      FROM catalog_hierarchy h
+      JOIN catalog_services s ON s.code = h.parent_code
+      WHERE s.service_object = 'Business Scenario module'
+    `);
+    for (const row of hierRes.rows) {
+      if (flatIndex[row.svc_code]) flatIndex[row.svc_code]._parentName = row.mod_name;
+    }
+    // Build phases from catalog_classification
     const cfRes = await db.query(
       "SELECT service_code, feature_value FROM catalog_classification WHERE feature_key = 'sapActivateProjectPhase'"
     );
     const phasesMap = {};
     for (const row of cfRes.rows) {
       if (!phasesMap[row.service_code]) phasesMap[row.service_code] = [];
-      // feature_value may be a comma-separated string from the API — split it
       const vals = row.feature_value.split(',').map(v => v.trim()).filter(Boolean);
       phasesMap[row.service_code].push(...vals);
     }
@@ -48,7 +56,6 @@ async function _loadFlatIndex() {
     }
     return flatIndex;
   } catch(e) {
-    // Fall back to snapshot payload for local dev
     const data = snapshot.load();
     if (!data || !data.payload) throw new Error('No catalog data available');
     return JSON.parse(data.payload).flat_index || {};
@@ -92,14 +99,9 @@ router.post('/generatePptx', async (req, res) => {
 
       // Map flatIndex services to the shape expected by generate_list_pptx
       const svcs = services.map(s => {
-        // Use DB-sourced fields (prefixed _) — reliable vs raw_data which may be incomplete
-        const parentCode = s._parentCode || s.parentCode || '';
-        const parentEntry = flatIndex[parentCode];
-        const parentName = (parentEntry && (parentEntry._name || parentEntry.name)) || parentCode || '';
+        const parentName = s._parentName || '';
         const phases     = s._phases || [];
-        const et = (s.classificationFeatures || []).filter(f => f.key === 'engagementType').map(f => f.value)[0]
-          || (Array.isArray(s.engagementType) ? s.engagementType[0] : s.engagementType) || '';
-        console.log(`[pptx] svc=${s.code} parentCode=${JSON.stringify(parentCode)} parentEntry=${parentEntry?'found':'MISSING'} parentName=${JSON.stringify(parentName)} et=${JSON.stringify(et)}`);
+        const et         = s._engagementType || '';
         return {
           code:             s.code,
           name:             s._name || s.name,
@@ -108,7 +110,7 @@ router.post('/generatePptx', async (req, res) => {
           key_benefits:     s.keyBenefits || '',
           description:      s.description || '',
           engagement_type:  et,
-          parent_code:      parentCode,
+          parent_code:      s.code,
           parent_name:      parentName,
           phases,
           business_scenario_naming: s.businessScenarioNaming || s.business_scenario_naming || {},
