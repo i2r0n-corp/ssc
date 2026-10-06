@@ -1187,8 +1187,6 @@ function render() {
 
   const pages = [
     { id: 'catalog',   label: 'Catalogue Browser' },
-    { id: 'incidents', label: 'Incidents' },
-    { id: 'chat',      label: 'Chat' },
     { id: 'debug',     label: 'Matching Debug' },
   ];
 
