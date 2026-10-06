@@ -363,12 +363,15 @@ function generateListPptxBuffer(services, opts = {}) {
     if (et.includes('Max'))            text = svc.key_benefits || svc.keyBenefits || svc.short_description || '';
     else if (et.includes('Advanced'))  text = svc.summary      || svc.short_description || '';
     else                               text = svc.description  || svc.short_description || '';
-    // Truncate to 3 sentences only for EGI-named Foundational services
+    // Truncate to 3 sentences only for EGI-named Foundational services — applied after stripHtml
     const isFoundational = !et.includes('Max') && !et.includes('Advanced');
     const isEGI = (svc.name || '').toUpperCase().startsWith('EGI');
     if (truncateObj && text && isFoundational && isEGI) {
-      const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
-      text = sentences.slice(0, 3).join(' ').trim();
+      const clean = stripHtml(text);
+      // Split on sentence-ending punctuation followed by whitespace or end-of-string
+      const parts = clean.split(/(?<=[.!?])\s+/);
+      text = parts.slice(0, 3).join(' ').trim();
+      return text;
     }
     return text;
   }
@@ -376,10 +379,14 @@ function generateListPptxBuffer(services, opts = {}) {
   function getStreamText(modName, bsName) {
     if (streamMode === 'custom' || streamMode === 'customNoBS') return streamCustom || modName;
     if (streamMode === 'moduleOnly') {
-      const sep = modName.indexOf(' // ');
-      return sep !== -1 ? modName.slice(sep + 4) : modName;
+      // Full string format: "BS Name // Module N: Actual Module Name"
+      // Extract the part after " // ", then strip the "Module N: " prefix if present
+      const sepIdx = modName.indexOf(' // ');
+      const afterSep = sepIdx !== -1 ? modName.slice(sepIdx + 4) : modName;
+      // Strip leading "Module <digits/chars>: " prefix
+      return afterSep.replace(/^Module\s+[^:]+:\s*/i, '');
     }
-    // bsAndModule: use full string as-is (already "BS Name // Module Name" from DB)
+    // bsAndModule: full string as-is
     return modName;
   }
 

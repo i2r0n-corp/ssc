@@ -974,7 +974,6 @@ function renderPptxListSettingsModal() {
         ${colCheck('objectives', 'Objectives (Short Description)',   s.cols.objectives, false)}
       </div>
 
-      <div style="font-weight:600;font-size:0.8rem;color:#1D2D3E;margin-bottom:0.4rem">Stream Label</div>
       <div style="margin-bottom:1rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0">
         <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem;font-weight:600">
           <input type="checkbox" ${streamOn?'checked':''} onchange="togglePptxCol('stream')"/>
