@@ -280,9 +280,9 @@ function buildDataRows(dataRows, cols, objW, yearCount, yearBorders) {
 function buildSlideXml(templateSlideXml, dataRows, slideTitle, streamBlocks, cols, objW, yearCount, yearFrom, yearBorders) {
   let xml = templateSlideXml;
 
-  // 1. Replace title
+  // 1. Replace title — match the title placeholder by ph type="title", then replace its <a:t> text
   xml = xml.replace(
-    /(<p:cNvPr[^>]*name="Title 3"[^>]*\/>[\s\S]*?<a:t>)([^<]*)(<\/a:t>)/,
+    /(name="Title 3"[\s\S]*?<p:ph type="title"[\s\S]*?<a:t>)([^<]*?)(<\/a:t>)/,
     `$1${esc(slideTitle)}$3`
   );
 

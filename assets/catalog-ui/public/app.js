@@ -1321,7 +1321,7 @@ function render() {
   app.innerHTML = `
     <div class="shell-top">
       <div class="shell-top-inner">
-        <span class="shell-bar-title">🗂 Success Plans Catalogue Intelligence</span>
+        <span class="shell-bar-title">Success Plans Catalogue Intelligence</span>
         <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" class="btn btn-secondary btn-sm" style="margin-left:auto;font-size:0.8rem">Feedback</a>
       </div>
     </div>
