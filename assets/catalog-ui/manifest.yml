@@ -11,6 +11,7 @@ applications:
     health-check-http-endpoint: /
     env:
       NODE_ENV: production
+      REACT_APP_CAP_BACKEND_URL: https://ssc-catalog-cap-backend.cfapps.us10-001.hana.ondemand.com
       destinations: >
         [{"name":"ssc-catalog-backend","url":"https://ssc-catalog-cap-backend.cfapps.us10-001.hana.ondemand.com","forwardAuthToken":true}]
     services:
