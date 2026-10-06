@@ -8,7 +8,6 @@ const path = require('path');
 const fs = require('fs');
 const passport = require('passport');
 const { JWTStrategy } = require('@sap/xssec');
-const xsenv = require('@sap/xsenv');
 
 const app = express();
 
@@ -26,10 +25,13 @@ app.use(express.raw({ type: ['application/vnd.openxmlformats-officedocument.spre
 
 // XSUAA auth — only active when bound to CF (VCAP_SERVICES present)
 if (process.env.VCAP_SERVICES) {
-  const xsuaaService = xsenv.getServices({ xsuaa: { tag: 'xsuaa' } }).xsuaa;
-  passport.use('JWT', new JWTStrategy(xsuaaService));
-  app.use(passport.initialize());
-  app.use('/api', passport.authenticate('JWT', { session: false }));
+  const vcap = JSON.parse(process.env.VCAP_SERVICES);
+  const xsuaaCredentials = (vcap['xsuaa'] || vcap['user-provided'] || [])[0]?.credentials;
+  if (xsuaaCredentials) {
+    passport.use('JWT', new JWTStrategy(xsuaaCredentials));
+    app.use(passport.initialize());
+    app.use('/api', passport.authenticate('JWT', { session: false }));
+  }
 }
 
 // Mount routers
