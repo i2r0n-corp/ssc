@@ -102,6 +102,8 @@ router.post('/generatePptx', async (req, res) => {
         const parentName = s._parentName || '';
         const phases     = s._phases || [];
         const et         = s._engagementType || '';
+        // business_scenario_naming: keyed by BS code → deck name for that service
+        const bsNaming = s.businessScenarioNaming || s.business_scenario_naming || s.businessScenarios || {};
         return {
           code:             s.code,
           name:             s._name || s.name,
@@ -110,10 +112,9 @@ router.post('/generatePptx', async (req, res) => {
           key_benefits:     s.keyBenefits || '',
           description:      s.description || '',
           engagement_type:  et,
-          parent_code:      s.code,
           parent_name:      parentName,
           phases,
-          business_scenario_naming: s.businessScenarioNaming || s.business_scenario_naming || {},
+          business_scenario_naming: bsNaming,
         };
       });
 
@@ -126,6 +127,12 @@ router.post('/generatePptx', async (req, res) => {
         yearTo:      opts.yearTo,
         cols:        opts.cols || null,
       });
+      // Debug: log first svc to check deck names and grouping
+      if (svcs.length > 0) {
+        const s0 = svcs[0];
+        console.log(`[pptx] opts: groupByET=${opts.groupByET} useDeckName=${opts.useDeckName} bsCode=${opts.bsCode}`);
+        console.log(`[pptx] svc[0]: name=${s0.name} parent_name=${s0.parent_name} et=${s0.engagement_type} bsNamingKeys=${Object.keys(s0.business_scenario_naming||{}).slice(0,3).join(',')}`);
+      }
       fs.writeFileSync(filePath, buf);
 
     } else {

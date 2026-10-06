@@ -338,8 +338,8 @@ function generateListPptxBuffer(services, opts = {}) {
   // ── Parse services into modules ───────────────────────────────────────────
   const moduleMap = new Map();
   for (const svc of services) {
-    const key = svc.parent_code || '__none__';
-    if (!moduleMap.has(key)) moduleMap.set(key, { name: svc.parent_name || svc.parentName || key, services: [] });
+    const key = svc.parent_name || svc.parent_code || '__none__';
+    if (!moduleMap.has(key)) moduleMap.set(key, { name: key, services: [] });
     moduleMap.get(key).services.push(svc);
   }
   const modules = [...moduleMap.values()];
