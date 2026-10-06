@@ -151,6 +151,26 @@ function headerCell(text, algn) {
     `</a:p></a:txBody>${TCPR_HDR}</a:tc>`;
 }
 
+const BORDER_LINE = `<a:solidFill><a:srgbClr val="8696A9"/></a:solidFill><a:prstDash val="solid"/><a:round/>`;
+const NO_FILL_LINE = `<a:noFill/>`;
+
+function cellYear(text, borderLeft, borderRight) {
+  const lnL = borderLeft  ? `<a:lnL w="19050" cmpd="sng">${BORDER_LINE}</a:lnL>` : `<a:lnL w="12700" cmpd="sng"><a:noFill/></a:lnL>`;
+  const lnR = borderRight ? `<a:lnR w="19050" cmpd="sng">${BORDER_LINE}</a:lnR>` : `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr"><a:noFill/><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`;
+  const tcPr =
+    `<a:tcPr marL="${PAD_L}" marR="${PAD_R}" marT="${PAD_T}" marB="${PAD_B}" anchor="t">` +
+    lnL + lnR +
+    `<a:lnT w="12700" cap="flat" cmpd="sng" algn="ctr"><a:noFill/><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnT>` +
+    `<a:lnB w="12700" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnB>` +
+    `<a:lnTlToBr w="12700" cmpd="sng"><a:noFill/><a:prstDash val="solid"/></a:lnTlToBr>` +
+    `<a:lnBlToTr w="12700" cmpd="sng"><a:noFill/><a:prstDash val="solid"/></a:lnBlToTr>` +
+    `<a:noFill/></a:tcPr>`;
+  return `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>` +
+    `<a:p><a:pPr algn="ctr" rtl="0"><a:buNone/></a:pPr>` +
+    (text ? `<a:r>${RPR_DATA}<a:t>${esc(text)}</a:t></a:r>` : `<a:endParaRPr lang="en-GB"/>`) +
+    `</a:p></a:txBody>${tcPr}</a:tc>`;
+}
+
 // ── Row height calculation ────────────────────────────────────────────────────
 
 function calcCellHeight(text, colWidth) {
@@ -218,7 +238,7 @@ function buildTblGrid(cols, objW, yearCount) {
 
 // ── Build header rows XML ─────────────────────────────────────────────────────
 
-function buildHeaderRows(cols, objW, yearCount, yearFrom) {
+function buildHeaderRows(cols, objW, yearCount, yearFrom, yearBorders) {
   const ROW_H = 482208;  // single header row
   let cells = '';
   if (cols.stream)    cells += headerCell('Stream');
@@ -226,13 +246,18 @@ function buildHeaderRows(cols, objW, yearCount, yearFrom) {
   if (cols.component) cells += headerCell('Service Component');
   if (cols.tier)      cells += headerCell('Tier');
   cells += headerCell('Objectives');
-  for (let i = 0; i < yearCount; i++) cells += headerCell(String(yearFrom + i));
+  for (let i = 0; i < yearCount; i++) {
+    const isFirst = i === 0, isLast = i === yearCount - 1;
+    cells += yearBorders
+      ? cellYear(String(yearFrom + i), isFirst, isLast)
+      : headerCell(String(yearFrom + i));
+  }
   return `<a:tr h="${ROW_H}">${cells}</a:tr>`;
 }
 
 // ── Build data rows XML ───────────────────────────────────────────────────────
 
-function buildDataRows(dataRows, cols, objW, yearCount) {
+function buildDataRows(dataRows, cols, objW, yearCount, yearBorders) {
   return dataRows.map(dr => {
     let cells = '';
     if (cols.stream) {
@@ -242,14 +267,17 @@ function buildDataRows(dataRows, cols, objW, yearCount) {
     if (cols.component) cells += cellData(dr.component);
     if (cols.tier)      cells += cellData(dr.tier);
     cells += cellData(dr.objectives);
-    for (let i=0; i<yearCount; i++) cells += cellData('', 'ctr');
+    for (let i=0; i<yearCount; i++) {
+      const isFirst = i === 0, isLast = i === yearCount - 1;
+      cells += cellYear('', yearBorders && isFirst, yearBorders && isLast);
+    }
     return `<a:tr h="${dr.rowH}">${cells}</a:tr>`;
   }).join('');
 }
 
 // ── Slide XML builder ─────────────────────────────────────────────────────────
 
-function buildSlideXml(templateSlideXml, dataRows, slideTitle, streamBlocks, cols, objW, yearCount, yearFrom) {
+function buildSlideXml(templateSlideXml, dataRows, slideTitle, streamBlocks, cols, objW, yearCount, yearFrom, yearBorders) {
   let xml = templateSlideXml;
 
   // 1. Replace title
@@ -273,8 +301,8 @@ function buildSlideXml(templateSlideXml, dataRows, slideTitle, streamBlocks, col
   const tableCy    = HEADER_H + totalDataH;
 
   const newGrid    = buildTblGrid(cols, objW, yearCount);
-  const headerRows = buildHeaderRows(cols, objW, yearCount, yearFrom);
-  const dataRowXml = buildDataRows(dataRows, cols, objW, yearCount);
+  const headerRows = buildHeaderRows(cols, objW, yearCount, yearFrom, yearBorders);
+  const dataRowXml = buildDataRows(dataRows, cols, objW, yearCount, yearBorders);
 
   xml = xml.slice(0, tblGridStart) + newGrid + headerRows + dataRowXml + xml.slice(tblEnd);
 
@@ -317,6 +345,7 @@ function generateListPptxBuffer(services, opts = {}) {
   const streamCustom = (opts.streamCustom || '').slice(0, 64);
   const truncateObj  = !!opts.truncateObjectives;
   const bsName       = opts.bsName || '';
+  const yearBorders  = !!opts.yearBorders;
 
   // Column visibility — all on by default
   const cols = {
@@ -482,7 +511,7 @@ function generateListPptxBuffer(services, opts = {}) {
         ? [{ text: streamText, rowOffset: 0, rowCount: rows.length }]
         : [];
       outFiles[`ppt/slides/slide${slideNum}.xml`] = buildSlideXml(
-        templateSlide, rows, title, streamBlocks, cols, objW, yearCount, yearFrom
+        templateSlide, rows, title, streamBlocks, cols, objW, yearCount, yearFrom, yearBorders
       );
       outFiles[`ppt/slides/_rels/slide${slideNum}.xml.rels`] =
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +

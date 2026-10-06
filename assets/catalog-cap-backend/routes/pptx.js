@@ -182,6 +182,7 @@ router.post('/generatePptx', async (req, res) => {
         streamMode:         opts.streamMode || null,
         streamCustom:       opts.streamCustom || '',
         truncateObjectives: !!opts.truncateObjectives,
+        yearBorders:        !!opts.yearBorders,
       });
       fs.writeFileSync(filePath, buf);
 

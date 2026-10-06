@@ -25,7 +25,7 @@ let state = {
   pptxListSettings: {
     open: false,
     cols: { stream: true, phases: true, component: true, tier: false, objectives: true },
-    years: false, yearFrom: '2026', yearTo: '2030',
+    years: false, yearFrom: '2026', yearTo: '2030', yearBorders: false,
     groupByET: false, useDeckName: false,
     title: 'Services Description',
     streamMode: 'bsAndModule',  // 'bsAndModule' | 'moduleOnly' | 'custom' | 'customNoBS'
@@ -836,6 +836,7 @@ window.generatePptx = async function(template) {
         yearFrom: s.years ? s.yearFrom : '0',
         yearTo:   s.years ? s.yearTo   : '0',
         groupByET: s.groupByET, useDeckName: s.useDeckName,
+        yearBorders: s.years ? s.yearBorders : false,
         title: s.title,
         bsCode,
         streamMode: resolvedStreamMode,
@@ -897,6 +898,9 @@ window.setPptxGroupET = function(v) {
 window.setPptxDeckName = function(v) {
   state.pptxListSettings.useDeckName = v; render();
 };
+window.setPptxYearBorders = function(v) {
+  state.pptxListSettings.yearBorders = v; render();
+};
 let _titleDebounce = null;
 window.setPptxTitle = function(v) {
   state.pptxListSettings.title = v;
@@ -931,29 +935,29 @@ function renderPptxListSettingsModal() {
   const inputStyle = `width:100%;padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid ${streamOn?'#8696A9':'#c0c0c0'};border-radius:4px;${streamOn?'':'background:#f5f5f5;color:#9BA8B0;'}`;
 
   const streamOptions = bsActive ? `
-    <div style="${dimStyle}display:flex;flex-direction:column;gap:0.35rem;margin-top:0.5rem">
-      <label style="display:flex;align-items:center;gap:0.5rem;cursor:${streamOn?'pointer':'not-allowed'};font-size:0.875rem;${greyText}">
+    <div style="display:flex;flex-direction:column;gap:0.35rem">
+      <label style="display:flex;align-items:center;gap:0.5rem;cursor:${streamOn?'pointer':'not-allowed'};font-size:0.875rem">
         <input type="radio" name="streamMode" value="bsAndModule" ${s.streamMode==='bsAndModule'?'checked':''} ${disAttr} onchange="setPptxStreamMode('bsAndModule')"/>
         Business Scenario + Module Name
       </label>
-      <label style="display:flex;align-items:center;gap:0.5rem;cursor:${streamOn?'pointer':'not-allowed'};font-size:0.875rem;${greyText}">
+      <label style="display:flex;align-items:center;gap:0.5rem;cursor:${streamOn?'pointer':'not-allowed'};font-size:0.875rem">
         <input type="radio" name="streamMode" value="moduleOnly" ${s.streamMode==='moduleOnly'?'checked':''} ${disAttr} onchange="setPptxStreamMode('moduleOnly')"/>
         Only Module Name
       </label>
-      <label style="display:flex;align-items:center;gap:0.5rem;cursor:${streamOn?'pointer':'not-allowed'};font-size:0.875rem;${greyText}">
+      <label style="display:flex;align-items:center;gap:0.5rem;cursor:${streamOn?'pointer':'not-allowed'};font-size:0.875rem">
         <input type="radio" name="streamMode" value="custom" ${s.streamMode==='custom'?'checked':''} ${disAttr} onchange="setPptxStreamMode('custom')"/>
         Custom
       </label>
       ${s.streamMode==='custom' ? `
       <input type="text" id="pptx-stream-custom" maxlength="64" ${disAttr} oninput="setPptxStreamCustom(this.value)"
-        style="margin-left:1.5rem;width:calc(100% - 1.5rem);padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid ${streamOn?'#8696A9':'#c0c0c0'};border-radius:4px;${streamOn?'':'background:#f5f5f5;color:#9BA8B0;'}"
+        style="margin-left:1.5rem;width:calc(100% - 1.5rem);padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid #8696A9;border-radius:4px"
         placeholder="Custom stream label (max 64 chars)"/>` : ''}
     </div>` : `
-    <div style="${dimStyle}display:flex;flex-direction:column;gap:0.35rem;margin-top:0.5rem">
+    <div style="display:flex;flex-direction:column;gap:0.35rem">
       <input type="text" id="pptx-stream-custom" maxlength="64" ${disAttr}
         oninput="setPptxStreamCustom(this.value)"
-        style="${inputStyle}"
-        placeholder="${streamOn ? 'Custom stream label (max 64 chars)' : 'Enable Stream to set label'}"/>
+        style="width:100%;padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid #8696A9;border-radius:4px"
+        placeholder="Custom stream label (max 64 chars)"/>
     </div>`;
 
   return `
@@ -974,37 +978,40 @@ function renderPptxListSettingsModal() {
         ${colCheck('objectives', 'Objectives (Short Description)',   s.cols.objectives, false)}
       </div>
 
-      <div style="margin-bottom:1rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0">
-        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem;font-weight:600">
-          <input type="checkbox" ${streamOn?'checked':''} onchange="togglePptxCol('stream')"/>
-          Stream
-        </label>
+      <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem;font-weight:600;margin-bottom:0.4rem">
+        <input type="checkbox" ${streamOn?'checked':''} onchange="togglePptxCol('stream')"/>
+        Stream
+      </label>
+      <div style="margin-bottom:1rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${streamOn?'':'opacity:0.45;pointer-events:none;'}">
         ${streamOptions}
       </div>
 
-      <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:${s.years?'0.4rem':'1rem'}">
+      <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem;font-weight:600;margin-bottom:0.4rem">
+        <input type="checkbox" ${s.years?'checked':''} onchange="setPptxYears(this.checked)"/>
+        Include Year Columns
+      </label>
+      <div style="margin-bottom:1rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${s.years?'':'opacity:0.45;pointer-events:none;'}">
+        <div style="display:flex;gap:0.75rem;align-items:flex-end;margin-bottom:0.6rem">
+          <div>
+            <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year From</div>
+            <input type="text" id="pptx-year-from" maxlength="4" oninput="setPptxYearFrom(this.value)"
+              style="width:80px;padding:0.4rem 0.5rem;font-size:0.875rem;border:1px solid ${!yearValid&&s.yearFrom.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
+              placeholder="2026"/>
+          </div>
+          <div style="padding-bottom:0.5rem;color:#6a6a6a">→</div>
+          <div>
+            <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year To</div>
+            <input type="text" id="pptx-year-to" maxlength="4" oninput="setPptxYearTo(this.value)"
+              style="width:80px;padding:0.4rem 0.5rem;font-size:0.875rem;border:1px solid ${!yearValid&&s.yearTo.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
+              placeholder="2030"/>
+          </div>
+          ${!yearValid ? `<div style="font-size:0.72rem;color:#dc3545;align-self:flex-end;padding-bottom:0.5rem">First year must be less than second</div>` : ''}
+        </div>
         <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
-          <input type="checkbox" ${s.years?'checked':''} onchange="setPptxYears(this.checked)"/>
-          Include Year Columns
+          <input type="checkbox" ${s.yearBorders?'checked':''} onchange="setPptxYearBorders(this.checked)"/>
+          Show column borders (left of first, between, right of last)
         </label>
       </div>
-      ${s.years ? `
-      <div style="display:flex;gap:0.75rem;align-items:flex-end;margin-bottom:1rem">
-        <div>
-          <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year From</div>
-          <input type="text" id="pptx-year-from" maxlength="4" oninput="setPptxYearFrom(this.value)"
-            style="width:80px;padding:0.4rem 0.5rem;font-size:0.875rem;border:1px solid ${!yearValid&&s.yearFrom.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
-            placeholder="2026"/>
-        </div>
-        <div style="padding-bottom:0.5rem;color:#6a6a6a">→</div>
-        <div>
-          <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year To</div>
-          <input type="text" id="pptx-year-to" maxlength="4" oninput="setPptxYearTo(this.value)"
-            style="width:80px;padding:0.4rem 0.5rem;font-size:0.875rem;border:1px solid ${!yearValid&&s.yearTo.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
-            placeholder="2030"/>
-        </div>
-        ${!yearValid ? `<div style="font-size:0.72rem;color:#dc3545;align-self:flex-end;padding-bottom:0.5rem">First year must be less than second</div>` : ''}
-      </div>` : ''}
 
       <div style="font-weight:600;font-size:0.8rem;color:#1D2D3E;margin-bottom:0.4rem">Options</div>
       <div style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:1rem">
