@@ -405,9 +405,12 @@ function renderCatalogResults() {
       <button class="btn btn-secondary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)">
         📋 PPTX List ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
-      <button class="btn btn-primary btn-sm" onclick="generatePptx('one-pager')" title="One-pager per service PPTX">
-        📄 PPTX One-Pagers ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
-      </button>
+      <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px">
+        <button class="btn btn-primary btn-sm" disabled style="opacity:0.45;cursor:not-allowed">
+          📄 PPTX One-Pagers
+        </button>
+        <span style="font-size:0.68rem;color:#dc3545;font-weight:600">under construction</span>
+      </div>
     </div>
     ${state.pptx.error ? `<div class="error-strip" style="margin-bottom:0.5rem">⚠ ${state.pptx.error}</div>` : ''}
     <table class="service-table">
