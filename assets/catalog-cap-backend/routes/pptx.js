@@ -31,6 +31,16 @@ async function _loadFlatIndex() {
         flatIndex[row.parent_code].childServices.push(row.child_code);
       }
     }
+    // Build module name index — modules are not in catalog_services, look them up from matching log
+    const modRes = await db.query(
+      'SELECT DISTINCT module_code, module_name FROM catalog_matching_log_rows WHERE module_code IS NOT NULL AND module_name IS NOT NULL'
+    );
+    const moduleNames = {};
+    for (const row of modRes.rows) moduleNames[row.module_code] = row.module_name;
+    // Inject module names as synthetic entries so pptx route can look them up
+    for (const [code, name] of Object.entries(moduleNames)) {
+      if (!flatIndex[code]) flatIndex[code] = { code, name };
+    }
     return flatIndex;
   } catch(e) {
     // Fall back to snapshot payload for local dev

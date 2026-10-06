@@ -75,8 +75,8 @@ const COL_W = {
   year:       400000,
 };
 
-// Cell padding from template (marL/marR/marT/marB)
-const PAD_L = 9523, PAD_R = 9523, PAD_T = 9523, PAD_B = 0;
+// Cell padding (EMU) — half of 8pt font size (~1.4mm) symmetric on all sides
+const PAD_L = 50800, PAD_R = 50800, PAD_T = 50800, PAD_B = 50800;
 
 // Font metrics: 72 Brand 8pt
 const FONT_SZ_EMU   = 8 * 12700;          // 101600 EMU
@@ -153,11 +153,11 @@ function headerCell(text, algn) {
 
 // ── Row height calculation ────────────────────────────────────────────────────
 
-function calcRowHeight(objText, objColWidth) {
-  const textWidth = objColWidth - PAD_L - PAD_R;
+function calcCellHeight(text, colWidth) {
+  const textWidth = colWidth - PAD_L - PAD_R;
   const charsPerLine = Math.max(1, Math.floor(textWidth / AVG_CHAR_W));
-  const lines = Math.max(1, Math.ceil((objText || '').length / charsPerLine));
-  return lines * LINE_H_EMU + PAD_T;
+  const lines = Math.max(1, Math.ceil((text || '').length / charsPerLine));
+  return lines * LINE_H_EMU + PAD_T + PAD_B;
 }
 
 // ── Stream overlay (rotated floating textbox) ─────────────────────────────────
@@ -369,14 +369,22 @@ function generateListPptxBuffer(services, opts = {}) {
       ? svc.business_scenario_naming[bsCode] : (svc.name || '');
     const phases = (svc.phases||[]).slice().sort((a,b)=>PHASE_ORDER.indexOf(a)-PHASE_ORDER.indexOf(b));
     const allPhases = PHASE_ORDER.every(p => phases.includes(p));
+    const phasesText = allPhases ? 'All' : phases.join(', ');
     const objText = cols.objectives ? stripHtml(getObjectives(svc)) : '';
     const tierLabel = (svc.engagement_type || '').includes('Enterprise Support')
       ? 'Foundational'
       : (ET_LABEL[svc.engagement_type] || svc.engagement_type || '');
-    const rowH = cols.objectives ? calcRowHeight(objText, objW) : LINE_H_EMU + PAD_T;
+
+    // Row height = max across all columns that can wrap
+    const minH = LINE_H_EMU + PAD_T + PAD_B;
+    let rowH = minH;
+    if (cols.phases)    rowH = Math.max(rowH, calcCellHeight(phasesText,  COL_W.phases));
+    if (cols.component) rowH = Math.max(rowH, calcCellHeight(name,         COL_W.component));
+    if (cols.objectives)rowH = Math.max(rowH, calcCellHeight(objText,      objW));
+
     return {
       isStreamStart, streamRowSpan, streamText,
-      phases:    allPhases ? 'All' : phases.join(', '),
+      phases:    phasesText,
       component: name,
       tier:      tierLabel,
       objectives: objText,
