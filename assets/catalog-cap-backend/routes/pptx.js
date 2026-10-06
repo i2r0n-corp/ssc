@@ -22,13 +22,16 @@ async function _loadFlatIndex() {
     // Select dedicated columns alongside raw_data so parent_code is always reliable
     const svcRes = await db.query('SELECT code, name, parent_code, raw_data FROM catalog_services');
     const flatIndex = {};
+    let withParent = 0, withoutParent = 0;
     for (const row of svcRes.rows) {
       if (!row.code) continue;
       const obj = row.raw_data || {};
       obj._name       = row.name;
       obj._parentCode = row.parent_code;
+      if (row.parent_code) withParent++; else withoutParent++;
       flatIndex[row.code] = obj;
     }
+    console.log(`[pptx] _loadFlatIndex: ${Object.keys(flatIndex).length} entries, ${withParent} with parent_code, ${withoutParent} without`);
     // Build phases from catalog_classification (reliable, one row per phase value)
     const cfRes = await db.query(
       "SELECT service_code, feature_value FROM catalog_classification WHERE feature_key = 'sapActivateProjectPhase'"
@@ -91,10 +94,12 @@ router.post('/generatePptx', async (req, res) => {
       const svcs = services.map(s => {
         // Use DB-sourced fields (prefixed _) — reliable vs raw_data which may be incomplete
         const parentCode = s._parentCode || s.parentCode || '';
-        const parentName = (flatIndex[parentCode] && (flatIndex[parentCode]._name || flatIndex[parentCode].name)) || parentCode || '';
+        const parentEntry = flatIndex[parentCode];
+        const parentName = (parentEntry && (parentEntry._name || parentEntry.name)) || parentCode || '';
         const phases     = s._phases || [];
         const et = (s.classificationFeatures || []).filter(f => f.key === 'engagementType').map(f => f.value)[0]
           || (Array.isArray(s.engagementType) ? s.engagementType[0] : s.engagementType) || '';
+        console.log(`[pptx] svc=${s.code} parentCode=${JSON.stringify(parentCode)} parentEntry=${parentEntry?'found':'MISSING'} parentName=${JSON.stringify(parentName)} et=${JSON.stringify(et)}`);
         return {
           code:             s.code,
           name:             s._name || s.name,
