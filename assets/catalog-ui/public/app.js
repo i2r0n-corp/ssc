@@ -36,6 +36,7 @@ let state = {
   exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null },
   currentUser: null,
   accessDeniedModal: false,  // set after first API call that exposes user identity
+  backendDown: false,
 };
 
 function saveCart() {
@@ -70,7 +71,11 @@ async function loadCatalog() {
     state.catalog.hasSearched = false;
     state.catalog.error = null;
   } catch (e) {
-    state.catalog.error = e.message;
+    if (e instanceof TypeError && e.message.toLowerCase().includes('fetch')) {
+      state.backendDown = true;
+    } else {
+      state.catalog.error = e.message;
+    }
   }
   state.catalog.loading = false; render();
 }
@@ -1478,8 +1483,19 @@ function render() {
         </div>
         <div class="modal-footer"><button class="btn btn-primary" onclick="window.closeAccessDenied()">OK</button></div>
       </div>
+    </div>` : ''}
+    ${state.backendDown ? `
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center">
+      <div style="background:#fff;border-radius:8px;max-width:480px;width:90%;padding:2rem 2.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.25);text-align:center">
+        <div style="font-size:2.5rem;margin-bottom:1rem">⚠️</div>
+        <h3 style="margin:0 0 0.75rem;color:#1D2D3E;font-size:1.1rem;font-weight:700">Backend Unavailable</h3>
+        <p style="margin:0 0 1.25rem;color:#555;font-size:0.95rem;line-height:1.5">
+          We're experiencing some technical issues with the backend server.<br>
+          The service may be restarting or temporarily down.
+        </p>
+        <button class="btn btn-primary" onclick="state.backendDown=false;loadCatalog()">Try Again</button>
+      </div>
     </div>` : ''}`;
-
   // Restore year input values without disturbing focus — the inputs use no value= attr
   const yf = document.getElementById('pptx-year-from');
   const yt = document.getElementById('pptx-year-to');
