@@ -820,6 +820,11 @@ window.toggleSort = function(col) {
 };
 
 window.generatePptx = async function(template) {
+  // Flush year inputs immediately in case debounce hasn't fired yet
+  const yfEl = document.getElementById('pptx-year-from');
+  const ytEl = document.getElementById('pptx-year-to');
+  if (yfEl) state.pptxListSettings.yearFrom = yfEl.value.replace(/\D/g,'').slice(0,4);
+  if (ytEl) state.pptxListSettings.yearTo   = ytEl.value.replace(/\D/g,'').slice(0,4);
   const codes = state.selectedServices.size > 0
     ? [...state.selectedServices]
     : state.filteredServices.map(s => s.code);
@@ -853,7 +858,7 @@ window.generatePptx = async function(template) {
         return null;
       })();
       body.listOptions = {
-        cols: { ...s.cols },
+        cols: { ...s.cols, stream: bsCode ? s.cols.stream : false },
         yearFrom: s.years ? s.yearFrom : '0',
         yearTo:   s.years ? s.yearTo   : '0',
         groupByET: s.groupByET, useDeckName: s.useDeckName,
@@ -1005,7 +1010,7 @@ function renderPptxListSettingsModal() {
         <input type="checkbox" ${streamOn && bsActive?'checked':''} ${!bsActive?'disabled':''} onchange="togglePptxCol('stream')"/>
         Stream
       </label>
-      <div style="margin-bottom:1rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${(streamOn && bsActive)?'':'opacity:0.45;pointer-events:none;'}">
+      <div style="margin-bottom:1rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${(streamOn && bsActive)?'':'display:none'}">
         ${streamOptions}
       </div>
 
@@ -1058,7 +1063,7 @@ function renderPptxListSettingsModal() {
 
       <div style="display:flex;gap:0.75rem;justify-content:flex-end">
         <button class="btn btn-secondary btn-sm" onclick="closePptxListSettings()">Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick="closePptxListSettings();generatePptx('list')"
+        <button class="btn btn-primary btn-sm" onclick="generatePptx('list').then(()=>closePptxListSettings())"
           ${!yearValid ? 'disabled title="Fix year range first"' : ''}>
           ⬇ Export Now
         </button>
