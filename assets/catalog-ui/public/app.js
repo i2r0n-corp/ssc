@@ -1360,47 +1360,6 @@ function renderExportLogPage() {
   };
 
   const sel = state.exportLog.selectedRow;
-  const detailModal = sel ? (() => {
-    const r = sel;
-    const cols = r.pptx_cols ? Object.entries(r.pptx_cols).map(([k,v]) => `${k}: ${v?'✓':'✗'}`).join('\n') : '—';
-    const stream = r.pptx_stream_mode ? (r.pptx_stream_mode === 'custom' || r.pptx_stream_mode === 'customNoBS' ? `${r.pptx_stream_mode}: "${r.pptx_stream_custom||''}"` : r.pptx_stream_mode) : '—';
-    const rows2 = [
-      ['Date / Time',   fmt(r.logged_at)],
-      ['User',          r.logon_name || r.user_id || '—'],
-      ['Export Type',   r.export_type],
-      ['# Services',    r.service_count ?? '—'],
-      ['BS Filter',     r.filter_bs || '—'],
-      ['ET Filter',     r.filter_et || '—'],
-      ['Modules',       r.filter_modules?.length ? r.filter_modules.join(', ') : '—'],
-      ['Query',         r.filter_query || '—'],
-      ['Slide Title',   r.pptx_title || '—'],
-      ['Stream Mode',   stream],
-      ['Years',         r.pptx_year_from ? `${r.pptx_year_from} – ${r.pptx_year_to||'?'}` : '—'],
-      ['Year Borders',  r.pptx_year_borders != null ? (r.pptx_year_borders ? 'Yes' : 'No') : '—'],
-      ['Columns',       r.pptx_cols ? Object.entries(r.pptx_cols).filter(([,v])=>v).map(([k])=>k).join(', ') || '—' : '—'],
-      ['Group by ET',   r.pptx_group_by_et != null ? (r.pptx_group_by_et ? 'Yes' : 'No') : '—'],
-      ['Use Deck Name', r.pptx_use_deck_name != null ? (r.pptx_use_deck_name ? 'Yes' : 'No') : '—'],
-      ['Truncate Obj',  r.pptx_truncate_obj != null ? (r.pptx_truncate_obj ? 'Yes' : 'No') : '—'],
-    ];
-    return `
-    <div class="modal-backdrop" onclick="window.closeExportLogDetail()">
-      <div class="modal-dialog" style="max-width:480px" onclick="event.stopPropagation()">
-        <div class="modal-header">
-          <h5 class="modal-title">Export Details</h5>
-          <button class="btn-close" onclick="window.closeExportLogDetail()"></button>
-        </div>
-        <div class="modal-body" style="padding:1rem">
-          <table style="width:100%;font-size:0.875rem;border-collapse:collapse">
-            ${rows2.map(([k,v]) => `<tr>
-              <td style="padding:0.3rem 0.75rem 0.3rem 0;color:#6a6a6a;white-space:nowrap;vertical-align:top;font-weight:600">${k}</td>
-              <td style="padding:0.3rem 0;word-break:break-word">${v}</td>
-            </tr>`).join('')}
-          </table>
-        </div>
-        <div class="modal-footer"><button class="btn btn-primary" onclick="window.closeExportLogDetail()">Close</button></div>
-      </div>
-    </div>`;
-  })() : '';
 
   return `
   <div class="card" style="overflow-x:auto">
@@ -1432,8 +1391,53 @@ function renderExportLogPage() {
         </tr>`).join('')}
       </tbody>
     </table>
-  </div>
-  ${detailModal}`;
+  </div>`;
+}
+
+function renderExportLogDetailModal() {
+  const r = state.exportLog.selectedRow;
+  if (!r) return '';
+  const fmt = iso => new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const stream = r.pptx_stream_mode
+    ? ((r.pptx_stream_mode === 'custom' || r.pptx_stream_mode === 'customNoBS')
+        ? `${r.pptx_stream_mode}: "${r.pptx_stream_custom || ''}"` : r.pptx_stream_mode)
+    : '—';
+  const rows2 = [
+    ['Date / Time',   fmt(r.logged_at)],
+    ['User',          r.logon_name || r.user_id || '—'],
+    ['Export Type',   r.export_type],
+    ['# Services',    r.service_count ?? '—'],
+    ['BS Filter',     r.filter_bs || '—'],
+    ['ET Filter',     r.filter_et || '—'],
+    ['Modules',       r.filter_modules?.length ? r.filter_modules.join(', ') : '—'],
+    ['Query',         r.filter_query || '—'],
+    ['Slide Title',   r.pptx_title || '—'],
+    ['Stream Mode',   stream],
+    ['Years',         r.pptx_year_from ? `${r.pptx_year_from} – ${r.pptx_year_to || '?'}` : '—'],
+    ['Year Borders',  r.pptx_year_borders != null ? (r.pptx_year_borders ? 'Yes' : 'No') : '—'],
+    ['Columns',       r.pptx_cols ? Object.entries(r.pptx_cols).filter(([,v])=>v).map(([k])=>k).join(', ') || '—' : '—'],
+    ['Group by ET',   r.pptx_group_by_et   != null ? (r.pptx_group_by_et   ? 'Yes' : 'No') : '—'],
+    ['Use Deck Name', r.pptx_use_deck_name != null ? (r.pptx_use_deck_name ? 'Yes' : 'No') : '—'],
+    ['Truncate Obj',  r.pptx_truncate_obj  != null ? (r.pptx_truncate_obj  ? 'Yes' : 'No') : '—'],
+  ];
+  return `
+  <div class="modal-backdrop" onclick="window.closeExportLogDetail()">
+    <div class="modal-dialog" style="max-width:480px" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h5 class="modal-title">Export Details</h5>
+        <button class="btn-close" onclick="window.closeExportLogDetail()"></button>
+      </div>
+      <div class="modal-body" style="padding:1rem">
+        <table style="width:100%;font-size:0.875rem;border-collapse:collapse">
+          ${rows2.map(([k,v]) => `<tr>
+            <td style="padding:0.3rem 0.75rem 0.3rem 0;color:#6a6a6a;white-space:nowrap;vertical-align:top;font-weight:600">${k}</td>
+            <td style="padding:0.3rem 0;word-break:break-word">${v}</td>
+          </tr>`).join('')}
+        </table>
+      </div>
+      <div class="modal-footer"><button class="btn btn-primary" onclick="window.closeExportLogDetail()">Close</button></div>
+    </div>
+  </div>`;
 }
 
 function render() {
@@ -1472,6 +1476,7 @@ function render() {
     <div class="page-content">${content}</div>
     ${renderServiceDetailModal()}
     ${renderPptxListSettingsModal()}
+    ${renderExportLogDetailModal()}
     ${state.accessDeniedModal ? `
     <div class="modal-backdrop" onclick="window.closeAccessDenied()">
       <div class="modal-dialog" style="max-width:420px" onclick="event.stopPropagation()">

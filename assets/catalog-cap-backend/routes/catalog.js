@@ -1109,7 +1109,10 @@ router.get('/export-log', async (req, res) => {
     const db = require('../store/db');
     const result = await db.query(
       `SELECT id, logged_at, user_id, logon_name, export_type, service_count,
-              filter_bs, filter_et, filter_modules, filter_query
+              filter_bs, filter_et, filter_modules, filter_query,
+              pptx_title, pptx_cols, pptx_stream_mode, pptx_stream_custom,
+              pptx_year_from, pptx_year_to, pptx_year_borders,
+              pptx_group_by_et, pptx_use_deck_name, pptx_truncate_obj
        FROM catalog_export_log
        ORDER BY logged_at DESC
        LIMIT 500`
