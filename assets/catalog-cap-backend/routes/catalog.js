@@ -1123,4 +1123,14 @@ router.get('/export-log', async (req, res) => {
   }
 });
 
+router.get('/export-stats', async (req, res) => {
+  try {
+    const db = require('../store/db');
+    const result = await db.query(`SELECT COUNT(*)::int AS total FROM catalog_export_log`);
+    res.json({ total: result.rows[0].total });
+  } catch (e) {
+    res.json({ total: null });
+  }
+});
+
 module.exports = router;

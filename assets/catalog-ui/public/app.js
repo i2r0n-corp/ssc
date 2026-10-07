@@ -35,8 +35,9 @@ let state = {
   chat: { messages: [], loading: false, input: '' },
   exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null },
   currentUser: null,
-  accessDeniedModal: false,  // set after first API call that exposes user identity
+  accessDeniedModal: false,
   backendDown: false,
+  exportTotal: null,
 };
 
 function saveCart() {
@@ -875,6 +876,7 @@ window.generatePptx = async function(template) {
       body: JSON.stringify(body)
     });
     state.pptx.downloadUrl = data.downloadUrl;
+    if (state.exportTotal != null) state.exportTotal++;
     const a = document.createElement('a');
     a.href = `${CAP_BACKEND_URL}${data.downloadUrl}`;
     a.download = data.filename;
@@ -1461,7 +1463,8 @@ function render() {
     <div class="shell-top">
       <div class="shell-top-inner">
         <span class="shell-bar-title">Success Plans Catalogue Intelligence</span>
-        <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" class="btn btn-secondary btn-sm" style="margin-left:auto;font-size:0.8rem">Feedback</a>
+        ${state.exportTotal != null ? `<span style="margin-left:auto;font-size:0.8rem;color:rgba(255,255,255,0.75)">Documents created: <strong style="color:#fff">${state.exportTotal}</strong></span>` : '<span style="margin-left:auto"></span>'}
+        <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" class="btn btn-secondary btn-sm" style="font-size:0.8rem">Feedback</a>
       </div>
     </div>
     <div class="shell-bar">
@@ -1524,4 +1527,7 @@ render();
 loadCatalog();
 apiFetch(`${CAP_BACKEND_URL}/api/catalog/whoami`)
   .then(d => { state.currentUser = (d.logonName || '').toLowerCase(); render(); })
+  .catch(() => {});
+apiFetch(`${CAP_BACKEND_URL}/api/catalog/export-stats`)
+  .then(d => { state.exportTotal = d.total ?? null; render(); })
   .catch(() => {});
