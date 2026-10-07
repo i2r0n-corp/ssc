@@ -151,23 +151,26 @@ function headerCell(text, algn) {
     `</a:p></a:txBody>${TCPR_HDR}</a:tc>`;
 }
 
-const BORDER_LINE_SOLID =
+const NO_FILL_LINE_CHILDREN =
+  `<a:noFill/><a:prstDash val="solid"/><a:round/>` +
+  `<a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/>`;
+const SOLID_LINE_CHILDREN =
   `<a:solidFill><a:srgbClr val="8696A9"/></a:solidFill>` +
   `<a:prstDash val="solid"/><a:round/>` +
   `<a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/>`;
 
 function cellYear(text, borderLeft, isHeader) {
   const lnL = borderLeft
-    ? `<a:lnL w="19050" cap="flat" cmpd="sng" algn="ctr">${BORDER_LINE_SOLID}</a:lnL>`
-    : `<a:lnL w="12700" cmpd="sng"><a:noFill/></a:lnL>`;
-  const lnR = `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr"><a:noFill/><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`;
+    ? `<a:lnL w="19050" cap="flat" cmpd="sng" algn="ctr">${SOLID_LINE_CHILDREN}</a:lnL>`
+    : `<a:lnL w="12700" cap="flat" cmpd="sng" algn="ctr">${NO_FILL_LINE_CHILDREN}</a:lnL>`;
+  const lnR = `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr">${NO_FILL_LINE_CHILDREN}</a:lnR>`;
   const fill = isHeader ? `<a:solidFill><a:srgbClr val="003366"/></a:solidFill>` : `<a:noFill/>`;
   const anchor = isHeader ? 'ctr' : 't';
   const rpr = isHeader ? RPR_HDR : RPR_DATA;
   const tcPr =
     `<a:tcPr marL="${PAD_L}" marR="${PAD_R}" marT="${PAD_T}" marB="${PAD_B}" anchor="${anchor}">` +
     lnL + lnR +
-    `<a:lnT w="12700" cap="flat" cmpd="sng" algn="ctr"><a:noFill/><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnT>` +
+    `<a:lnT w="12700" cap="flat" cmpd="sng" algn="ctr">${NO_FILL_LINE_CHILDREN}</a:lnT>` +
     `<a:lnB w="12700" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="tx1"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnB>` +
     `<a:lnTlToBr w="12700" cmpd="sng"><a:noFill/><a:prstDash val="solid"/></a:lnTlToBr>` +
     `<a:lnBlToTr w="12700" cmpd="sng"><a:noFill/><a:prstDash val="solid"/></a:lnBlToTr>` +
