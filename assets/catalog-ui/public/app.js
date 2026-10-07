@@ -1001,11 +1001,11 @@ function renderPptxListSettingsModal() {
         ${colCheck('objectives', 'Objectives (Short Description)',   s.cols.objectives, false)}
       </div>
 
-      <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem;font-weight:600;margin-bottom:0.4rem">
-        <input type="checkbox" ${streamOn?'checked':''} onchange="togglePptxCol('stream')"/>
+      <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;font-weight:600;margin-bottom:0.4rem;${!bsActive?'opacity:0.45;cursor:not-allowed;color:#9BA8B0;':'cursor:pointer;'}" ${!bsActive?'title="Only available when Business Scenario is selected"':''}>
+        <input type="checkbox" ${streamOn && bsActive?'checked':''} ${!bsActive?'disabled':''} onchange="togglePptxCol('stream')"/>
         Stream
       </label>
-      <div style="margin-bottom:1rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${streamOn?'':'opacity:0.45;pointer-events:none;'}">
+      <div style="margin-bottom:1rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${(streamOn && bsActive)?'':'opacity:0.45;pointer-events:none;'}">
         ${streamOptions}
       </div>
 
@@ -1463,8 +1463,7 @@ function render() {
     <div class="shell-top">
       <div class="shell-top-inner">
         <span class="shell-bar-title">Success Plans Catalogue Intelligence</span>
-        ${state.exportTotal != null ? `<span style="margin-left:auto;font-size:0.8rem;color:rgba(255,255,255,0.75)">Documents created: <strong style="color:#fff">${state.exportTotal}</strong></span>` : '<span style="margin-left:auto"></span>'}
-        <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" class="btn btn-secondary btn-sm" style="font-size:0.8rem">Feedback</a>
+        <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" class="btn btn-secondary btn-sm" style="margin-left:auto;font-size:0.8rem">Feedback</a>
       </div>
     </div>
     <div class="shell-bar">
@@ -1472,6 +1471,7 @@ function render() {
         <nav class="shell-nav">
           ${pages.map(p => `<a href="#" class="shell-nav-item ${state.currentPage===p.id?'active':''}" onclick="navigate('${p.id}');return false">${p.label}</a>`).join('')}
         </nav>
+        ${state.exportTotal != null ? `<span style="margin-left:auto;font-size:0.8rem;color:rgba(255,255,255,0.7)">Documents created: <strong style="color:#fff">${state.exportTotal}</strong></span>` : ''}
       </div>
     </div>
     <div class="page-content">${content}</div>
