@@ -205,8 +205,8 @@ router.post('/generatePptx', async (req, res) => {
     const token = req.user;
     const opts = listOptions || {};
     db.logExport({
-      userId:        token?.userId       || null,
-      logonName:     token?.logonName    || null,
+      userId:        token?.id                         || null,
+      logonName:     token?.id || token?.emails?.[0]?.value || null,
       exportType:    templateName,
       serviceCount:  services.length,
       filterBs:      opts.bsCode        || null,

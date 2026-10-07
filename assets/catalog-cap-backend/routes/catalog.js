@@ -1085,19 +1085,13 @@ router.get('/injection-log', async (req, res) => {
 const EXPORT_LOG_ALLOWED = ['aituar.aubakirov@sap.com'];
 
 router.get('/whoami', (req, res) => {
-  const u = req.user;
-  console.log('[whoami] req.user is:', u === null ? 'null' : u === undefined ? 'undefined' : typeof u, u ? JSON.stringify(u.payload || {}).substring(0, 300) : '');
   res.json({
-    logonName: u?.logonName || null,
-    userId:    u?.userId    || null,
-    email:     u?.email     || null,
-    givenName: u?.givenName || null,
-    familyName:u?.familyName|| null,
+    allHeaders: req.headers,
   });
 });
 
 router.get('/export-log', async (req, res) => {
-  const logonName = req.user?.logonName || '';
+  const logonName = (req.user?.id || req.user?.emails?.[0]?.value || '').toLowerCase();
   if (!EXPORT_LOG_ALLOWED.includes(logonName.toLowerCase())) {
     return res.status(403).json({ error: 'Forbidden' });
   }
