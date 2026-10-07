@@ -1086,6 +1086,7 @@ const EXPORT_LOG_ALLOWED = ['aituar.aubakirov@sap.com'];
 
 router.get('/whoami', (req, res) => {
   const u = req.user;
+  console.log('[whoami] req.user is:', u === null ? 'null' : u === undefined ? 'undefined' : typeof u, u ? JSON.stringify(u.payload || {}).substring(0, 300) : '');
   res.json({
     logonName: u?.logonName || null,
     userId:    u?.userId    || null,
