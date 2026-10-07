@@ -381,7 +381,7 @@ function generateListPptxBuffer(services, opts = {}) {
   const yt  = parseInt(opts.yearTo, 10);
   const yearFrom  = (yf >= 2000 && yf <= 2050) ? yf : 0;
   const yearTo    = (yt >= 2000 && yt <= 2050) ? yt : 0;
-  const yearCount = (yearFrom && yearTo && yearFrom <= yearTo) ? Math.min(6, yearTo - yearFrom + 1) : 0;
+  const yearCount = (yearFrom && yearTo && yearFrom <= yearTo) ? Math.min(8, yearTo - yearFrom + 1) : 0;
 
   if (!fs.existsSync(templateFile)) throw new Error('ListTemplate.pptx not found: ' + templateFile);
 

@@ -949,7 +949,7 @@ function renderPptxListSettingsModal() {
   if (!s.open) return '';
   const bsActive = !!state.filters.businessScenario;
   const yf = parseInt(s.yearFrom,10)||0, yt = parseInt(s.yearTo,10)||0;
-  const yearValid = !s.years || (s.yearFrom.length===4 && s.yearTo.length===4 && yf>=2000 && yf<=2050 && yt>=2000 && yt<=2050 && yf<yt);
+  const yearValid = !s.years || (s.yearFrom.length===4 && s.yearTo.length===4 && yf>=2000 && yf<=2050 && yt>=2000 && yt<=2033 && yf<yt);
 
   const activeET = state.filters.engagementType || '';
   const truncateEnabled = !activeET || activeET.toLowerCase().includes('foundational') || activeET.toLowerCase().includes('enterprise support');
@@ -1033,7 +1033,7 @@ function renderPptxListSettingsModal() {
               style="width:80px;padding:0.4rem 0.5rem;font-size:0.875rem;border:1px solid ${!yearValid&&s.yearTo.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
               placeholder="2030"/>
           </div>
-          ${!yearValid ? `<div style="font-size:0.72rem;color:#dc3545;align-self:flex-end;padding-bottom:0.5rem">First year must be less than second</div>` : ''}
+          ${!yearValid ? `<div style="font-size:0.72rem;color:#dc3545;align-self:flex-end;padding-bottom:0.5rem">Year From must be less than Year To, and Year To ≤ 2033</div>` : ''}
         </div>
         <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
           <input type="checkbox" ${s.yearBorders?'checked':''} onchange="setPptxYearBorders(this.checked)"/>
