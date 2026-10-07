@@ -33,7 +33,7 @@ let state = {
     truncateObjectives: false,
   },
   chat: { messages: [], loading: false, input: '' },
-  exportLog: { rows: [], loading: false, error: null, loaded: false },
+  exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null },
   currentUser: null,
   accessDeniedModal: false,  // set after first API call that exposes user identity
 };
@@ -1321,6 +1321,14 @@ window.closeAccessDenied = function() {
   state.accessDeniedModal = false; render();
 };
 
+window.openExportLogDetail = function(i) {
+  state.exportLog.selectedRow = state.exportLog.rows[i] || null; render();
+};
+
+window.closeExportLogDetail = function() {
+  state.exportLog.selectedRow = null; render();
+};
+
 window.loadExportLog = async function loadExportLog() {
   if (state.exportLog.loading) return;
   state.exportLog.loading = true; state.exportLog.error = null; render();
@@ -1346,39 +1354,81 @@ function renderExportLogPage() {
     return d.toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' });
   };
 
+  const sel = state.exportLog.selectedRow;
+  const detailModal = sel ? (() => {
+    const r = sel;
+    const cols = r.pptx_cols ? Object.entries(r.pptx_cols).map(([k,v]) => `${k}: ${v?'✓':'✗'}`).join('\n') : '—';
+    const stream = r.pptx_stream_mode ? (r.pptx_stream_mode === 'custom' || r.pptx_stream_mode === 'customNoBS' ? `${r.pptx_stream_mode}: "${r.pptx_stream_custom||''}"` : r.pptx_stream_mode) : '—';
+    const rows2 = [
+      ['Date / Time',   fmt(r.logged_at)],
+      ['User',          r.logon_name || r.user_id || '—'],
+      ['Export Type',   r.export_type],
+      ['# Services',    r.service_count ?? '—'],
+      ['BS Filter',     r.filter_bs || '—'],
+      ['ET Filter',     r.filter_et || '—'],
+      ['Modules',       r.filter_modules?.length ? r.filter_modules.join(', ') : '—'],
+      ['Query',         r.filter_query || '—'],
+      ['Slide Title',   r.pptx_title || '—'],
+      ['Stream Mode',   stream],
+      ['Years',         r.pptx_year_from ? `${r.pptx_year_from} – ${r.pptx_year_to||'?'}` : '—'],
+      ['Year Borders',  r.pptx_year_borders != null ? (r.pptx_year_borders ? 'Yes' : 'No') : '—'],
+      ['Columns',       r.pptx_cols ? Object.entries(r.pptx_cols).filter(([,v])=>v).map(([k])=>k).join(', ') || '—' : '—'],
+      ['Group by ET',   r.pptx_group_by_et != null ? (r.pptx_group_by_et ? 'Yes' : 'No') : '—'],
+      ['Use Deck Name', r.pptx_use_deck_name != null ? (r.pptx_use_deck_name ? 'Yes' : 'No') : '—'],
+      ['Truncate Obj',  r.pptx_truncate_obj != null ? (r.pptx_truncate_obj ? 'Yes' : 'No') : '—'],
+    ];
+    return `
+    <div class="modal-backdrop" onclick="window.closeExportLogDetail()">
+      <div class="modal-dialog" style="max-width:480px" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <h5 class="modal-title">Export Details</h5>
+          <button class="btn-close" onclick="window.closeExportLogDetail()"></button>
+        </div>
+        <div class="modal-body" style="padding:1rem">
+          <table style="width:100%;font-size:0.875rem;border-collapse:collapse">
+            ${rows2.map(([k,v]) => `<tr>
+              <td style="padding:0.3rem 0.75rem 0.3rem 0;color:#6a6a6a;white-space:nowrap;vertical-align:top;font-weight:600">${k}</td>
+              <td style="padding:0.3rem 0;word-break:break-word">${v}</td>
+            </tr>`).join('')}
+          </table>
+        </div>
+        <div class="modal-footer"><button class="btn btn-primary" onclick="window.closeExportLogDetail()">Close</button></div>
+      </div>
+    </div>`;
+  })() : '';
+
   return `
   <div class="card" style="overflow-x:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
       <h3 style="margin:0;font-size:1rem">Export Log <span style="font-weight:400;color:#6a6a6a;font-size:0.875rem">(last 500 events)</span></h3>
       <button class="btn btn-secondary btn-sm" onclick="loadExportLog()">↻ Refresh</button>
     </div>
-    <table class="service-table" style="font-size:0.8rem">
+    <table class="service-table" style="font-size:0.8rem;cursor:pointer">
       <thead>
         <tr>
           <th>Date / Time</th>
           <th>User</th>
-          <th>Export Type</th>
-          <th style="text-align:center"># Services</th>
-          <th>BS Filter</th>
-          <th>ET Filter</th>
-          <th>Modules</th>
+          <th>Type</th>
+          <th style="text-align:center">#</th>
+          <th>BS</th>
+          <th>ET</th>
           <th>Query</th>
         </tr>
       </thead>
       <tbody>
-        ${rows.map(r => `<tr>
+        ${rows.map((r,i) => `<tr onclick="window.openExportLogDetail(${i})" style="cursor:pointer">
           <td style="white-space:nowrap">${fmt(r.logged_at)}</td>
           <td style="white-space:nowrap">${r.logon_name || r.user_id || '—'}</td>
           <td>${r.export_type}</td>
           <td style="text-align:center">${r.service_count ?? '—'}</td>
-          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.filter_bs||''}">${r.filter_bs || '—'}</td>
-          <td>${r.filter_et || '—'}</td>
-          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.filter_modules||[]).join(', ')}">${r.filter_modules?.length ? r.filter_modules.join(', ') : '—'}</td>
-          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.filter_query||''}">${r.filter_query || '—'}</td>
+          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.filter_bs||''}">${r.filter_bs || '—'}</td>
+          <td style="white-space:nowrap">${r.filter_et || '—'}</td>
+          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.filter_query||''}">${r.filter_query || '—'}</td>
         </tr>`).join('')}
       </tbody>
     </table>
-  </div>`;
+  </div>
+  ${detailModal}`;
 }
 
 function render() {

@@ -214,14 +214,24 @@ router.post('/generatePptx', async (req, res) => {
     const jwtPayload = getJwtPayload(req);
     const opts = listOptions || {};
     db.logExport({
-      userId:        jwtPayload?.user_uuid || null,
-      logonName:     jwtPayload?.user_name || jwtPayload?.email || null,
-      exportType:    templateName,
-      serviceCount:  services.length,
-      filterBs:      opts.bsCode        || null,
-      filterEt:      req.body?.filterEt || null,
-      filterModules: Array.isArray(opts.selectedModuleCodes) && opts.selectedModuleCodes.length ? opts.selectedModuleCodes : null,
-      filterQuery:   req.body?.filterQuery || null,
+      userId:           jwtPayload?.user_uuid || null,
+      logonName:        jwtPayload?.user_name || jwtPayload?.email || null,
+      exportType:       templateName,
+      serviceCount:     services.length,
+      filterBs:         opts.bsCode        || null,
+      filterEt:         req.body?.filterEt  || null,
+      filterModules:    Array.isArray(opts.selectedModuleCodes) && opts.selectedModuleCodes.length ? opts.selectedModuleCodes : null,
+      filterQuery:      req.body?.filterQuery || null,
+      pptxTitle:        opts.title           || null,
+      pptxCols:         opts.cols            || null,
+      pptxStreamMode:   opts.streamMode      || null,
+      pptxStreamCustom: opts.streamCustom    || null,
+      pptxYearFrom:     opts.yearFrom        || null,
+      pptxYearTo:       opts.yearTo          || null,
+      pptxYearBorders:  opts.yearBorders     ?? null,
+      pptxGroupByEt:    opts.groupByET       ?? null,
+      pptxUseDeckName:  opts.useDeckName     ?? null,
+      pptxTruncateObj:  opts.truncateObjectives ?? null,
     });
 
     console.log(`[M4.achieved]: PPTX generated — template="${templateName}" service_count=${services.length} file_size_kb=${fileSizeKb}`);
