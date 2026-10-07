@@ -34,7 +34,8 @@ let state = {
   },
   chat: { messages: [], loading: false, input: '' },
   exportLog: { rows: [], loading: false, error: null, loaded: false },
-  currentUser: null,  // set after first API call that exposes user identity
+  currentUser: null,
+  accessDeniedModal: false,  // set after first API call that exposes user identity
 };
 
 function saveCart() {
@@ -642,6 +643,12 @@ function renderChatPage() {
 // ── Event handlers ─────────────────────────────────────────────────────────────
 
 window.navigate = function(page) {
+  const isAdmin = state.currentUser === 'aituar.aubakirov@sap.com';
+  if (!isAdmin && (page === 'debug' || page === 'exportlog')) {
+    state.accessDeniedModal = true;
+    render();
+    return;
+  }
   state.currentPage = page;
   render();
   if (page === 'catalog' && state.catalog.services.length === 0) loadCatalog();
@@ -1310,6 +1317,10 @@ window.closeDebugModal = function() {
   state.debug.selectedRow = null; render();
 };
 
+window.closeAccessDenied = function() {
+  state.accessDeniedModal = false; render();
+};
+
 window.loadExportLog = async function loadExportLog() {
   if (state.exportLog.loading) return;
   state.exportLog.loading = true; state.exportLog.error = null; render();
@@ -1374,11 +1385,10 @@ function render() {
   const app = document.getElementById('app');
   if (!app) return;
 
-  const isAdmin = state.currentUser === 'aituar.aubakirov@sap.com';
   const pages = [
     { id: 'catalog',   label: 'Catalogue Browser' },
     { id: 'debug',     label: 'Matching Debug' },
-    ...(isAdmin ? [{ id: 'exportlog', label: 'Export Log' }] : []),
+    { id: 'exportlog', label: 'Export Log' },
   ];
 
   let content = '';
@@ -1406,7 +1416,19 @@ function render() {
     </div>
     <div class="page-content">${content}</div>
     ${renderServiceDetailModal()}
-    ${renderPptxListSettingsModal()}`;
+    ${renderPptxListSettingsModal()}
+    ${state.accessDeniedModal ? `
+    <div class="modal-backdrop" onclick="window.closeAccessDenied()">
+      <div class="modal-dialog" style="max-width:420px" onclick="event.stopPropagation()">
+        <div class="modal-header"><h5 class="modal-title">Access Restricted</h5></div>
+        <div class="modal-body" style="padding:1.5rem">
+          <p style="margin:0 0 0.75rem">This section is available to authorised users only.</p>
+          <p style="margin:0;color:#6a6a6a;font-size:0.875rem">To request access, contact the app administrator:<br>
+          <a href="mailto:aituar.aubakirov@sap.com">aituar.aubakirov@sap.com</a></p>
+        </div>
+        <div class="modal-footer"><button class="btn btn-primary" onclick="window.closeAccessDenied()">OK</button></div>
+      </div>
+    </div>` : ''}`;
 
   // Restore year input values without disturbing focus — the inputs use no value= attr
   const yf = document.getElementById('pptx-year-from');
