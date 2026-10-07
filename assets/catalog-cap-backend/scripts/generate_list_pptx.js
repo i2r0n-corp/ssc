@@ -140,7 +140,7 @@ function cellData(text, algn, borderRight) {
   const tcpr = borderRight
     ? TCPR_DATA.replace(
         `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr"><a:noFill/><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`,
-        `<a:lnR w="19050" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:srgbClr val="8696A9"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`
+        `<a:lnR w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`
       )
     : TCPR_DATA;
   return `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>` +
@@ -154,7 +154,7 @@ function headerCell(text, algn, borderRight) {
   const tcpr = borderRight
     ? TCPR_HDR.replace(
         `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr"><a:noFill/><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`,
-        `<a:lnR w="19050" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:srgbClr val="8696A9"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`
+        `<a:lnR w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`
       )
     : TCPR_HDR;
   return `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>` +
@@ -167,14 +167,12 @@ const NO_FILL_LINE_CHILDREN =
   `<a:noFill/><a:prstDash val="solid"/><a:round/>` +
   `<a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/>`;
 const SOLID_LINE_CHILDREN =
-  `<a:solidFill><a:srgbClr val="8696A9"/></a:solidFill>` +
+  `<a:solidFill><a:srgbClr val="000000"/></a:solidFill>` +
   `<a:prstDash val="solid"/><a:round/>` +
   `<a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/>`;
 
-function cellYear(text, borderLeft, isHeader) {
-  const lnL = borderLeft
-    ? `<a:lnL w="19050" cap="flat" cmpd="sng" algn="ctr">${SOLID_LINE_CHILDREN}</a:lnL>`
-    : `<a:lnL w="12700" cap="flat" cmpd="sng" algn="ctr">${NO_FILL_LINE_CHILDREN}</a:lnL>`;
+function cellYear(text, isHeader) {
+  const lnL = `<a:lnL w="9525" cap="flat" cmpd="sng" algn="ctr">${SOLID_LINE_CHILDREN}</a:lnL>`;
   const lnR = `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr">${NO_FILL_LINE_CHILDREN}</a:lnR>`;
   const fill = isHeader ? `<a:solidFill><a:srgbClr val="003366"/></a:solidFill>` : `<a:noFill/>`;
   const anchor = isHeader ? 'ctr' : 't';
@@ -270,7 +268,7 @@ function buildHeaderRows(cols, objW, yearCount, yearFrom, yearBorders) {
   cells += headerCell('Objectives', undefined, yearCount > 0 && yearBorders);
   for (let i = 0; i < yearCount; i++) {
     cells += yearBorders
-      ? cellYear(String(yearFrom + i), true, true)
+      ? cellYear(String(yearFrom + i), true)
       : headerCell(String(yearFrom + i));
   }
   return `<a:tr h="${ROW_H}">${cells}</a:tr>`;
@@ -289,7 +287,7 @@ function buildDataRows(dataRows, cols, objW, yearCount, yearBorders) {
     if (cols.tier)      cells += cellData(dr.tier);
     cells += cellData(dr.objectives, undefined, yearCount > 0 && yearBorders);
     for (let i=0; i<yearCount; i++) {
-      cells += yearBorders ? cellYear('', true, false) : cellData('', 'ctr');
+      cells += yearBorders ? cellYear('', false) : cellData('', 'ctr');
     }
     return `<a:tr h="${dr.rowH}">${cells}</a:tr>`;
   }).join('');

@@ -1086,10 +1086,12 @@ const EXPORT_LOG_ALLOWED = ['aituar.aubakirov@sap.com'];
 
 router.get('/whoami', (req, res) => {
   const u = req.user;
-  console.log('[whoami] user keys:', u ? Object.getOwnPropertyNames(Object.getPrototypeOf(u)).join(',') : 'null');
-  console.log('[whoami] user JSON:', u ? JSON.stringify(u) : 'null');
-  const logonName = u?.logonName || u?.userId || u?.email || u?.user_name || null;
-  res.json({ logonName });
+  const proto = u ? Object.getOwnPropertyNames(Object.getPrototypeOf(u)) : [];
+  const protoVals = {};
+  for (const k of proto) {
+    try { protoVals[k] = u[k]; } catch(e) { protoVals[k] = '(error)'; }
+  }
+  res.json({ raw: u, protoKeys: proto, protoVals });
 });
 
 router.get('/export-log', async (req, res) => {
