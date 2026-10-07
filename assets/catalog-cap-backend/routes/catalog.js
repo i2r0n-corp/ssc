@@ -1082,4 +1082,29 @@ router.get('/injection-log', async (req, res) => {
   }
 });
 
+const EXPORT_LOG_ALLOWED = ['aituar.aubakirov@sap.com'];
+
+router.get('/whoami', (req, res) => {
+  res.json({ logonName: req.user?.logonName || null });
+});
+
+router.get('/export-log', async (req, res) => {
+  const logonName = req.user?.logonName || '';
+  if (!EXPORT_LOG_ALLOWED.includes(logonName.toLowerCase())) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  try {
+    const result = await db.query(
+      `SELECT id, logged_at, user_id, logon_name, export_type, service_count,
+              filter_bs, filter_et, filter_modules, filter_query
+       FROM catalog_export_log
+       ORDER BY logged_at DESC
+       LIMIT 500`
+    );
+    res.json({ rows: result.rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;

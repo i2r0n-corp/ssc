@@ -32,7 +32,9 @@ let state = {
     streamCustom: '',
     truncateObjectives: false,
   },
-  chat: { messages: [], loading: false, input: '' }
+  chat: { messages: [], loading: false, input: '' },
+  exportLog: { rows: [], loading: false, error: null, loaded: false },
+  currentUser: null,  // set after first API call that exposes user identity
 };
 
 function saveCart() {
@@ -644,6 +646,7 @@ window.navigate = function(page) {
   render();
   if (page === 'catalog' && state.catalog.services.length === 0) loadCatalog();
   if (page === 'debug') loadDebugLog();
+  if (page === 'exportlog') loadExportLog();
 };
 
 window.updateFilter = function(key, value) {
@@ -1307,13 +1310,75 @@ window.closeDebugModal = function() {
   state.debug.selectedRow = null; render();
 };
 
+window.loadExportLog = async function loadExportLog() {
+  if (state.exportLog.loading) return;
+  state.exportLog.loading = true; state.exportLog.error = null; render();
+  try {
+    const data = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/export-log`);
+    state.exportLog.rows = data.rows || [];
+    state.exportLog.loaded = true;
+  } catch (e) {
+    state.exportLog.error = e.message;
+  }
+  state.exportLog.loading = false; render();
+}
+
+function renderExportLogPage() {
+  const { rows, loading, error, loaded } = state.exportLog;
+  if (loading) return `<div class="card"><div style="color:#6a6a6a;padding:2rem;text-align:center">Loading export log…</div></div>`;
+  if (error) return `<div class="card"><div style="color:#dc3545;padding:1rem">Error: ${error}</div></div>`;
+  if (!loaded) return `<div class="card"><div style="padding:1rem;color:#6a6a6a">No data yet.</div></div>`;
+  if (rows.length === 0) return `<div class="card"><div style="padding:1rem;color:#6a6a6a">No export events recorded yet.</div></div>`;
+
+  const fmt = iso => {
+    const d = new Date(iso);
+    return d.toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  };
+
+  return `
+  <div class="card" style="overflow-x:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h3 style="margin:0;font-size:1rem">Export Log <span style="font-weight:400;color:#6a6a6a;font-size:0.875rem">(last 500 events)</span></h3>
+      <button class="btn btn-secondary btn-sm" onclick="loadExportLog()">↻ Refresh</button>
+    </div>
+    <table class="service-table" style="font-size:0.8rem">
+      <thead>
+        <tr>
+          <th>Date / Time</th>
+          <th>User</th>
+          <th>Export Type</th>
+          <th style="text-align:center"># Services</th>
+          <th>BS Filter</th>
+          <th>ET Filter</th>
+          <th>Modules</th>
+          <th>Query</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(r => `<tr>
+          <td style="white-space:nowrap">${fmt(r.logged_at)}</td>
+          <td style="white-space:nowrap">${r.logon_name || r.user_id || '—'}</td>
+          <td>${r.export_type}</td>
+          <td style="text-align:center">${r.service_count ?? '—'}</td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.filter_bs||''}">${r.filter_bs || '—'}</td>
+          <td>${r.filter_et || '—'}</td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.filter_modules||[]).join(', ')}">${r.filter_modules?.length ? r.filter_modules.join(', ') : '—'}</td>
+          <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.filter_query||''}">${r.filter_query || '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
 function render() {
   const app = document.getElementById('app');
   if (!app) return;
 
+  const isAdmin = state.currentUser === 'aituar.aubakirov@sap.com';
   const pages = [
     { id: 'catalog',   label: 'Catalogue Browser' },
     { id: 'debug',     label: 'Matching Debug' },
+    ...(isAdmin ? [{ id: 'exportlog', label: 'Export Log' }] : []),
   ];
 
   let content = '';
@@ -1322,6 +1387,7 @@ function render() {
     case 'incidents': content = renderIncidentsPage(); break;
     case 'chat':      content = renderChatPage(); break;
     case 'debug':     content = renderDebugPage(); break;
+    case 'exportlog': content = renderExportLogPage(); break;
   }
 
   app.innerHTML = `
@@ -1367,3 +1433,6 @@ function render() {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 render();
 loadCatalog();
+apiFetch(`${CAP_BACKEND_URL}/api/catalog/whoami`)
+  .then(d => { state.currentUser = (d.logonName || '').toLowerCase(); render(); })
+  .catch(() => {});
