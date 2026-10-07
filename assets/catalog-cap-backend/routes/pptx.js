@@ -10,6 +10,15 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const PptxGenJS = require('pptxgenjs');
 const snapshot = require('../store/snapshot');
+
+function getJwtPayload(req) {
+  try {
+    const auth = req.headers['authorization'] || '';
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    if (!token) return null;
+    return JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
+  } catch { return null; }
+}
 const db = require('../store/db');
 const { generateListPptxBuffer } = require('../scripts/generate_list_pptx');
 
@@ -202,11 +211,11 @@ router.post('/generatePptx', async (req, res) => {
     const fileSizeKb = Math.round(stat.size / 1024);
 
     // Log export event
-    const token = req.user;
+    const jwtPayload = getJwtPayload(req);
     const opts = listOptions || {};
     db.logExport({
-      userId:        token?.id                         || null,
-      logonName:     token?.id || token?.emails?.[0]?.value || null,
+      userId:        jwtPayload?.user_uuid || null,
+      logonName:     jwtPayload?.user_name || jwtPayload?.email || null,
       exportType:    templateName,
       serviceCount:  services.length,
       filterBs:      opts.bsCode        || null,

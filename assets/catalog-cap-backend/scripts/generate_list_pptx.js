@@ -189,7 +189,7 @@ function cellYear(text, isHeader, isLast) {
     fill + `</a:tcPr>`;
   return `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>` +
     `<a:p><a:pPr algn="ctr" rtl="0"><a:buNone/></a:pPr>` +
-    (text ? `<a:r>${rpr}<a:t>${esc(text)}</a:t></a:r>` : `<a:endParaRPr lang="en-GB"/>`) +
+    (text ? `<a:r>${rpr}<a:t>${esc(text)}</a:t></a:r>` : `<a:endParaRPr lang="en-GB" sz="800" dirty="0"/>`) +
     `</a:p></a:txBody>${tcPr}</a:tc>`;
 }
 

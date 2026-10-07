@@ -1084,15 +1084,25 @@ router.get('/injection-log', async (req, res) => {
 
 const EXPORT_LOG_ALLOWED = ['aituar.aubakirov@sap.com'];
 
+function getJwtPayload(req) {
+  try {
+    const auth = req.headers['authorization'] || '';
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    if (!token) return null;
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
+    return payload;
+  } catch { return null; }
+}
+
 router.get('/whoami', (req, res) => {
-  res.json({
-    allHeaders: req.headers,
-  });
+  const payload = getJwtPayload(req);
+  res.json({ logonName: (payload?.user_name || payload?.email || null) });
 });
 
 router.get('/export-log', async (req, res) => {
-  const logonName = (req.user?.id || req.user?.emails?.[0]?.value || '').toLowerCase();
-  if (!EXPORT_LOG_ALLOWED.includes(logonName.toLowerCase())) {
+  const payload = getJwtPayload(req);
+  const logonName = (payload?.user_name || payload?.email || '').toLowerCase();
+  if (!EXPORT_LOG_ALLOWED.includes(logonName)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   try {
