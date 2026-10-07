@@ -171,9 +171,11 @@ const SOLID_LINE_CHILDREN =
   `<a:prstDash val="solid"/><a:round/>` +
   `<a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/>`;
 
-function cellYear(text, isHeader) {
-  const lnL = `<a:lnL w="9525" cap="flat" cmpd="sng" algn="ctr">${SOLID_LINE_CHILDREN}</a:lnL>`;
-  const lnR = `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr">${NO_FILL_LINE_CHILDREN}</a:lnR>`;
+function cellYear(text, isHeader, isLast) {
+  const lnL = `<a:lnL w="0" cmpd="sng"><a:noFill/></a:lnL>`;
+  const lnR = isLast
+    ? `<a:lnR w="0" cmpd="sng"><a:noFill/></a:lnR>`
+    : `<a:lnR w="9525" cap="flat" cmpd="sng" algn="ctr">${SOLID_LINE_CHILDREN}</a:lnR>`;
   const fill = isHeader ? `<a:solidFill><a:srgbClr val="003366"/></a:solidFill>` : `<a:noFill/>`;
   const anchor = isHeader ? 'ctr' : 't';
   const rpr = isHeader ? RPR_HDR : RPR_DATA;
@@ -268,7 +270,7 @@ function buildHeaderRows(cols, objW, yearCount, yearFrom, yearBorders) {
   cells += headerCell('Objectives', undefined, yearCount > 0 && yearBorders);
   for (let i = 0; i < yearCount; i++) {
     cells += yearBorders
-      ? cellYear(String(yearFrom + i), true)
+      ? cellYear(String(yearFrom + i), true, i === yearCount - 1)
       : headerCell(String(yearFrom + i));
   }
   return `<a:tr h="${ROW_H}">${cells}</a:tr>`;
@@ -287,7 +289,7 @@ function buildDataRows(dataRows, cols, objW, yearCount, yearBorders) {
     if (cols.tier)      cells += cellData(dr.tier);
     cells += cellData(dr.objectives, undefined, yearCount > 0 && yearBorders);
     for (let i=0; i<yearCount; i++) {
-      cells += yearBorders ? cellYear('', false) : cellData('', 'ctr');
+      cells += yearBorders ? cellYear('', false, i === yearCount - 1) : cellData('', 'ctr');
     }
     return `<a:tr h="${dr.rowH}">${cells}</a:tr>`;
   }).join('');
