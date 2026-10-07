@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS catalog_export_log (
 CREATE INDEX IF NOT EXISTS idx_export_log_logged_at  ON catalog_export_log(logged_at DESC);
 CREATE INDEX IF NOT EXISTS idx_export_log_logon_name ON catalog_export_log(logon_name);
 
-
+CREATE TABLE IF NOT EXISTS catalog_matching_steps (
   id          BIGSERIAL PRIMARY KEY,
   log_row_id  BIGINT NOT NULL REFERENCES catalog_matching_log_rows(id) ON DELETE CASCADE,
   type        TEXT NOT NULL,
