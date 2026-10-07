@@ -1421,21 +1421,19 @@ function renderExportLogDetailModal() {
     ['Truncate Obj',  r.pptx_truncate_obj  != null ? (r.pptx_truncate_obj  ? 'Yes' : 'No') : '—'],
   ];
   return `
-  <div class="modal-backdrop" onclick="window.closeExportLogDetail()">
-    <div class="modal-dialog" style="max-width:480px" onclick="event.stopPropagation()">
-      <div class="modal-header">
-        <h5 class="modal-title">Export Details</h5>
-        <button class="btn-close" onclick="window.closeExportLogDetail()"></button>
+  <div class="modal-overlay" onclick="if(event.target===this)window.closeExportLogDetail()">
+    <div class="modal-box" style="max-width:480px" onclick="event.stopPropagation()">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <strong style="font-size:1rem">Export Details</strong>
+        <button class="btn btn-secondary btn-sm" onclick="window.closeExportLogDetail()">✕</button>
       </div>
-      <div class="modal-body" style="padding:1rem">
-        <table style="width:100%;font-size:0.875rem;border-collapse:collapse">
-          ${rows2.map(([k,v]) => `<tr>
-            <td style="padding:0.3rem 0.75rem 0.3rem 0;color:#6a6a6a;white-space:nowrap;vertical-align:top;font-weight:600">${k}</td>
-            <td style="padding:0.3rem 0;word-break:break-word">${v}</td>
-          </tr>`).join('')}
-        </table>
-      </div>
-      <div class="modal-footer"><button class="btn btn-primary" onclick="window.closeExportLogDetail()">Close</button></div>
+      <table style="width:100%;font-size:0.875rem;border-collapse:collapse">
+        ${rows2.map(([k,v]) => `<tr>
+          <td style="padding:0.3rem 0.75rem 0.3rem 0;color:#6a6a6a;white-space:nowrap;vertical-align:top;font-weight:600">${k}</td>
+          <td style="padding:0.3rem 0;word-break:break-word">${v}</td>
+        </tr>`).join('')}
+      </table>
+      <div style="margin-top:1.25rem;text-align:right"><button class="btn btn-primary" onclick="window.closeExportLogDetail()">Close</button></div>
     </div>
   </div>`;
 }
@@ -1478,22 +1476,20 @@ function render() {
     ${renderPptxListSettingsModal()}
     ${renderExportLogDetailModal()}
     ${state.accessDeniedModal ? `
-    <div class="modal-backdrop" onclick="window.closeAccessDenied()">
-      <div class="modal-dialog" style="max-width:420px" onclick="event.stopPropagation()">
-        <div class="modal-header"><h5 class="modal-title">Access Restricted</h5></div>
-        <div class="modal-body" style="padding:1.5rem">
-          <p style="margin:0 0 0.75rem">This section is available to authorised users only.</p>
-          <p style="margin:0;color:#6a6a6a;font-size:0.875rem">To request access, contact the app administrator:<br>
-          <a href="mailto:aituar.aubakirov@sap.com">aituar.aubakirov@sap.com</a></p>
-        </div>
-        <div class="modal-footer"><button class="btn btn-primary" onclick="window.closeAccessDenied()">OK</button></div>
+    <div class="modal-overlay" onclick="if(event.target===this)window.closeAccessDenied()">
+      <div class="modal-box" style="max-width:420px">
+        <strong style="font-size:1rem;display:block;margin-bottom:0.75rem">Access Restricted</strong>
+        <p style="margin:0 0 0.75rem">This section is available to authorised users only.</p>
+        <p style="margin:0 0 1.25rem;color:#6a6a6a;font-size:0.875rem">To request access, contact the app administrator:<br>
+        <a href="mailto:aituar.aubakirov@sap.com">aituar.aubakirov@sap.com</a></p>
+        <div style="text-align:right"><button class="btn btn-primary" onclick="window.closeAccessDenied()">OK</button></div>
       </div>
     </div>` : ''}
     ${state.backendDown ? `
-    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center">
-      <div style="background:#fff;border-radius:8px;max-width:480px;width:90%;padding:2rem 2.5rem;box-shadow:0 8px 32px rgba(0,0,0,0.25);text-align:center">
+    <div class="modal-overlay">
+      <div class="modal-box" style="max-width:480px;text-align:center">
         <div style="font-size:2.5rem;margin-bottom:1rem">⚠️</div>
-        <h3 style="margin:0 0 0.75rem;color:#1D2D3E;font-size:1.1rem;font-weight:700">Backend Unavailable</h3>
+        <strong style="font-size:1.05rem;display:block;margin-bottom:0.75rem">Backend Unavailable</strong>
         <p style="margin:0 0 1.25rem;color:#555;font-size:0.95rem;line-height:1.5">
           We're experiencing some technical issues with the backend server.<br>
           The service may be restarting or temporarily down.
