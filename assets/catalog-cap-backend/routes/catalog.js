@@ -1106,6 +1106,7 @@ router.get('/export-log', async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
   }
   try {
+    const db = require('../store/db');
     const result = await db.query(
       `SELECT id, logged_at, user_id, logon_name, export_type, service_count,
               filter_bs, filter_et, filter_modules, filter_query
