@@ -33,7 +33,7 @@ let state = {
     truncateObjectives: false,
   },
   chat: { messages: [], loading: false, input: '' },
-  exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null },
+  exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null, sortCol: 'logged_at', sortDir: 'desc' },
   currentUser: null,
   accessDeniedModal: false,
   backendDown: false,
@@ -1354,8 +1354,15 @@ window.loadExportLog = async function loadExportLog() {
   state.exportLog.loading = false; render();
 }
 
+window.sortExportLog = function(col) {
+  const el = state.exportLog;
+  if (el.sortCol === col) { el.sortDir = el.sortDir === 'asc' ? 'desc' : 'asc'; }
+  else { el.sortCol = col; el.sortDir = 'asc'; }
+  render();
+};
+
 function renderExportLogPage() {
-  const { rows, loading, error, loaded } = state.exportLog;
+  const { rows, loading, error, loaded, sortCol, sortDir } = state.exportLog;
   if (loading) return `<div class="card"><div style="color:#6a6a6a;padding:2rem;text-align:center">Loading export log…</div></div>`;
   if (error) return `<div class="card"><div style="color:#dc3545;padding:1rem">Error: ${error}</div></div>`;
   if (!loaded) return `<div class="card"><div style="padding:1rem;color:#6a6a6a">No data yet.</div></div>`;
@@ -1366,7 +1373,17 @@ function renderExportLogPage() {
     return d.toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' });
   };
 
-  const sel = state.exportLog.selectedRow;
+  const sorted = [...rows].sort((a, b) => {
+    const av = a[sortCol] ?? '', bv = b[sortCol] ?? '';
+    const cmp = (typeof av === 'number' && typeof bv === 'number')
+      ? av - bv
+      : String(av).localeCompare(String(bv));
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
+
+  const arrow = col => sortCol === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ' ⇅';
+  const th = (col, label, extra='') =>
+    `<th style="cursor:pointer;user-select:none;white-space:nowrap${extra?';'+extra:''}" onclick="window.sortExportLog('${col}')">${label}<span style="opacity:0.5;font-size:0.7em">${arrow(col)}</span></th>`;
 
   return `
   <div class="card" style="overflow-x:auto">
@@ -1374,20 +1391,20 @@ function renderExportLogPage() {
       <h3 style="margin:0;font-size:1rem">Export Log <span style="font-weight:400;color:#6a6a6a;font-size:0.875rem">(last 500 events)</span></h3>
       <button class="btn btn-secondary btn-sm" onclick="loadExportLog()">↻ Refresh</button>
     </div>
-    <table class="service-table" style="font-size:0.8rem;cursor:pointer">
+    <table class="service-table" style="font-size:0.8rem">
       <thead>
         <tr>
-          <th>Date / Time</th>
-          <th>User</th>
-          <th>Type</th>
-          <th style="text-align:center">#</th>
-          <th>BS</th>
-          <th>ET</th>
-          <th>Query</th>
+          ${th('logged_at',    'Date / Time')}
+          ${th('logon_name',   'User')}
+          ${th('export_type',  'Type')}
+          ${th('service_count','#', 'text-align:center')}
+          ${th('filter_bs',    'BS')}
+          ${th('filter_et',    'ET')}
+          ${th('filter_query', 'Query')}
         </tr>
       </thead>
       <tbody>
-        ${rows.map((r,i) => `<tr onclick="window.openExportLogDetail(${i})" style="cursor:pointer">
+        ${sorted.map((r,i) => `<tr onclick="window.openExportLogDetail(${rows.indexOf(r)})" style="cursor:pointer">
           <td style="white-space:nowrap">${fmt(r.logged_at)}</td>
           <td style="white-space:nowrap">${r.logon_name || r.user_id || '—'}</td>
           <td>${r.export_type}</td>
