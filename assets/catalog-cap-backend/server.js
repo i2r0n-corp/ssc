@@ -32,6 +32,11 @@ if (process.env.VCAP_SERVICES) {
     const authService = new XsuaaService(xsuaaCredentials);
     passport.use('JWT', new XssecPassportStrategy(authService));
     app.use(passport.initialize());
+    app.use('/api', (req, res, next) => {
+      const auth = req.headers['authorization'] || req.headers['x-approuter-authorization'] || 'none';
+      console.log('[auth] incoming auth header:', auth.substring(0, 80));
+      next();
+    });
     app.use('/api', passport.authenticate('JWT', { session: false, failWithError: false }));
     app.use('/api', (err, req, res, next) => {
       console.log('[auth] JWT error:', err?.message);
