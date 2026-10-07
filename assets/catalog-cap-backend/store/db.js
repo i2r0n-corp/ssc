@@ -268,7 +268,6 @@ async function logExport({ userId, logonName, exportType, serviceCount, filterBs
        pptxStreamMode || null, pptxStreamCustom || null,
        pptxYearFrom || null, pptxYearTo || null,
        pptxYearBorders ?? null, pptxGroupByEt ?? null, pptxUseDeckName ?? null, pptxTruncateObj ?? null]
-       filterBs || null, filterEt || null, filterModules || null, filterQuery || null]
     );
   } catch (e) {
     console.error('[export-log] Failed to write log entry:', e.message);
