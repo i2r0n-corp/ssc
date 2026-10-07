@@ -1085,7 +1085,9 @@ router.get('/injection-log', async (req, res) => {
 const EXPORT_LOG_ALLOWED = ['aituar.aubakirov@sap.com'];
 
 router.get('/whoami', (req, res) => {
-  res.json({ logonName: req.user?.logonName || null });
+  const logonName = req.user?.logonName || req.user?.userId || null;
+  console.log('[whoami] logonName=%s userId=%s', req.user?.logonName, req.user?.userId);
+  res.json({ logonName });
 });
 
 router.get('/export-log', async (req, res) => {
