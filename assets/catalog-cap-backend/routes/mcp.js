@@ -231,7 +231,7 @@ async function handleRpc(body) {
 // Clients connect here to receive the endpoint URL, then POST to /mcp/message
 const sseClients = new Map();
 
-router.get('/sse', requireMcpSecret, (req, res) => {
+router.get('/sse', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -257,7 +257,7 @@ router.get('/sse', requireMcpSecret, (req, res) => {
 });
 
 // ── Message endpoint ──────────────────────────────────────────────────────────
-router.post('/message', requireMcpSecret, async (req, res) => {
+router.post('/message', async (req, res) => {
   const clientId = req.query.clientId;
   const sseRes = clientId ? sseClients.get(clientId) : null;
 
@@ -281,7 +281,7 @@ router.post('/message', requireMcpSecret, async (req, res) => {
 });
 
 // ── Simple HTTP fallback (for clients that don't use SSE) ─────────────────────
-router.post('/rpc', requireMcpSecret, async (req, res) => {
+router.post('/rpc', async (req, res) => {
   const body = req.body;
   if (!body || typeof body !== 'object') return res.status(400).json({ error: 'Invalid JSON-RPC body' });
   const isBatch = Array.isArray(body);
@@ -291,7 +291,7 @@ router.post('/rpc', requireMcpSecret, async (req, res) => {
 });
 
 // Debug catch-all — logs what path Joule actually hits
-router.all('*', requireMcpSecret, (req, res) => {
+router.all('*', (req, res) => {
   console.log(`[mcp-debug] ${req.method} ${req.path} body=${JSON.stringify(req.body).substring(0,200)}`);
   res.status(404).json({ error: 'Not found', path: req.path, method: req.method });
 });
