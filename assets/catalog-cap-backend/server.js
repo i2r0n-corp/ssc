@@ -50,15 +50,12 @@ function getXsuaaUrl() {
   }
   return '';
 }
-app.get('/authorize', (req, res) => {
+
+function proxyToXsuaa(path, req, res) {
   const base = getXsuaaUrl();
   if (!base) return res.status(503).json({ error: 'XSUAA not configured' });
-  res.redirect(`${base}/oauth/authorize?${new URLSearchParams(req.query).toString()}`);
-});
-app.post('/token', (req, res) => {
-  const base = getXsuaaUrl();
-  if (!base) return res.status(503).json({ error: 'XSUAA not configured' });
-  const url = new URL(`${base}/oauth/token`);
+  const url = new URL(`${base}${path}`);
+  const lib = https;
   let body = '';
   if (req.body && typeof req.body === 'object' && !(req.body instanceof Buffer)) {
     body = new URLSearchParams(req.body).toString();
@@ -67,22 +64,50 @@ app.post('/token', (req, res) => {
   } else if (typeof req.body === 'string') {
     body = req.body;
   }
+  const isGet = req.method === 'GET';
+  const fullPath = isGet && req.query && Object.keys(req.query).length
+    ? `${url.pathname}?${new URLSearchParams(req.query).toString()}`
+    : url.pathname;
   const options = {
-    hostname: url.hostname, port: 443, path: url.pathname, method: 'POST',
+    hostname: url.hostname, port: 443, path: fullPath, method: req.method,
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Content-Length': Buffer.byteLength(body),
+      ...(isGet ? {} : { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }),
       ...(req.headers['authorization'] ? { 'Authorization': req.headers['authorization'] } : {})
     }
   };
-  const proxyReq = https.request(options, proxyRes => {
+  const proxyReq = lib.request(options, proxyRes => {
     res.status(proxyRes.statusCode);
-    res.setHeader('Content-Type', proxyRes.headers['content-type'] || 'application/json');
+    if (proxyRes.headers['content-type']) res.setHeader('Content-Type', proxyRes.headers['content-type']);
     proxyRes.pipe(res);
   });
   proxyReq.on('error', err => res.status(502).json({ error: err.message }));
-  proxyReq.write(body);
+  if (!isGet && body) proxyReq.write(body);
   proxyReq.end();
+}
+
+app.get('/authorize', (req, res) => {
+  const base = getXsuaaUrl();
+  if (!base) return res.status(503).json({ error: 'XSUAA not configured' });
+  res.redirect(`${base}/oauth/authorize?${new URLSearchParams(req.query).toString()}`);
+});
+app.post('/token', (req, res) => proxyToXsuaa('/oauth/token', req, res));
+app.get('/.well-known/openid-configuration', (req, res) => proxyToXsuaa('/.well-known/openid-configuration', req, res));
+app.get('/.well-known/oauth-authorization-server', (req, res) => proxyToXsuaa('/.well-known/oauth-authorization-server', req, res));
+app.get('/.well-known/oauth-protected-resource', (req, res) => {
+  const base = getXsuaaUrl();
+  res.json({
+    resource: `${req.protocol}://${req.get('host')}`,
+    authorization_servers: [base],
+    bearer_methods_supported: ['header']
+  });
+});
+app.get('/.well-known/oauth-protected-resource/mcp/sse', (req, res) => {
+  const base = getXsuaaUrl();
+  res.json({
+    resource: `${req.protocol}://${req.get('host')}/mcp/sse`,
+    authorization_servers: [base],
+    bearer_methods_supported: ['header']
+  });
 });
 
 // Mount routers

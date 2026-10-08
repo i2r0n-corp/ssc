@@ -231,6 +231,16 @@ async function handleRpc(body) {
 // Clients connect here to receive the endpoint URL, then POST to /mcp/message
 const sseClients = new Map();
 
+// Joule POSTs to /sse first to initialize — handle as JSON-RPC
+router.post('/sse', async (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== 'object') return res.status(400).json({ error: 'Invalid body' });
+  const isBatch = Array.isArray(body);
+  const requests = isBatch ? body : [body];
+  const responses = await Promise.all(requests.map(handleRpc));
+  res.json(isBatch ? responses : responses[0]);
+});
+
 router.get('/sse', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
