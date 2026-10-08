@@ -367,6 +367,7 @@ function generateListPptxBuffer(services, opts = {}) {
   const bsName       = opts.bsName || '';
   const yearBorders  = !!opts.yearBorders;
   const switchTypes  = !!opts.switchTypes;
+  const groupMode    = opts.groupMode || 'perModule';
 
   // Column visibility — all on by default
   const cols = {
@@ -390,8 +391,18 @@ function generateListPptxBuffer(services, opts = {}) {
   const { objW } = calcLayout(cols, yearCount);
 
   // ── Parse services into modules ───────────────────────────────────────────
+  let modulesInput = services;
+  if (groupET && groupMode === 'acrossAll') {
+    // Flatten all services into one group, sorted by ET
+    const sorted = [...services].sort((a, b) => {
+      const ai = ET_ORDER.indexOf(a.engagement_type), bi = ET_ORDER.indexOf(b.engagement_type);
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
+    });
+    modulesInput = sorted.map(s => ({ ...s, parent_name: '', parent_code: '' }));
+  }
+
   const moduleMap = new Map();
-  for (const svc of services) {
+  for (const svc of modulesInput) {
     const key = svc.parent_name || svc.parent_code || '__none__';
     if (!moduleMap.has(key)) moduleMap.set(key, { name: key, services: [] });
     moduleMap.get(key).services.push(svc);

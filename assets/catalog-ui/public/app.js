@@ -873,7 +873,9 @@ window.generatePptx = async function(template) {
         cols: { ...s.cols, stream: bsCode ? s.cols.stream : false },
         yearFrom: s.years ? s.yearFrom : '0',
         yearTo:   s.years ? s.yearTo   : '0',
-        groupByET: s.groupByET, useDeckName: s.useDeckName,
+        groupByET: s.groupByET,
+        groupMode: (!bsCode || resolvedStreamMode === 'custom') ? 'acrossAll' : 'perModule',
+        useDeckName: s.useDeckName,
         yearBorders: s.years ? s.yearBorders : false,
         title: s.title,
         bsCode,
@@ -976,15 +978,15 @@ function renderPptxListSettingsModal() {
     <div style="display:flex;flex-direction:column;gap:0.35rem">
       <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
         <input type="radio" name="streamMode" value="bsAndModule" ${s.streamMode==='bsAndModule'?'checked':''} onchange="setPptxStreamMode('bsAndModule')"/>
-        Business Scenario + Module Name
+        Business Scenario + Module Name ${tip('Combines scenario and module into one stream label for full context')}
       </label>
       <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
         <input type="radio" name="streamMode" value="moduleOnly" ${s.streamMode==='moduleOnly'?'checked':''} onchange="setPptxStreamMode('moduleOnly')"/>
-        Only Module Name
+        Only Module Name ${tip('Label shows just the module name, stripping the Business Scenario prefix')}
       </label>
       <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
         <input type="radio" name="streamMode" value="custom" ${s.streamMode==='custom'?'checked':''} onchange="setPptxStreamMode('custom')"/>
-        Custom
+        Custom ${tip('Use your own fixed text as the stream label on every slide')}
       </label>
       ${s.streamMode==='custom' ? `
       <input type="text" id="pptx-stream-custom" maxlength="64" oninput="setPptxStreamCustom(this.value)"
@@ -996,6 +998,7 @@ function renderPptxListSettingsModal() {
   const sectionLabel = 'font-weight:600;font-size:0.82rem;color:#1D2D3E;margin-bottom:0.5rem;margin-top:0.85rem';
   const checkLabel   = 'display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem';
   const checkLabelOff = 'display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;opacity:0.45;cursor:not-allowed;color:#9BA8B0;';
+  const tip = (text) => `<span title="${text}" style="display:inline-flex;align-items:center;justify-content:center;width:0.82rem;height:0.82rem;border-radius:50%;background:#1D6FA4;color:#fff;font-size:0.6rem;font-weight:700;cursor:default;flex-shrink:0;line-height:1">?</span>`;
 
   return `
   <div class="modal-overlay" onclick="if(event.target===this)closePptxListSettings()">
@@ -1004,16 +1007,16 @@ function renderPptxListSettingsModal() {
       <h3 style="margin-top:0">⚙ PPTX List — Export Settings</h3>
 
       <div style="font-size:0.82rem;color:#6a6a6a;margin-bottom:1rem">
-        Set up slides header, choose columns to include, and configure formatting options. Changes apply to the next export.
+        Set up slides header, choose columns to include, and configure formatting options. Changes apply to this export.
       </div>
 
       <!-- Slide Title -->
-      <div style="${sectionLabel}">Service Title</div>
+      <div style="${sectionLabel}">Service Title ${tip('Override the slide header text shown at the top of each generated slide')}</div>
       <input type="text" id="pptx-slide-title" value="${s.title.replace(/"/g,'&quot;')}" oninput="setPptxTitle(this.value)"
         style="width:100%;margin-bottom:0.5rem" placeholder="Services Description"/>
 
       <!-- Columns — 4 in one row -->
-      <div style="${sectionLabel}">Columns</div>
+      <div style="${sectionLabel}">Columns ${tip('Select which columns appear in the output table')}</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem 1rem;margin-bottom:0.75rem">
         ${colCheck('phases',     'Activate Phases',  s.cols.phases,     false)}
         ${colCheck('component',  'Service Name',     s.cols.component,  false)}
@@ -1027,7 +1030,7 @@ function renderPptxListSettingsModal() {
         <div style="${bsActive ? '' : 'display:none'}">
           <label style="${streamOn ? checkLabel : checkLabelOff}" ${!bsActive?'title="Only available when Business Scenario is selected"':''}>
             <input type="checkbox" ${streamOn?'checked':''} ${!bsActive?'disabled':''} onchange="togglePptxCol('stream')"/>
-            <span style="font-weight:600;font-size:0.82rem;color:#1D2D3E">Stream</span>
+            Stream ${tip('Shows a side label per slide indicating the module or scenario grouping')}
           </label>
           <div style="margin-top:0.4rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${streamOn?'':'display:none'}">
             ${streamOptions}
@@ -1037,7 +1040,7 @@ function renderPptxListSettingsModal() {
         <div>
           <label style="${checkLabel}">
             <input type="checkbox" ${s.years?'checked':''} onchange="setPptxYears(this.checked)"/>
-            <span style="font-weight:600;font-size:0.82rem;color:#1D2D3E">Timeline (Years)</span>
+            Timeline (Years) ${tip('Inserts year columns so services can be mapped to a delivery timeline')}
           </label>
           <div style="margin-top:0.4rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${s.years?'':'opacity:0.45;pointer-events:none;'}">
             <div style="display:flex;gap:0.75rem;align-items:flex-end;margin-bottom:0.6rem">
@@ -1064,34 +1067,24 @@ function renderPptxListSettingsModal() {
         </div>
       </div>
 
-      <!-- Grouping — visible only when BS active -->
-      ${bsActive ? `
-      <div style="${sectionLabel}">Grouping rows by Engagement Type</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:0.75rem">
+      <!-- Options -->
+      <div style="${sectionLabel}">Options</div>
+      <div style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:1.25rem">
         <label style="${checkLabel}">
           <input type="checkbox" ${s.groupByET?'checked':''} onchange="setPptxGroupET(this.checked)"/>
-          per Module
+          Grouping rows by Engagement Type ${tip(bsActive && s.streamMode !== 'custom' ? 'Sorts rows within each module by tier: Max first, then Advanced, then Foundational' : 'Sorts all rows by tier across the full list: Max first, then Advanced, then Foundational')}
         </label>
-        <label style="${checkLabel};opacity:0.45;cursor:not-allowed" title="Coming soon">
-          <input type="checkbox" disabled/>
-          across all Modules
-        </label>
-      </div>` : ''}
-
-      <!-- Miscellaneous -->
-      <div style="${sectionLabel}">Miscellaneous</div>
-      <div style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:1.25rem">
         <label style="${bsActive?checkLabel:checkLabelOff}" ${!bsActive?'title="Only available when Business Scenario is selected"':''}>
           <input type="checkbox" ${s.useDeckName?'checked':''} ${!bsActive?'disabled':''} onchange="setPptxDeckName(this.checked)"/>
-          Use Deck Names in Service Name column
+          Use Deck Names in Service Name column ${tip('Replaces technical service names with the presentation deck label for this scenario')}
         </label>
         <label style="${truncateEnabled?checkLabel:checkLabelOff}" ${truncateEnabled?'':'title="Only applies when ET is unset or Foundational"'}>
           <input type="checkbox" ${s.truncateObjectives?'checked':''} ${truncateEnabled?'':'disabled'} onchange="setPptxTruncateObjectives(this.checked)"/>
-          Truncate EGIs description to 3 sentences
+          Truncate EGIs description to 3 sentences ${tip('Limits EGI service descriptions to 3 sentences — reduces row height on dense slides')}
         </label>
         <label style="${checkLabel}">
           <input type="checkbox" ${s.switchTypes?'checked':''} onchange="setPptxSwitchTypes(this.checked)"/>
-          Switch Types to Premium / Entitlements
+          Switch Types to Premium / Entitlements ${tip('Replaces engagement type labels with service types: Max → Premium Service, others → Service Entitlement')}
         </label>
       </div>
 

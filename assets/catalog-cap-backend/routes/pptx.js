@@ -182,6 +182,7 @@ router.post('/generatePptx', async (req, res) => {
       const buf = generateListPptxBuffer(svcs, {
         title:              opts.title || 'Services Description',
         groupByET:          !!opts.groupByET,
+        groupMode:          opts.groupMode || 'perModule',
         bsCode:             opts.bsCode || null,
         bsName:             opts.bsCode ? (flatIndex[opts.bsCode]?._name || '') : '',
         useDeckName:        !!opts.useDeckName,
