@@ -10,6 +10,7 @@
   </script>
   <!-- SAP 72 Font -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=72:wght@400;600;700&display=swap" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/gitbrent/bootstrap-switch-button@1.1.0/css/bootstrap-switch-button.min.css" />
   <style>
     :root { --sap-brand-color: #0070F2; --sap-dark-color: #003366; }
     * { box-sizing: border-box; font-family: '72', 'SAP72', Arial, sans-serif; }
@@ -162,39 +163,9 @@
       .filter-more-btn { display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 1rem; border: none; background: none; color: var(--sap-brand-color); font-size: 0.875rem; font-weight: 600; cursor: pointer; }
     }
     /* ─────────────────────────────────────────────────────────────────────── */
-    /* ── BSB-style pill switch (Merge/Intersect + Catalogue/Deck) ─────────── */
-    .bsb-switch {
-      display: inline-flex; align-items: stretch;
-      border: 1px solid #0070F2; border-radius: 2rem; overflow: hidden;
-      background: #fff; cursor: pointer; user-select: none;
-    }
-    .bsb-switch button {
-      border: none; background: transparent; cursor: pointer;
-      display: flex; align-items: center; justify-content: center; gap: 5px;
-      padding: 4px 12px; font-size: 0.72rem; font-weight: 600;
-      color: #556B82; transition: background 0.15s, color 0.15s;
-      white-space: nowrap; line-height: 1;
-    }
-    .bsb-switch button img { width: 18px; height: 18px; object-fit: contain; filter: invert(35%) sepia(10%) saturate(500%) hue-rotate(180deg); transition: filter 0.15s; }
-    .bsb-switch button.active { background: #0070F2; color: #fff; }
-    .bsb-switch button.active img { filter: brightness(0) invert(1); }
-    .bsb-switch button:not(.active):hover { background: #EBF2FF; color: #0070F2; }
+    /* ── BSB overrides — keep SAP blue ────────────────────────────────────── */
+    .btn-primary { background-color: #0070F2 !important; border-color: #0070F2 !important; }
     /* ─────────────────────────────────────────────────────────────────────── */
-    /* ── Mode switch legacy (keep for any remaining uses) ─────────────────── */
-    .mode-switch { display: flex; width: fit-content; align-items: center; background: #EBF2FF; border-radius: 2rem; padding: 2px; gap: 0; }
-    .mode-switch button {
-      border: none; background: transparent; border-radius: 2rem;
-      padding: 3px 12px; font-size: 0.72rem; font-weight: 600; cursor: pointer;
-      color: #556B82; transition: background 0.18s, color 0.18s, box-shadow 0.18s;
-      white-space: nowrap;
-    }
-    .mode-switch button.active { background: var(--sap-brand-color); color: #fff; box-shadow: 0 1px 4px rgba(0,112,242,0.25); }
-    .mode-switch button:not(.active):hover { background: #d6e8ff; color: #0070F2; }
-    /* ─────────────────────────────────────────────────────────────────────── */
-    .toggle-group { display: flex; border: 1px solid var(--sap-brand-color); border-radius: 4px; overflow: hidden; }
-    .toggle-btn { padding: 0.4rem 0.85rem; font-size: 0.8rem; font-weight: 600; border: none; background: white; color: var(--sap-brand-color); cursor: pointer; transition: all 0.15s; }
-    .toggle-btn.active { background: var(--sap-brand-color); color: white; }
-    .toggle-btn:hover:not(.active) { background: #f0f7ff; }
     .los-toggle { position:relative; display:inline-block; width:32px; height:18px; flex-shrink:0; }
     .los-toggle input { opacity:0; width:0; height:0; }
     .los-slider { position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0; background:#c0c0c0; border-radius:18px; transition:.3s; }
@@ -230,6 +201,7 @@
 </head>
 <body>
   <div id="app"></div>
+  <script src="https://cdn.jsdelivr.net/gh/gitbrent/bootstrap-switch-button@1.1.0/dist/bootstrap-switch-button.min.js"></script>
   <script type="module" src="/app.js?v=20261006a"></script>
 </body>
 </html>
