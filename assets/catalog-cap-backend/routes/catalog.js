@@ -1212,10 +1212,12 @@ router.post('/admin/users', requireAdmin, async (req, res) => {
   }
 });
 
-router.delete('/admin/users/:email', requireAdmin, async (req, res) => {
+router.post('/admin/users/delete', requireAdmin, async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'email required' });
   try {
     const db = require('../store/db');
-    await db.query(`DELETE FROM catalog_user_permissions WHERE email = $1`, [req.params.email]);
+    await db.query(`DELETE FROM catalog_user_permissions WHERE email = $1`, [email]);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

@@ -1507,9 +1507,18 @@ window.adminSetPerm = async function(email, tab, value) {
   } catch (e) { state.admin.usersError = e.message; render(); }
 };
 
+window.adminEmailInput = function(v) {
+  state.admin.newEmail = v;
+};
+
 window.adminAddUser = async function() {
   const email = (state.admin.newEmail || '').trim().toLowerCase();
-  if (!email || !email.includes('@')) return;
+  if (!email || !email.includes('@')) {
+    state.admin.usersError = 'Enter a valid email address first';
+    render();
+    return;
+  }
+  state.admin.usersError = null;
   try {
     await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/users`, {
       method: 'POST',
@@ -1523,7 +1532,10 @@ window.adminAddUser = async function() {
 window.adminDeleteUser = async function(email) {
   if (!confirm(`Remove ${email}?`)) return;
   try {
-    await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/users/${encodeURIComponent(email)}`, { method: 'DELETE' });
+    await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/users/delete`, {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
     state.admin.users = state.admin.users.filter(u => u.email !== email);
     render();
   } catch (e) { state.admin.usersError = e.message; render(); }
@@ -1567,7 +1579,7 @@ function renderAdminPage() {
           </tr>`).join('')}
           <tr style="background:#f7f8f9">
             <td><input type="text" placeholder="new@email.com" value="${newEmail}"
-              oninput="state.admin.newEmail=this.value"
+              oninput="window.adminEmailInput(this.value)"
               style="width:100%;padding:0.3rem 0.5rem;font-size:0.8rem;border:1px solid #8696A9;border-radius:4px"
               onkeydown="if(event.key==='Enter')window.adminAddUser()"/></td>
             <td colspan="${TABS.length}"></td>
