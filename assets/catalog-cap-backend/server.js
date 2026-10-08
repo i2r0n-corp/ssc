@@ -93,7 +93,8 @@ app.get('/authorize', (req, res) => {
 });
 app.post('/token', (req, res) => proxyToXsuaa('/oauth/token', req, res));
 function oauthDiscovery(req, res) {
-  const self = `${req.protocol}://${req.get('host')}`;
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
+  const self = `${proto}://${req.get('host')}`;
   const base = getXsuaaUrl();
   res.json({
     issuer: self,
@@ -109,17 +110,19 @@ function oauthDiscovery(req, res) {
 app.get('/.well-known/openid-configuration', oauthDiscovery);
 app.get('/.well-known/oauth-authorization-server', oauthDiscovery);
 app.get('/.well-known/oauth-protected-resource', (req, res) => {
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
   const base = getXsuaaUrl();
   res.json({
-    resource: `${req.protocol}://${req.get('host')}`,
+    resource: `${proto}://${req.get('host')}`,
     authorization_servers: [base],
     bearer_methods_supported: ['header']
   });
 });
 app.get('/.well-known/oauth-protected-resource/mcp/sse', (req, res) => {
+  const proto = req.headers['x-forwarded-proto'] || req.protocol;
   const base = getXsuaaUrl();
   res.json({
-    resource: `${req.protocol}://${req.get('host')}/mcp/sse`,
+    resource: `${proto}://${req.get('host')}/mcp/sse`,
     authorization_servers: [base],
     bearer_methods_supported: ['header']
   });
