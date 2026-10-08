@@ -238,7 +238,7 @@ router.post('/sse', async (req, res) => {
     const host = req.headers['x-forwarded-host'] || req.headers.host || '';
     const proto = req.headers['x-forwarded-proto'] || 'https';
     const base = `${proto}://${host}`;
-    res.setHeader('WWW-Authenticate', `Bearer realm="${base}", authorization_uri="${base}/authorize"`);
+    res.setHeader('WWW-Authenticate', `Bearer realm="${base}", authorization_uri="${base}/authorize", token_uri="${base}/token"`);
     return res.status(401).json({ error: 'Unauthorized' });
   }
   const body = req.body;
