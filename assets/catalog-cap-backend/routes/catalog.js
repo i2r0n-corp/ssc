@@ -1150,7 +1150,7 @@ router.get('/my-permissions', async (req, res) => {
       return res.json({ catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: isAdmin });
     }
     const r = result.rows[0];
-    res.json({ catalog: r.tab_catalog, incidents: r.tab_incidents, chat: r.tab_chat, debug: r.tab_debug, exportlog: r.tab_exportlog, admin: r.tab_admin || isAdmin });
+    res.json({ catalog: true, incidents: r.tab_incidents, chat: r.tab_chat, debug: r.tab_debug, exportlog: r.tab_exportlog, admin: r.tab_admin || isAdmin });
   } catch (e) {
     res.json({ catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: isAdmin });
   }

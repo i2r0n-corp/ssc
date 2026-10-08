@@ -1543,8 +1543,8 @@ window.adminDeleteUser = async function(email) {
 
 function renderAdminPage() {
   const { users, usersLoading, usersError, newEmail, visitorLog, visitorLastSeen, visitorLoading, visitorError } = state.admin;
-  const TABS = ['catalog','incidents','chat','debug','exportlog','admin'];
-  const TAB_LABELS = { catalog:'Catalogue', incidents:'Incidents', chat:'Chat', debug:'Debug', exportlog:'Export Log', admin:'Admin' };
+  const TABS = ['incidents','chat','debug','exportlog','admin'];
+  const TAB_LABELS = { incidents:'Incidents', chat:'Chat', debug:'Debug', exportlog:'Export Log', admin:'Admin' };
   const fmtDate = iso => new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
 
   const sel = (email, tab, val) =>
