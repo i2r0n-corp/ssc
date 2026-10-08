@@ -35,7 +35,7 @@ if (process.env.VCAP_SERVICES) {
   }
 }
 
-// MCP server — mounted outside XSUAA, protected by MCP_SECRET env var
+// MCP Streamable HTTP server (spec 2025-03-26) — outside XSUAA, self-authenticates via Bearer
 app.use('/mcp', require('./routes/mcp'));
 
 // OAuth proxy for Joule PKCE flow — Joule uses MCP server base URL as OAuth root
