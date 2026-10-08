@@ -250,21 +250,20 @@ function renderCatalogFilters() {
           <!-- BS field: native select + external link button -->
           <div style="width:100%;display:flex;flex-direction:column;gap:4px">
             <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600">Business Scenario</label>
-            <div style="display:flex;align-items:center;gap:0.5rem">
-              <div class="fl-field" style="flex:1;min-width:0;margin:0">
-                <select id="filter-bs" ${!state.filters.businessScenario ? 'data-empty="true"' : ''}
-                  onchange="updateFilter('businessScenario', this.value); this.dataset.empty = this.value ? 'false' : 'true'">
-                  <option value=""></option>
-                  ${uniqueBS.map(([code,,label]) => `<option value="${code}" ${state.filters.businessScenario===code?'selected':''}>${label}</option>`).join('')}
-                </select>
-                <label>Business Scenario</label>
-              </div>
+            <div style="display:flex;align-items:stretch;gap:0.4rem">
+              <select id="filter-bs" ${!state.filters.businessScenario ? 'data-empty="true"' : ''}
+                onchange="updateFilter('businessScenario', this.value); this.dataset.empty = this.value ? 'false' : 'true'"
+                style="flex:1;min-width:0;padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid #c0c0c0;border-radius:4px;background:#fff;color:${state.filters.businessScenario?'#1D2D3E':'#9BA8B0'}">
+                <option value=""></option>
+                ${uniqueBS.map(([code,,label]) => `<option value="${code}" ${state.filters.businessScenario===code?'selected':''}>${label}</option>`).join('')}
+              </select>
               ${(() => {
                 const bsUrl = state.filters.businessScenario ? (state.catalog.bsUrlMap||{})[state.filters.businessScenario] : null;
                 return bsUrl
-                  ? `<a href="${bsUrl}" target="_blank" rel="noopener"
-                      style="flex-shrink:0;padding:0.35rem 0.75rem;font-size:0.8rem;background:#0070F2;color:#fff;border:none;border-radius:4px;text-decoration:none;white-space:nowrap;line-height:1.4">in Service Catalog</a>`
-                  : `<span style="flex-shrink:0;padding:0.35rem 0.75rem;font-size:0.8rem;background:#c0c0c0;color:#fff;border-radius:4px;white-space:nowrap;line-height:1.4;cursor:default">in Service Catalog</span>`;
+                  ? `<a href="${bsUrl}" target="_blank" rel="noopener" title="Open in Service Catalog"
+                      style="flex-shrink:0;display:flex;align-items:center;justify-content:center;width:2rem;background:#0070F2;color:#fff;border-radius:4px;text-decoration:none;font-size:1rem">↗</a>`
+                  : `<span title="Open in Service Catalog"
+                      style="flex-shrink:0;display:flex;align-items:center;justify-content:center;width:2rem;background:#d0d0d0;color:#fff;border-radius:4px;font-size:1rem;cursor:default">↗</span>`;
               })()}
             </div>
           </div>
