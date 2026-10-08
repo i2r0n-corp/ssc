@@ -50,6 +50,19 @@ const TOOLS = [
     name: 'getCatalogStats',
     description: 'Get catalog statistics: total service count, last updated timestamp.',
     inputSchema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'generatePresentation',
+    description: 'Generate a PowerPoint presentation for a list of services and return a download URL. Use serviceCodes from searchServices results.',
+    inputSchema: {
+      type: 'object',
+      required: ['serviceCodes'],
+      properties: {
+        serviceCodes: { type: 'array', items: { type: 'string' }, description: 'List of service codes to include' },
+        title:        { type: 'string', description: 'Presentation title (default: "Services Description")' },
+        template:     { type: 'string', description: 'Template: "list" (table format, recommended), "short-description", or "one-pager"', default: 'list' }
+      }
+    }
   }
 ];
 
@@ -136,6 +149,10 @@ async function callToolDb(name, args, db) {
     return { count: services.length, services };
   }
 
+  if (name === 'generatePresentation') {
+    return callGeneratePresentation(args);
+  }
+
   throw new Error(`Unknown tool: ${name}`);
 }
 
@@ -182,7 +199,58 @@ function callToolSnapshot(name, args) {
     };
   }
 
+  if (name === 'generatePresentation') {
+    return callGeneratePresentation(args);
+  }
+
   return { error: `Unknown tool: ${name}` };
+}
+
+// ── PPTX generation ───────────────────────────────────────────────────────────
+async function callGeneratePresentation(args) {
+  const { serviceCodes, title, template } = args;
+  if (!Array.isArray(serviceCodes) || serviceCodes.length === 0) {
+    return { error: 'serviceCodes must be a non-empty array' };
+  }
+  try {
+    const { v4: uuidv4 } = require('uuid');
+    const fs = require('fs');
+    const path = require('path');
+    const { generateListPptxBuffer } = require('../scripts/generate_list_pptx');
+    const db = require('../store/db');
+
+    const r = await db.query(
+      'SELECT code, name, engagement_type, raw_data FROM catalog_services WHERE code = ANY($1)',
+      [serviceCodes]
+    );
+    const svcs = r.rows.map(row => ({
+      code:              row.code,
+      name:              row.name || '',
+      short_description: (row.raw_data || {}).shortDescription || '',
+      engagement_type:   row.engagement_type || '',
+      parent_name:       '',
+      phases:            [],
+      business_scenario_naming: {}
+    }));
+
+    if (!svcs.length) return { error: 'None of the provided service codes were found' };
+
+    const buf = generateListPptxBuffer(svcs, { title: title || 'Services Description' });
+    const fileId = uuidv4();
+    const PPTX_TMP = path.join(__dirname, '..', 'data', 'pptx-tmp');
+    fs.mkdirSync(PPTX_TMP, { recursive: true });
+    fs.writeFileSync(path.join(PPTX_TMP, `${fileId}.pptx`), buf);
+
+    const host = process.env.VCAP_APPLICATION
+      ? JSON.parse(process.env.VCAP_APPLICATION).application_uris?.[0]
+      : 'localhost:' + (process.env.PORT || 4004);
+    const proto = process.env.VCAP_APPLICATION ? 'https' : 'http';
+    const downloadUrl = `${proto}://${host}/api/pptx/download/${fileId}`;
+
+    return { downloadUrl, serviceCount: svcs.length, message: `Presentation ready with ${svcs.length} services. Download: ${downloadUrl}` };
+  } catch(e) {
+    return { error: e.message };
+  }
 }
 
 // ── JSON-RPC dispatch ─────────────────────────────────────────────────────────

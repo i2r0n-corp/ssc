@@ -267,7 +267,9 @@ router.get('/download/:fileId', (req, res) => {
   }
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
   res.setHeader('Content-Disposition', `attachment; filename="catalog-export.pptx"`);
-  fs.createReadStream(filePath).pipe(res);
+  const stream = fs.createReadStream(filePath);
+  stream.pipe(res);
+  stream.on('close', () => fs.unlink(filePath, () => {}));
 });
 
 // ── Template builders ─────────────────────────────────────────────────────────
