@@ -291,4 +291,10 @@ router.post('/rpc', requireMcpSecret, async (req, res) => {
   res.json(isBatch ? responses : responses[0]);
 });
 
+// Debug catch-all — logs what path Joule actually hits
+router.all('*', requireMcpSecret, (req, res) => {
+  console.log(`[mcp-debug] ${req.method} ${req.path} body=${JSON.stringify(req.body).substring(0,200)}`);
+  res.status(404).json({ error: 'Not found', path: req.path, method: req.method });
+});
+
 module.exports = router;
