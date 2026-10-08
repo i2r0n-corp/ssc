@@ -691,14 +691,27 @@ window.updateFilter = function(key, value) {
   if (key === 'businessScenario') { state.filters.modules = []; state.filters.module = ''; state.filters.deckName = ''; state.filters.namingType = ''; }
   // These keys change filter panel structure — full re-render
   const needsFullRender = key === 'businessScenario' || key === 'engagementType';
-  // Mode-switch keys and query-state keys only need filter panel patch + results
-  const needsFilterPatch = key === 'phaseMode' || key === 'advancedLoSMode' || key === 'foundationalCatsMode' || key === 'maxFocusTopicsMode' || key === 'namingType';
+  // Icon/mode switches — update button active classes in-place, no panel re-render
+  const isModeSwitch = key === 'phaseMode' || key === 'advancedLoSMode' || key === 'foundationalCatsMode' || key === 'maxFocusTopicsMode';
   clearTimeout(window._filterDebounce);
   if (needsFullRender) {
     window._filterDebounce = setTimeout(() => { render(); applyFilters(); }, 300);
-  } else if (needsFilterPatch) {
-    patchFilters();
+  } else if (isModeSwitch) {
+    // Surgically update only the two buttons of the affected icon-switch
+    const switchMap = { phaseMode: 'phaseMode', advancedLoSMode: 'advancedLoSMode', foundationalCatsMode: 'foundationalCatsMode', maxFocusTopicsMode: 'maxFocusTopicsMode' };
+    document.querySelectorAll(`.icon-switch`).forEach(sw => {
+      const [btnA, btnB] = sw.querySelectorAll('button');
+      if (!btnA || !btnB) return;
+      const onMerge  = btnA.getAttribute('onclick') || '';
+      const onIntersect = btnB.getAttribute('onclick') || '';
+      if (onMerge.includes(key)) {
+        btnA.classList.toggle('active', value === 'merge');
+        btnB.classList.toggle('active', value === 'intersect');
+      }
+    });
     window._filterDebounce = setTimeout(applyFilters, 300);
+  } else if (key === 'namingType') {
+    patchResults();
   } else {
     window._filterDebounce = setTimeout(applyFilters, 300);
   }
