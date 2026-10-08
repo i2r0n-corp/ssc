@@ -92,8 +92,22 @@ app.get('/authorize', (req, res) => {
   res.redirect(`${base}/oauth/authorize?${new URLSearchParams(req.query).toString()}`);
 });
 app.post('/token', (req, res) => proxyToXsuaa('/oauth/token', req, res));
-app.get('/.well-known/openid-configuration', (req, res) => proxyToXsuaa('/.well-known/openid-configuration', req, res));
-app.get('/.well-known/oauth-authorization-server', (req, res) => proxyToXsuaa('/.well-known/oauth-authorization-server', req, res));
+function oauthDiscovery(req, res) {
+  const self = `${req.protocol}://${req.get('host')}`;
+  const base = getXsuaaUrl();
+  res.json({
+    issuer: self,
+    authorization_endpoint: `${self}/authorize`,
+    token_endpoint: `${self}/token`,
+    jwks_uri: `${base}/token_keys`,
+    response_types_supported: ['code'],
+    grant_types_supported: ['authorization_code', 'client_credentials', 'refresh_token'],
+    code_challenge_methods_supported: ['S256'],
+    token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post']
+  });
+}
+app.get('/.well-known/openid-configuration', oauthDiscovery);
+app.get('/.well-known/oauth-authorization-server', oauthDiscovery);
 app.get('/.well-known/oauth-protected-resource', (req, res) => {
   const base = getXsuaaUrl();
   res.json({
