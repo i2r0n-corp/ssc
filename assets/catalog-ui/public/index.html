@@ -162,18 +162,18 @@
       .filter-more-btn { display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 1rem; border: none; background: none; color: var(--sap-brand-color); font-size: 0.875rem; font-weight: 600; cursor: pointer; }
     }
     /* ─────────────────────────────────────────────────────────────────────── */
-    /* ── Mode switch (Merge / Intersect + Catalogue / Deck) ───────────────── */
-    .mode-switch { display: flex; width: fit-content; align-items: center; background: #8696A9; border-radius: 6px; padding: 2px; gap: 0; }
-    .mode-switch button {
-      border: none; background: transparent; border-radius: 4px;
-      padding: 2px; font-size: 0.72rem; font-weight: 600; cursor: pointer;
-      color: #fff; transition: background 0.18s, box-shadow 0.18s;
-      white-space: nowrap; display: flex; align-items: center;
-    }
-    .mode-switch button img { width: 18px; height: 18px; object-fit: contain; filter: brightness(0) invert(1); transition: filter 0.15s; }
+    /* ── Mode switch (Catalogue / Deck text toggle) ────────────────────────── */
+    .mode-switch { display: flex; width: fit-content; align-items: center; background: #EBF2FF; border-radius: 6px; padding: 2px; gap: 0; }
+    .mode-switch button { border: none; background: transparent; border-radius: 4px; padding: 3px 12px; font-size: 0.72rem; font-weight: 600; cursor: pointer; color: #556B82; transition: background 0.18s, color 0.18s; white-space: nowrap; }
     .mode-switch button.active { background: var(--sap-brand-color); color: #fff; box-shadow: 0 1px 4px rgba(0,112,242,0.25); }
-    .mode-switch button.active img { filter: brightness(0) invert(1); }
-    .mode-switch button:not(.active):hover { background: rgba(255,255,255,0.2); }
+    .mode-switch button:not(.active):hover { background: #d6e8ff; color: #0070F2; }
+    /* ── Icon switch (Merge / Intersect image toggle) ──────────────────────── */
+    .icon-switch { display: flex; width: fit-content; align-items: center; background: transparent; border-radius: 4px; padding: 0; gap: 0; }
+    .icon-switch button { border: none; background: #8696A9; cursor: pointer; padding: 0; display: flex; align-items: center; justify-content: center; transition: background 0.18s; }
+    .icon-switch button:first-child { border-radius: 3px 0 0 3px; }
+    .icon-switch button:last-child  { border-radius: 0 3px 3px 0; }
+    .icon-switch button img { display: block; object-fit: contain; filter: brightness(0) invert(1); }
+    .icon-switch button.active { background: var(--sap-brand-color); }
     /* ─────────────────────────────────────────────────────────────────────── */
     .los-toggle { position:relative; display:inline-block; width:32px; height:18px; flex-shrink:0; }
     .los-toggle input { opacity:0; width:0; height:0; }

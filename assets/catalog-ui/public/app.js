@@ -320,7 +320,7 @@ function renderCatalogFilters() {
         <div class="filter-group" style="${activatePhaseActive ? '' : disabledStyle}">
           <label>Activate Phases</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div class="mode-switch">
+            <div class="icon-switch">
               <button class="${(state.filters.phaseMode||'merge')==='merge'?'active':''}" onclick="updateFilter('phaseMode','merge')"><img src="merge.png" alt="Merge" /></button>
               <button class="${state.filters.phaseMode==='intersect'?'active':''}" onclick="updateFilter('phaseMode','intersect')"><img src="intersect.png" alt="Intersect" /></button>
             </div>
@@ -356,7 +356,7 @@ function renderCatalogFilters() {
         <div class="filter-group" style="${advancedActive ? '' : disabledStyle}">
           <label>Advanced LoB${showAdvancedBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Advanced)</span>'}</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div class="mode-switch">
+            <div class="icon-switch">
               <button class="${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}" onclick="updateFilter('advancedLoSMode','merge')"><img src="merge.png" alt="Merge" /></button>
               <button class="${state.filters.advancedLoSMode==='intersect'?'active':''}" onclick="updateFilter('advancedLoSMode','intersect')"><img src="intersect.png" alt="Intersect" /></button>
             </div>
@@ -374,7 +374,7 @@ function renderCatalogFilters() {
         <div class="filter-group" style="${foundationalActive ? '' : disabledStyle}">
           <label>Foundation subcategories${showFoundationalBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Foundation)</span>'}</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div class="mode-switch">
+            <div class="icon-switch">
               <button class="${(state.filters.foundationalCatsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('foundationalCatsMode','merge')"><img src="merge.png" alt="Merge" /></button>
               <button class="${state.filters.foundationalCatsMode==='intersect'?'active':''}" onclick="updateFilter('foundationalCatsMode','intersect')"><img src="intersect.png" alt="Intersect" /></button>
             </div>
