@@ -252,7 +252,7 @@ function renderCatalogFilters() {
             <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600">Business Scenario</label>
             <div style="position:relative">
               <div id="bs-dropdown-trigger"
-                onclick="window.toggleBsDropdown()"
+                onclick="window.toggleBsDropdown(event)"
                 style="width:100%;padding:0.35rem 0.6rem;font-size:0.875rem;border:1px solid #c0c0c0;border-radius:4px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:space-between;min-height:2rem;${state.filters.businessScenario?'color:#1D2D3E':'color:#9BA8B0'}">
                 <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">
                   ${state.filters.businessScenario ? (uniqueBS.find(([c])=>c===state.filters.businessScenario)||['','',state.filters.businessScenario])[2] : ''}
@@ -261,6 +261,7 @@ function renderCatalogFilters() {
               </div>
               ${state.catalog.bsDropdownOpen ? `
               <div id="bs-dropdown-list"
+                onclick="event.stopPropagation()"
                 style="position:absolute;z-index:999;top:100%;left:0;right:0;background:#fff;border:1px solid #c0c0c0;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.12);max-height:260px;overflow-y:auto;margin-top:2px">
                 <div onclick="window.selectBs('')"
                   style="padding:0.4rem 0.6rem;font-size:0.875rem;color:#9BA8B0;cursor:pointer;border-bottom:1px solid #f0f0f0"
@@ -699,7 +700,8 @@ window.navigate = function(page) {
   apiFetch(`${CAP_BACKEND_URL}/api/catalog/visitor`, { method: 'POST', body: JSON.stringify({ page, sessionId: state.sessionId }) }).catch(() => {});
 };
 
-window.toggleBsDropdown = function() {
+window.toggleBsDropdown = function(e) {
+  if (e) e.stopPropagation();
   state.catalog.bsDropdownOpen = !state.catalog.bsDropdownOpen; render();
 };
 window.selectBs = function(code) {
@@ -769,6 +771,7 @@ window.clearFilters = function() {
   state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', maxFocusTopics: [], maxFocusTopicsMode: 'merge', deckName: '', namingType: '' };
   state.filteredServices = [];
   state.catalog.hasSearched = false;
+  state.catalog.bsDropdownOpen = false;
   render();
 };
 
@@ -1798,11 +1801,7 @@ apiFetch(`${CAP_BACKEND_URL}/api/catalog/export-stats`)
 apiFetch(`${CAP_BACKEND_URL}/api/catalog/visitor`, { method: 'POST', body: JSON.stringify({ page: 'app-load', sessionId: state.sessionId }) }).catch(() => {});
 
 // Close BS dropdown when clicking outside
-document.addEventListener('click', function(e) {
+document.addEventListener('click', function() {
   if (!state.catalog.bsDropdownOpen) return;
-  const trigger = document.getElementById('bs-dropdown-trigger');
-  const list    = document.getElementById('bs-dropdown-list');
-  if (trigger && !trigger.contains(e.target) && list && !list.contains(e.target)) {
-    state.catalog.bsDropdownOpen = false; render();
-  }
+  state.catalog.bsDropdownOpen = false; render();
 });
