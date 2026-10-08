@@ -320,8 +320,9 @@ function renderCatalogFilters() {
         <div class="filter-group" style="${activatePhaseActive ? '' : disabledStyle}">
           <label>Activate Phases</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div class="img-mode-switch" onclick="updateFilter('phaseMode',(state.filters.phaseMode||'merge')==='merge'?'intersect':'merge')" title="${(state.filters.phaseMode||'merge')==='merge'?'Merge (click to switch to Intersect)':'Intersect (click to switch to Merge)'}">
-              <img src="${(state.filters.phaseMode||'merge')==='merge'?'merge.png':'intersect.png'}" alt="${(state.filters.phaseMode||'merge')==='merge'?'Merge':'Intersect'}" />
+            <div class="bsb-switch">
+              <button class="${(state.filters.phaseMode||'merge')==='merge'?'active':''}" onclick="updateFilter('phaseMode','merge')"><img src="merge.png" alt="" />Merge</button>
+              <button class="${state.filters.phaseMode==='intersect'?'active':''}" onclick="updateFilter('phaseMode','intersect')"><img src="intersect.png" alt="" />Intersect</button>
             </div>
             ${(state.filters.phases||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('phases')">✕</button>` : ''}
           </div>
@@ -355,8 +356,9 @@ function renderCatalogFilters() {
         <div class="filter-group" style="${advancedActive ? '' : disabledStyle}">
           <label>Advanced LoB${showAdvancedBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Advanced)</span>'}</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div class="img-mode-switch" onclick="updateFilter('advancedLoSMode',(state.filters.advancedLoSMode||'merge')==='merge'?'intersect':'merge')" title="${(state.filters.advancedLoSMode||'merge')==='merge'?'Merge (click to switch to Intersect)':'Intersect (click to switch to Merge)'}">
-              <img src="${(state.filters.advancedLoSMode||'merge')==='merge'?'merge.png':'intersect.png'}" alt="${(state.filters.advancedLoSMode||'merge')==='merge'?'Merge':'Intersect'}" />
+            <div class="bsb-switch">
+              <button class="${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}" onclick="updateFilter('advancedLoSMode','merge')"><img src="merge.png" alt="" />Merge</button>
+              <button class="${state.filters.advancedLoSMode==='intersect'?'active':''}" onclick="updateFilter('advancedLoSMode','intersect')"><img src="intersect.png" alt="" />Intersect</button>
             </div>
             ${(state.filters.advancedLoS||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('advancedLoS')">✕</button>` : ''}
           </div>
@@ -372,8 +374,9 @@ function renderCatalogFilters() {
         <div class="filter-group" style="${foundationalActive ? '' : disabledStyle}">
           <label>Foundation subcategories${showFoundationalBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Foundation)</span>'}</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div class="img-mode-switch" onclick="updateFilter('foundationalCatsMode',(state.filters.foundationalCatsMode||'merge')==='merge'?'intersect':'merge')" title="${(state.filters.foundationalCatsMode||'merge')==='merge'?'Merge (click to switch to Intersect)':'Intersect (click to switch to Merge)'}">
-              <img src="${(state.filters.foundationalCatsMode||'merge')==='merge'?'merge.png':'intersect.png'}" alt="${(state.filters.foundationalCatsMode||'merge')==='merge'?'Merge':'Intersect'}" />
+            <div class="bsb-switch">
+              <button class="${(state.filters.foundationalCatsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('foundationalCatsMode','merge')"><img src="merge.png" alt="" />Merge</button>
+              <button class="${state.filters.foundationalCatsMode==='intersect'?'active':''}" onclick="updateFilter('foundationalCatsMode','intersect')"><img src="intersect.png" alt="" />Intersect</button>
             </div>
             ${(state.filters.foundationalCats||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('foundationalCats')">✕</button>` : ''}
           </div>
@@ -450,7 +453,7 @@ function renderCatalogResults() {
           <th style="cursor:default;user-select:none">
             <div style="display:flex;align-items:center;gap:0.5rem">
               ${bsSelected ? `
-              <div class="mode-switch" style="margin-bottom:0" onclick="event.stopPropagation()">
+              <div class="bsb-switch" onclick="event.stopPropagation()">
                 <button class="${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType','catalog')">Catalogue</button>
                 <button class="${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType','deck')">Deck</button>
               </div>` : ''}

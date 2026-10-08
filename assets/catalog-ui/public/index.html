@@ -93,6 +93,8 @@
       box-shadow: 0 0 0 2px rgba(0,112,242,0.15);
     }
     input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
+    select:disabled, input:disabled { background: #f4f5f6; color: #8696A9; border-color: #d0d5dd; cursor: not-allowed; opacity: 1; }
+    .fl-field select:disabled ~ label, .fl-field input:disabled ~ label { color: #8696A9; }
     .filter-hint { font-size: 0.7rem; color: #8696A9; margin-top: 2px; }
     .upload-area { border: 2px dashed #c0c0c0; border-radius: 8px; padding: 2rem; text-align: center; cursor: pointer; transition: border-color 0.2s; }
     .upload-area:hover { border-color: var(--sap-brand-color); }
@@ -160,11 +162,25 @@
       .filter-more-btn { display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 1rem; border: none; background: none; color: var(--sap-brand-color); font-size: 0.875rem; font-weight: 600; cursor: pointer; }
     }
     /* ─────────────────────────────────────────────────────────────────────── */
-    /* ── Image mode switch (Merge / Intersect) ────────────────────────────── */
-    .img-mode-switch { display:inline-flex; cursor:pointer; border-radius:6px; overflow:hidden; border:2px solid transparent; transition:border-color 0.15s, box-shadow 0.15s; }
-    .img-mode-switch:hover { border-color: var(--sap-brand-color); box-shadow: 0 0 0 2px rgba(0,112,242,0.15); }
-    .img-mode-switch img { display:block; width:28px; height:28px; object-fit:contain; }
-    /* ── Mode switch (Merge / Intersect) ──────────────────────────────────── */
+    /* ── BSB-style pill switch (Merge/Intersect + Catalogue/Deck) ─────────── */
+    .bsb-switch {
+      display: inline-flex; align-items: stretch;
+      border: 1px solid #0070F2; border-radius: 2rem; overflow: hidden;
+      background: #fff; cursor: pointer; user-select: none;
+    }
+    .bsb-switch button {
+      border: none; background: transparent; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+      padding: 4px 12px; font-size: 0.72rem; font-weight: 600;
+      color: #556B82; transition: background 0.15s, color 0.15s;
+      white-space: nowrap; line-height: 1;
+    }
+    .bsb-switch button img { width: 18px; height: 18px; object-fit: contain; filter: invert(35%) sepia(10%) saturate(500%) hue-rotate(180deg); transition: filter 0.15s; }
+    .bsb-switch button.active { background: #0070F2; color: #fff; }
+    .bsb-switch button.active img { filter: brightness(0) invert(1); }
+    .bsb-switch button:not(.active):hover { background: #EBF2FF; color: #0070F2; }
+    /* ─────────────────────────────────────────────────────────────────────── */
+    /* ── Mode switch legacy (keep for any remaining uses) ─────────────────── */
     .mode-switch { display: flex; width: fit-content; align-items: center; background: #EBF2FF; border-radius: 2rem; padding: 2px; gap: 0; }
     .mode-switch button {
       border: none; background: transparent; border-radius: 2rem;
@@ -172,10 +188,7 @@
       color: #556B82; transition: background 0.18s, color 0.18s, box-shadow 0.18s;
       white-space: nowrap;
     }
-    .mode-switch button.active {
-      background: var(--sap-brand-color); color: #fff;
-      box-shadow: 0 1px 4px rgba(0,112,242,0.25);
-    }
+    .mode-switch button.active { background: var(--sap-brand-color); color: #fff; box-shadow: 0 1px 4px rgba(0,112,242,0.25); }
     .mode-switch button:not(.active):hover { background: #d6e8ff; color: #0070F2; }
     /* ─────────────────────────────────────────────────────────────────────── */
     .toggle-group { display: flex; border: 1px solid var(--sap-brand-color); border-radius: 4px; overflow: hidden; }
