@@ -16,7 +16,6 @@ applications:
       # SSC_BASE_URL: https://your-ssc-instance.com
       # SSC_API_KEY: your-api-key
       AGENT_BASE_URL: https://0db6e10f-4ebc5ed5.60726259.canary-eu1.ca.ai.cloud.sap
-      MCP_SECRET: sfsf!Fg09
     services:
       - ssc-catalog-xsuaa
       - ssc-catalog-db

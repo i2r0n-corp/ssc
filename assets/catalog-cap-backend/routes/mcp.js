@@ -1,24 +1,11 @@
 /**
  * MCP HTTP server — Model Context Protocol over HTTP+SSE
- * Mounted at /mcp — outside XSUAA guard (which only covers /api)
- * Protected by static secret: Authorization: Bearer <MCP_SECRET>
- *
- * Endpoints:
- *   GET  /mcp/sse      — SSE stream, server sends endpoint event then waits
- *   POST /mcp/message  — JSON-RPC 2.0 tool calls from client
+ * Mounted at /mcp — protected by XSUAA (same as /api) when deployed to CF.
+ * Locally (no VCAP_SERVICES) the endpoint is open.
  */
 
 const router = require('express').Router();
 const snapshot = require('../store/snapshot');
-
-// ── Auth ──────────────────────────────────────────────────────────────────────
-function requireMcpSecret(req, res, next) {
-  const secret = process.env.MCP_SECRET;
-  if (!secret) return next(); // not configured — open (dev mode)
-  const auth = req.headers['authorization'] || '';
-  if (auth !== `Bearer ${secret}`) return res.status(401).json({ error: 'Unauthorized' });
-  next();
-}
 
 // ── Tool definitions ──────────────────────────────────────────────────────────
 const TOOLS = [
@@ -236,7 +223,7 @@ async function handleRpc(body) {
 // Clients connect here to receive the endpoint URL, then POST to /mcp/message
 const sseClients = new Map();
 
-router.get('/sse', requireMcpSecret, (req, res) => {
+router.get('/sse', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -262,7 +249,7 @@ router.get('/sse', requireMcpSecret, (req, res) => {
 });
 
 // ── Message endpoint ──────────────────────────────────────────────────────────
-router.post('/message', requireMcpSecret, async (req, res) => {
+router.post('/message', async (req, res) => {
   const clientId = req.query.clientId;
   const sseRes = clientId ? sseClients.get(clientId) : null;
 
@@ -286,7 +273,7 @@ router.post('/message', requireMcpSecret, async (req, res) => {
 });
 
 // ── Simple HTTP fallback (for clients that don't use SSE) ─────────────────────
-router.post('/rpc', requireMcpSecret, async (req, res) => {
+router.post('/rpc', async (req, res) => {
   const body = req.body;
   if (!body || typeof body !== 'object') return res.status(400).json({ error: 'Invalid JSON-RPC body' });
   const isBatch = Array.isArray(body);
