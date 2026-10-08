@@ -253,7 +253,7 @@ function renderCatalogFilters() {
             <div style="display:flex;align-items:stretch;gap:0.4rem">
               <select id="filter-bs" ${!state.filters.businessScenario ? 'data-empty="true"' : ''}
                 onchange="updateFilter('businessScenario', this.value); this.dataset.empty = this.value ? 'false' : 'true'"
-                style="flex:1;min-width:0;padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid #c0c0c0;border-radius:4px;background:#fff;color:${state.filters.businessScenario?'#1D2D3E':'#9BA8B0'}">
+                style="flex:1;min-width:0;padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid #c0c0c0;border-radius:4px;background:#fff">
                 <option value=""></option>
                 ${uniqueBS.map(([code,,label]) => `<option value="${code}" ${state.filters.businessScenario===code?'selected':''}>${label}</option>`).join('')}
               </select>
