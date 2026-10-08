@@ -974,6 +974,11 @@ function renderPptxListSettingsModal() {
 
   const streamOn = s.cols.stream && bsActive;
 
+  const sectionLabel = 'font-weight:600;font-size:0.82rem;color:#1D2D3E;margin-bottom:0.5rem;margin-top:0.85rem';
+  const checkLabel   = 'display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem';
+  const checkLabelOff = 'display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;opacity:0.45;cursor:not-allowed;color:#9BA8B0;';
+  const tip = (text) => `<span title="${text}" style="display:inline-flex;align-items:center;justify-content:center;width:0.82rem;height:0.82rem;border-radius:50%;background:#1D6FA4;color:#fff;font-size:0.6rem;font-weight:700;cursor:default;flex-shrink:0;line-height:1">?</span>`;
+
   const streamOptions = bsActive ? `
     <div style="display:flex;flex-direction:column;gap:0.35rem">
       <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
@@ -994,11 +999,6 @@ function renderPptxListSettingsModal() {
         style="margin-left:1.5rem;width:calc(100% - 1.5rem);padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid #8696A9;border-radius:4px"
         placeholder="Custom stream label (max 64 chars)"/>` : ''}
     </div>` : '';
-
-  const sectionLabel = 'font-weight:600;font-size:0.82rem;color:#1D2D3E;margin-bottom:0.5rem;margin-top:0.85rem';
-  const checkLabel   = 'display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem';
-  const checkLabelOff = 'display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;opacity:0.45;cursor:not-allowed;color:#9BA8B0;';
-  const tip = (text) => `<span title="${text}" style="display:inline-flex;align-items:center;justify-content:center;width:0.82rem;height:0.82rem;border-radius:50%;background:#1D6FA4;color:#fff;font-size:0.6rem;font-weight:700;cursor:default;flex-shrink:0;line-height:1">?</span>`;
 
   return `
   <div class="modal-overlay" onclick="if(event.target===this)closePptxListSettings()">
