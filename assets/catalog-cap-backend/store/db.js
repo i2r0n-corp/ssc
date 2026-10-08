@@ -189,7 +189,8 @@ CREATE TABLE IF NOT EXISTS catalog_export_log (
   pptx_year_borders   BOOLEAN,
   pptx_group_by_et    BOOLEAN,
   pptx_use_deck_name  BOOLEAN,
-  pptx_truncate_obj   BOOLEAN
+  pptx_truncate_obj   BOOLEAN,
+  pptx_switch_types   BOOLEAN
 );
 CREATE INDEX IF NOT EXISTS idx_export_log_logged_at  ON catalog_export_log(logged_at DESC);
 CREATE INDEX IF NOT EXISTS idx_export_log_logon_name ON catalog_export_log(logon_name);
@@ -253,6 +254,7 @@ async function initSchema() {
     await client.query(`ALTER TABLE catalog_export_log ADD COLUMN IF NOT EXISTS pptx_group_by_et BOOLEAN`);
     await client.query(`ALTER TABLE catalog_export_log ADD COLUMN IF NOT EXISTS pptx_use_deck_name BOOLEAN`);
     await client.query(`ALTER TABLE catalog_export_log ADD COLUMN IF NOT EXISTS pptx_truncate_obj BOOLEAN`);
+    await client.query(`ALTER TABLE catalog_export_log ADD COLUMN IF NOT EXISTS pptx_switch_types BOOLEAN`);
     console.log('[db] Schema initialised');
   } finally {
     client.release();
@@ -282,20 +284,20 @@ async function transaction(fn) {
 }
 
 async function logExport({ userId, logonName, exportType, serviceCount, filterBs, filterEt, filterModules, filterQuery,
-  pptxTitle, pptxCols, pptxStreamMode, pptxStreamCustom, pptxYearFrom, pptxYearTo, pptxYearBorders, pptxGroupByEt, pptxUseDeckName, pptxTruncateObj }) {
+  pptxTitle, pptxCols, pptxStreamMode, pptxStreamCustom, pptxYearFrom, pptxYearTo, pptxYearBorders, pptxGroupByEt, pptxUseDeckName, pptxTruncateObj, pptxSwitchTypes }) {
   try {
     await query(
       `INSERT INTO catalog_export_log
         (user_id, logon_name, export_type, service_count, filter_bs, filter_et, filter_modules, filter_query,
          pptx_title, pptx_cols, pptx_stream_mode, pptx_stream_custom, pptx_year_from, pptx_year_to,
-         pptx_year_borders, pptx_group_by_et, pptx_use_deck_name, pptx_truncate_obj)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+         pptx_year_borders, pptx_group_by_et, pptx_use_deck_name, pptx_truncate_obj, pptx_switch_types)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
       [userId || null, logonName || null, exportType, serviceCount || 0,
        filterBs || null, filterEt || null, filterModules || null, filterQuery || null,
        pptxTitle || null, pptxCols ? JSON.stringify(pptxCols) : null,
        pptxStreamMode || null, pptxStreamCustom || null,
        pptxYearFrom || null, pptxYearTo || null,
-       pptxYearBorders ?? null, pptxGroupByEt ?? null, pptxUseDeckName ?? null, pptxTruncateObj ?? null]
+       pptxYearBorders ?? null, pptxGroupByEt ?? null, pptxUseDeckName ?? null, pptxTruncateObj ?? null, pptxSwitchTypes ?? null]
     );
   } catch (e) {
     console.error('[export-log] Failed to write log entry:', e.message);

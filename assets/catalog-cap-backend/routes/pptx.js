@@ -192,6 +192,7 @@ router.post('/generatePptx', async (req, res) => {
         streamCustom:       opts.streamCustom || '',
         truncateObjectives: !!opts.truncateObjectives,
         yearBorders:        !!opts.yearBorders,
+        switchTypes:        !!opts.switchTypes,
       });
       fs.writeFileSync(filePath, buf);
 
@@ -232,6 +233,7 @@ router.post('/generatePptx', async (req, res) => {
       pptxGroupByEt:    opts.groupByET       ?? null,
       pptxUseDeckName:  opts.useDeckName     ?? null,
       pptxTruncateObj:  opts.truncateObjectives ?? null,
+      pptxSwitchTypes:  opts.switchTypes     ?? null,
     });
 
     console.log(`[M4.achieved]: PPTX generated — template="${templateName}" service_count=${services.length} file_size_kb=${fileSizeKb}`);

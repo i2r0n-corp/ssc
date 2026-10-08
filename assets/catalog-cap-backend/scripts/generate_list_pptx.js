@@ -265,8 +265,8 @@ function buildHeaderRows(cols, objW, yearCount, yearFrom, yearBorders) {
   let cells = '';
   if (cols.stream)    cells += headerCell('Stream');
   if (cols.phases)    cells += headerCell('Activate Phase');
-  if (cols.component) cells += headerCell('Service Component');
-  if (cols.tier)      cells += headerCell('Tier');
+  if (cols.component) cells += headerCell('Service Name');
+  if (cols.tier)      cells += headerCell('Type');
   cells += headerCell('Objectives', undefined, yearCount > 0 && yearBorders);
   for (let i = 0; i < yearCount; i++) {
     cells += yearBorders
@@ -366,6 +366,7 @@ function generateListPptxBuffer(services, opts = {}) {
   const truncateObj  = !!opts.truncateObjectives;
   const bsName       = opts.bsName || '';
   const yearBorders  = !!opts.yearBorders;
+  const switchTypes  = !!opts.switchTypes;
 
   // Column visibility — all on by default
   const cols = {
@@ -450,9 +451,11 @@ function generateListPptxBuffer(services, opts = {}) {
     const allPhases = PHASE_ORDER.every(p => phases.includes(p));
     const phasesText = allPhases ? 'All' : phases.join(', ');
     const objText = cols.objectives ? stripHtml(getObjectives(svc)) : '';
-    const tierLabel = (svc.engagement_type || '').includes('Enterprise Support')
-      ? 'Foundational'
-      : (ET_LABEL[svc.engagement_type] || svc.engagement_type || '');
+    const tierLabel = switchTypes
+      ? (ET_LABEL_PREMIUM[svc.engagement_type] || svc.engagement_type || '')
+      : ((svc.engagement_type || '').includes('Enterprise Support')
+          ? 'Foundational'
+          : (ET_LABEL[svc.engagement_type] || svc.engagement_type || ''));
 
     // Row height = max across all columns that can wrap
     const minH = LINE_H_EMU + PAD_T + PAD_B;
@@ -608,6 +611,7 @@ function generateListPptxBuffer(services, opts = {}) {
 }
 
 const ET_LABEL = {'Max Success Plan':'Max','Advanced Success Plan':'Advanced','Enterprise Support':'Foundational','Embedded Launch Activities':'Foundational','Cloud Prepackaged Services':'Foundational'};
+const ET_LABEL_PREMIUM = {'Max Success Plan':'Premium Service','Advanced Success Plan':'Service Entitlement','Enterprise Support':'Service Entitlement','Embedded Launch Activities':'Service Entitlement','Cloud Prepackaged Services':'Service Entitlement'};
 
 module.exports = { generateListPptxBuffer };
 
