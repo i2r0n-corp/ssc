@@ -546,7 +546,7 @@ router.get('/metadata', async (req, res) => {
 
       const [syncRes, bsRes, modRes, etRes, phaseRes, supercatRes, maxTopicRes] = await Promise.all([
         db.query('SELECT last_updated, service_count FROM catalog_sync ORDER BY id DESC LIMIT 1'),
-        db.query('SELECT code, name FROM catalog_services WHERE service_object=\'Business Scenario\' ORDER BY name'),
+        db.query('SELECT code, name, raw_data->>\'url\' AS url FROM catalog_services WHERE service_object=\'Business Scenario\' ORDER BY name'),
         db.query('SELECT h.parent_code AS bs_code, s.code AS mod_code, s.name AS mod_name FROM catalog_hierarchy h JOIN catalog_services s ON s.code = h.child_code WHERE s.service_object = \'Business Scenario module\' ORDER BY h.position'),
         db.query('SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key=\'engagementType\' ORDER BY feature_value'),
         db.query('SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key=\'sapActivateProjectPhase\' ORDER BY feature_value'),
@@ -555,8 +555,11 @@ router.get('/metadata', async (req, res) => {
       ]);
 
       if (syncRes.rows.length) {
-        const bsMap = {}, moduleMap = {}, bsToMods = {};
-        for (const row of bsRes.rows) bsMap[row.code] = row.name;
+        const bsMap = {}, moduleMap = {}, bsToMods = {}, bsUrlMap = {};
+        for (const row of bsRes.rows) {
+          bsMap[row.code] = row.name;
+          if (row.url) bsUrlMap[row.code] = row.url;
+        }
         for (const row of modRes.rows) {
           moduleMap[row.mod_code] = row.mod_name;
           if (!bsToMods[row.bs_code]) bsToMods[row.bs_code] = [];
@@ -565,7 +568,7 @@ router.get('/metadata', async (req, res) => {
         return res.json({
           lastUpdated: syncRes.rows[0].last_updated,
           serviceCount: syncRes.rows[0].service_count,
-          bsMap, moduleMap, bsToMods,
+          bsMap, moduleMap, bsToMods, bsUrlMap,
           engagementTypes: etRes.rows.map(r => r.feature_value),
           phases: phaseRes.rows.map(r => r.feature_value),
           supercategories: supercatRes.rows.map(r => r.category_name),
@@ -583,12 +586,13 @@ router.get('/metadata', async (req, res) => {
     if (!data) return res.status(404).json({ error: 'No snapshot available' });
     const flatIndex = JSON.parse(data.payload).flat_index || {};
 
-    const bsMap = {}, moduleMap = {}, bsToMods = {};
+    const bsMap = {}, moduleMap = {}, bsToMods = {}, bsUrlMap = {};
     const etSet = new Set(), phaseSet = new Set(), supercatMap = {};
 
     for (const [code, svc] of Object.entries(flatIndex)) {
       if (svc.serviceObject === 'Business Scenario') {
         bsMap[code] = svc.name;
+        if (svc.url) bsUrlMap[code] = svc.url;
         bsToMods[code] = [];
         for (const modCode of svc.childServices || []) {
           const mod = flatIndex[modCode];
@@ -616,7 +620,7 @@ router.get('/metadata', async (req, res) => {
 
     res.json({
       lastUpdated: data.lastUpdated, serviceCount: data.serviceCount,
-      bsMap, moduleMap, bsToMods,
+      bsMap, moduleMap, bsToMods, bsUrlMap,
       engagementTypes: [...etSet].sort(),
       phases: [...phaseSet].sort(),
       supercategories: Object.keys(supercatMap).sort()
