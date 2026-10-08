@@ -261,9 +261,9 @@ function renderCatalogFilters() {
               const bsUrl = state.filters.businessScenario ? (state.catalog.bsUrlMap||{})[state.filters.businessScenario] : null;
               return bsUrl
                 ? `<a href="${bsUrl}" target="_blank" rel="noopener" title="Open in Service Catalog"
-                    style="flex-shrink:0;display:flex;align-items:center;justify-content:center;width:2.25rem;height:2.25rem;background:#0070F2;border-radius:4px;text-decoration:none;margin-bottom:0"><img src="url.png" style="height:15px;width:auto;filter:brightness(0) invert(1)" alt="" /></a>`
+                    style="flex-shrink:0;display:flex;align-items:center;justify-content:center;width:2.25rem;height:2.25rem;background:#0070F2;border-radius:4px;text-decoration:none;margin-bottom:0"><img src="url.png" style="height:15px;width:auto" alt="" /></a>`
                 : `<span title="Open in Service Catalog"
-                    style="flex-shrink:0;display:flex;align-items:center;justify-content:center;width:2.25rem;height:2.25rem;background:#d0d0d0;border-radius:4px;cursor:default;margin-bottom:0"><img src="url.png" style="height:15px;width:auto;filter:brightness(0) invert(1)" alt="" /></span>`;
+                    style="flex-shrink:0;display:flex;align-items:center;justify-content:center;width:2.25rem;height:2.25rem;background:#d0d0d0;border-radius:4px;cursor:default;margin-bottom:0"><img src="url.png" style="height:15px;width:auto" alt="" /></span>`;
             })()}
           </div>
 
