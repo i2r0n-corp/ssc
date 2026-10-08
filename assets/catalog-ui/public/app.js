@@ -1639,7 +1639,6 @@ function render() {
     case 'admin':     content = renderAdminPage(); break;
     default:          content = renderCatalogPage();
   }
-  }
 
   app.innerHTML = `
     <div class="shell-top">
