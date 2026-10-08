@@ -39,8 +39,7 @@ router.post('/chat', async (req, res) => {
     const lib = agentUrl.protocol === 'https:' ? https : http;
 
     // Forward Authorization header if present (SAP AI Core needs JWT)
-    const authHeader = req.headers['authorization'] || '';
-
+  
     const reply = await new Promise((resolve, reject) => {
       const options = {
         hostname: agentUrl.hostname,
@@ -49,8 +48,7 @@ router.post('/chat', async (req, res) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(a2aBody),
-          ...(authHeader ? { Authorization: authHeader } : {})
+          'Content-Length': Buffer.byteLength(a2aBody)
         }
       };
 
