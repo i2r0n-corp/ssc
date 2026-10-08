@@ -12,7 +12,8 @@
   ],
   "oauth2-configuration": {
     "redirect-uris": [
-      "https://ssc-catalog-ui.cfapps.us10-001.hana.ondemand.com/**"
+      "https://ssc-catalog-ui.cfapps.us10-001.hana.ondemand.com/**",
+      "http://localhost:18766/**"
     ],
     "grant-types": ["authorization_code", "client_credentials", "refresh_token"]
   }

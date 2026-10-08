@@ -1,11 +1,72 @@
 /**
  * MCP HTTP server — Model Context Protocol over HTTP+SSE
- * Mounted at /mcp — protected by XSUAA (same as /api) when deployed to CF.
- * Locally (no VCAP_SERVICES) the endpoint is open.
+ * Mounted at /mcp — protected by MCP_SECRET env var.
+ * Also proxies OAuth authorize/token to XSUAA so Joule can do PKCE flow.
  */
 
 const router = require('express').Router();
 const snapshot = require('../store/snapshot');
+const https = require('https');
+const http = require('http');
+
+// ── XSUAA base URL (from VCAP or env) ────────────────────────────────────────
+function getXsuaaUrl() {
+  if (process.env.VCAP_SERVICES) {
+    try {
+      const vcap = JSON.parse(process.env.VCAP_SERVICES);
+      const creds = (vcap['xsuaa'] || vcap['user-provided'] || [])[0]?.credentials;
+      if (creds?.url) return creds.url;
+    } catch {}
+  }
+  return process.env.XSUAA_URL || '';
+}
+
+// ── OAuth proxy — /mcp/authorize → XSUAA /oauth/authorize ────────────────────
+router.get('/authorize', (req, res) => {
+  const base = getXsuaaUrl();
+  if (!base) return res.status(503).json({ error: 'XSUAA not configured' });
+  const params = new URLSearchParams(req.query).toString();
+  res.redirect(`${base}/oauth/authorize?${params}`);
+});
+
+// ── OAuth proxy — /mcp/token → XSUAA /oauth/token ────────────────────────────
+router.post('/token', (req, res) => {
+  const base = getXsuaaUrl();
+  if (!base) return res.status(503).json({ error: 'XSUAA not configured' });
+
+  const url = new URL(`${base}/oauth/token`);
+  const lib = url.protocol === 'https:' ? https : http;
+
+  let body = '';
+  if (req.body && typeof req.body === 'object' && !(req.body instanceof Buffer)) {
+    body = new URLSearchParams(req.body).toString();
+  } else if (Buffer.isBuffer(req.body)) {
+    body = req.body.toString();
+  } else if (typeof req.body === 'string') {
+    body = req.body;
+  }
+
+  const options = {
+    hostname: url.hostname,
+    port: url.port || 443,
+    path: url.pathname,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Length': Buffer.byteLength(body),
+      ...(req.headers['authorization'] ? { 'Authorization': req.headers['authorization'] } : {})
+    }
+  };
+
+  const proxyReq = lib.request(options, proxyRes => {
+    res.status(proxyRes.statusCode);
+    res.setHeader('Content-Type', proxyRes.headers['content-type'] || 'application/json');
+    proxyRes.pipe(res);
+  });
+  proxyReq.on('error', err => res.status(502).json({ error: err.message }));
+  proxyReq.write(body);
+  proxyReq.end();
+});
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function requireMcpSecret(req, res, next) {
