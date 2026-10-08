@@ -161,8 +161,8 @@ async function handleRpc(rpc, sessionId) {
   return { jsonrpc: '2.0', id, error: { code: -32601, message: `Method not found: ${method}` } };
 }
 
-// ── Streamable HTTP — POST /mcp ───────────────────────────────────────────────
-router.post('/', async (req, res) => {
+// ── Streamable HTTP — POST /mcp and /mcp/sse ─────────────────────────────────
+async function handlePost(req, res) {
   const auth = req.headers['authorization'] || '';
   if (!auth.startsWith('Bearer ')) {
     const host = req.headers['x-forwarded-host'] || req.headers.host || '';
@@ -202,10 +202,12 @@ router.post('/', async (req, res) => {
   if (newSessionId) res.setHeader('Mcp-Session-Id', newSessionId);
   res.setHeader('Content-Type', 'application/json');
   res.json(isBatch ? responses : responses[0]);
-});
+}
+router.post('/', handlePost);
+router.post('/sse', handlePost);
 
 // ── Streamable HTTP — GET /mcp (SSE stream for server→client) ─────────────────
-router.get('/', (req, res) => {
+function handleGet(req, res) {
   const auth = req.headers['authorization'] || '';
   if (!auth.startsWith('Bearer ')) {
     const host = req.headers['x-forwarded-host'] || req.headers.host || '';
@@ -229,7 +231,9 @@ router.get('/', (req, res) => {
     clearInterval(keepalive);
     if (session) session.sseStreams.delete(res);
   });
-});
+}
+router.get('/', handleGet);
+router.get('/sse', handleGet);
 
 // ── DELETE /mcp (session termination) ────────────────────────────────────────
 router.delete('/', (req, res) => {
