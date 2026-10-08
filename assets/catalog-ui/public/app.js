@@ -320,9 +320,8 @@ function renderCatalogFilters() {
         <div class="filter-group" style="${activatePhaseActive ? '' : disabledStyle}">
           <label>Activate Phases</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div class="mode-switch">
-              <button class="${(state.filters.phaseMode||'merge')==='merge'?'active':''}" onclick="updateFilter('phaseMode','merge')">Merge</button>
-              <button class="${state.filters.phaseMode==='intersect'?'active':''}" onclick="updateFilter('phaseMode','intersect')">Intersect</button>
+            <div class="img-mode-switch" onclick="updateFilter('phaseMode',(state.filters.phaseMode||'merge')==='merge'?'intersect':'merge')" title="${(state.filters.phaseMode||'merge')==='merge'?'Merge (click to switch to Intersect)':'Intersect (click to switch to Merge)'}">
+              <img src="${(state.filters.phaseMode||'merge')==='merge'?'merge.png':'intersect.png'}" alt="${(state.filters.phaseMode||'merge')==='merge'?'Merge':'Intersect'}" />
             </div>
             ${(state.filters.phases||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('phases')">✕</button>` : ''}
           </div>
@@ -356,9 +355,8 @@ function renderCatalogFilters() {
         <div class="filter-group" style="${advancedActive ? '' : disabledStyle}">
           <label>Advanced LoB${showAdvancedBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Advanced)</span>'}</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div class="mode-switch">
-              <button class="${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}" onclick="updateFilter('advancedLoSMode','merge')">Merge</button>
-              <button class="${state.filters.advancedLoSMode==='intersect'?'active':''}" onclick="updateFilter('advancedLoSMode','intersect')">Intersect</button>
+            <div class="img-mode-switch" onclick="updateFilter('advancedLoSMode',(state.filters.advancedLoSMode||'merge')==='merge'?'intersect':'merge')" title="${(state.filters.advancedLoSMode||'merge')==='merge'?'Merge (click to switch to Intersect)':'Intersect (click to switch to Merge)'}">
+              <img src="${(state.filters.advancedLoSMode||'merge')==='merge'?'merge.png':'intersect.png'}" alt="${(state.filters.advancedLoSMode||'merge')==='merge'?'Merge':'Intersect'}" />
             </div>
             ${(state.filters.advancedLoS||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('advancedLoS')">✕</button>` : ''}
           </div>
@@ -374,9 +372,8 @@ function renderCatalogFilters() {
         <div class="filter-group" style="${foundationalActive ? '' : disabledStyle}">
           <label>Foundation subcategories${showFoundationalBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Foundation)</span>'}</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <div class="mode-switch">
-              <button class="${(state.filters.foundationalCatsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('foundationalCatsMode','merge')">Merge</button>
-              <button class="${state.filters.foundationalCatsMode==='intersect'?'active':''}" onclick="updateFilter('foundationalCatsMode','intersect')">Intersect</button>
+            <div class="img-mode-switch" onclick="updateFilter('foundationalCatsMode',(state.filters.foundationalCatsMode||'merge')==='merge'?'intersect':'merge')" title="${(state.filters.foundationalCatsMode||'merge')==='merge'?'Merge (click to switch to Intersect)':'Intersect (click to switch to Merge)'}">
+              <img src="${(state.filters.foundationalCatsMode||'merge')==='merge'?'merge.png':'intersect.png'}" alt="${(state.filters.foundationalCatsMode||'merge')==='merge'?'Merge':'Intersect'}" />
             </div>
             ${(state.filters.foundationalCats||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('foundationalCats')">✕</button>` : ''}
           </div>
@@ -408,8 +405,7 @@ function renderCatalogResults() {
   const { loading } = state.catalog;
   const hasSearched = state.catalog.hasSearched;
   const et = state.filters.engagementType;
-  const namingDisabled = et === 'Max Success Plan' || !state.filters.businessScenario;
-  const namingStyle = namingDisabled ? 'opacity:0.4;pointer-events:none' : '';
+  const bsSelected = !!state.filters.businessScenario && et !== 'Max Success Plan';
   return `
     ${loading ? '<div class="loading"><div class="loading-spinner"></div> Loading...</div>' : ''}
     ${!hasSearched && !loading ? `
@@ -423,10 +419,6 @@ function renderCatalogResults() {
         <p>No services found. Try adjusting your filters.</p>
       </div>` : !loading ? `
     <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center;flex-wrap:wrap">
-      <div class="mode-switch" style="margin-bottom:0;${namingStyle}">
-        <button class="${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'catalog')">Catalog Name</button>
-        <button class="${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType', 'deck')">Deck Name</button>
-      </div>
       <span class="results-info" style="margin:0;flex:1">${state.filteredServices.length} service(s) found
         ${state.selectedServices.size > 0 ? ` — <strong>${state.selectedServices.size} selected</strong>` : ''}
         ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="margin-left:0.75rem;color:#155724;font-weight:600">Successfully downloaded</span>` : ''}
@@ -455,13 +447,19 @@ function renderCatalogResults() {
           <th style="width:2.5rem"><input type="checkbox" title="Select all / deselect all"
             ${state.filteredServices.length > 0 && state.filteredServices.every(s => state.selectedServices.has(s.code)) ? 'checked' : ''}
             onchange="toggleSelectAll(this.checked)" /></th>
-          <th style="cursor:pointer;user-select:none" onclick="toggleSort('name')">
-            Service Name ${state.sort.col==='name' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}
+          <th style="cursor:default;user-select:none">
+            <div style="display:flex;align-items:center;gap:0.5rem">
+              ${bsSelected ? `
+              <div class="mode-switch" style="margin-bottom:0" onclick="event.stopPropagation()">
+                <button class="${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType','catalog')">Catalogue</button>
+                <button class="${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType','deck')">Deck</button>
+              </div>` : ''}
+              <span style="cursor:pointer" onclick="toggleSort('name')">Service Name ${state.sort.col==='name' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}</span>
+            </div>
           </th>
-          <th style="cursor:pointer;user-select:none" onclick="toggleSort('et')">
+          <th style="cursor:pointer;user-select:none;width:30%" onclick="toggleSort('et')">
             Engagement Type ${state.sort.col==='et' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}
           </th>
-          <th>Code</th>
         </tr>
       </thead>
       <tbody>
@@ -486,11 +484,10 @@ function renderCatalogResults() {
             <td><input type="checkbox" ${state.selectedServices.has(svc.code)?'checked':''} onchange="toggleSelect('${svc.code}')" /></td>
             <td>
               <a href="#" onclick="openServiceDetail('${svc.code}');return false"
-                style="color:#0070F2;text-decoration:none;font-weight:700">${displayName}</a>
+                style="color:#0070F2;text-decoration:none">${displayName}</a>
               ${subName ? `<div style="font-size:0.75rem;color:#6a6a6a">${subName}</div>` : ''}
             </td>
             <td>${engagementBadge(svc.engagementType)}</td>
-            <td style="font-size:0.75rem;color:#6a6a6a">${svc.code}</td>
           </tr>`;
         }).join('');
         })()}

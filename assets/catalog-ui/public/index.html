@@ -160,6 +160,10 @@
       .filter-more-btn { display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 1rem; border: none; background: none; color: var(--sap-brand-color); font-size: 0.875rem; font-weight: 600; cursor: pointer; }
     }
     /* ─────────────────────────────────────────────────────────────────────── */
+    /* ── Image mode switch (Merge / Intersect) ────────────────────────────── */
+    .img-mode-switch { display:inline-flex; cursor:pointer; border-radius:6px; overflow:hidden; border:2px solid transparent; transition:border-color 0.15s, box-shadow 0.15s; }
+    .img-mode-switch:hover { border-color: var(--sap-brand-color); box-shadow: 0 0 0 2px rgba(0,112,242,0.15); }
+    .img-mode-switch img { display:block; width:28px; height:28px; object-fit:contain; }
     /* ── Mode switch (Merge / Intersect) ──────────────────────────────────── */
     .mode-switch { display: flex; width: fit-content; align-items: center; background: #EBF2FF; border-radius: 2rem; padding: 2px; gap: 0; }
     .mode-switch button {
