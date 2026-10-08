@@ -231,8 +231,16 @@ async function handleRpc(body) {
 // Clients connect here to receive the endpoint URL, then POST to /mcp/message
 const sseClients = new Map();
 
-// Joule POSTs to /sse first to initialize — handle as JSON-RPC
+// Joule POSTs to /sse first to initialize — if no auth token, return 401 with WWW-Authenticate
 router.post('/sse', async (req, res) => {
+  const auth = req.headers['authorization'] || '';
+  if (!auth.startsWith('Bearer ')) {
+    const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+    const proto = req.headers['x-forwarded-proto'] || 'https';
+    const base = `${proto}://${host}`;
+    res.setHeader('WWW-Authenticate', `Bearer realm="${base}", authorization_uri="${base}/authorize"`);
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   const body = req.body;
   if (!body || typeof body !== 'object') return res.status(400).json({ error: 'Invalid body' });
   const isBatch = Array.isArray(body);
