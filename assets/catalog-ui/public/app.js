@@ -35,9 +35,12 @@ let state = {
   chat: { messages: [], loading: false, input: '' },
   exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null, sortCol: 'logged_at', sortDir: 'desc' },
   currentUser: null,
+  myPermissions: { catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false },
+  admin: { users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null },
   accessDeniedModal: false,
   backendDown: false,
   exportTotal: null,
+  sessionId: Math.random().toString(36).slice(2),
 };
 
 function saveCart() {
@@ -312,7 +315,11 @@ function renderCatalogFilters() {
             ${(state.filters.phases||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('phases')">✕</button>` : ''}
           </div>
           <div class="check-panel">
-            ${phases.map(p => `<label>
+            ${[...phases].sort((a,b) => {
+              const ORDER = ['Prepare','Discover','Explore','Realize','Deploy','Run'];
+              const ai = ORDER.indexOf(a), bi = ORDER.indexOf(b);
+              return (ai===-1?99:ai) - (bi===-1?99:bi);
+            }).map(p => `<label>
               <input type="checkbox" value="${p}" ${(state.filters.phases||[]).includes(p)?'checked':''}
                 onchange="updateCheckboxFilter('phases', '${p}', this.checked)" />
               ${p}</label>`).join('')}
@@ -649,8 +656,9 @@ function renderChatPage() {
 // ── Event handlers ─────────────────────────────────────────────────────────────
 
 window.navigate = function(page) {
-  const isAdmin = state.currentUser === 'aituar.aubakirov@sap.com';
-  if (!isAdmin && (page === 'debug' || page === 'exportlog')) {
+  const p = state.myPermissions;
+  const allowed = { catalog: p.catalog, incidents: p.incidents, chat: p.chat, debug: p.debug, exportlog: p.exportlog, admin: p.admin };
+  if (!allowed[page]) {
     state.accessDeniedModal = true;
     render();
     return;
@@ -660,6 +668,9 @@ window.navigate = function(page) {
   if (page === 'catalog' && state.catalog.services.length === 0) loadCatalog();
   if (page === 'debug') loadDebugLog();
   if (page === 'exportlog') loadExportLog();
+  if (page === 'admin') { loadAdminUsers(); loadAdminVisitorLog(); }
+  // Log page visit
+  apiFetch(`${CAP_BACKEND_URL}/api/catalog/visitor`, { method: 'POST', body: JSON.stringify({ page, sessionId: state.sessionId }) }).catch(() => {});
 };
 
 window.updateFilter = function(key, value) {
@@ -1462,15 +1473,161 @@ function renderExportLogDetailModal() {
   </div>`;
 }
 
+// ── Admin handlers ────────────────────────────────────────────────────────────
+
+async function loadAdminUsers() {
+  state.admin.usersLoading = true; state.admin.usersError = null; render();
+  try {
+    const data = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/users`);
+    state.admin.users = data.rows || [];
+  } catch (e) { state.admin.usersError = e.message; }
+  state.admin.usersLoading = false; render();
+}
+
+async function loadAdminVisitorLog() {
+  state.admin.visitorLoading = true; state.admin.visitorError = null; render();
+  try {
+    const data = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/visitor-log`);
+    state.admin.visitorLog = data.visits || [];
+    state.admin.visitorLastSeen = data.lastSeen || [];
+  } catch (e) { state.admin.visitorError = e.message; }
+  state.admin.visitorLoading = false; render();
+}
+
+window.adminSetPerm = async function(email, tab, value) {
+  const user = state.admin.users.find(u => u.email === email);
+  if (!user) return;
+  user[`tab_${tab}`] = value;
+  render();
+  try {
+    await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/users`, {
+      method: 'POST',
+      body: JSON.stringify({ email: user.email, tab_catalog: user.tab_catalog, tab_incidents: user.tab_incidents, tab_chat: user.tab_chat, tab_debug: user.tab_debug, tab_exportlog: user.tab_exportlog, tab_admin: user.tab_admin })
+    });
+  } catch (e) { state.admin.usersError = e.message; render(); }
+};
+
+window.adminAddUser = async function() {
+  const email = (state.admin.newEmail || '').trim().toLowerCase();
+  if (!email || !email.includes('@')) return;
+  try {
+    await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/users`, {
+      method: 'POST',
+      body: JSON.stringify({ email, tab_catalog: true, tab_incidents: false, tab_chat: false, tab_debug: false, tab_exportlog: false, tab_admin: false })
+    });
+    state.admin.newEmail = '';
+    await loadAdminUsers();
+  } catch (e) { state.admin.usersError = e.message; render(); }
+};
+
+window.adminDeleteUser = async function(email) {
+  if (!confirm(`Remove ${email}?`)) return;
+  try {
+    await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/users/${encodeURIComponent(email)}`, { method: 'DELETE' });
+    state.admin.users = state.admin.users.filter(u => u.email !== email);
+    render();
+  } catch (e) { state.admin.usersError = e.message; render(); }
+};
+
+function renderAdminPage() {
+  const { users, usersLoading, usersError, newEmail, visitorLog, visitorLastSeen, visitorLoading, visitorError } = state.admin;
+  const TABS = ['catalog','incidents','chat','debug','exportlog','admin'];
+  const TAB_LABELS = { catalog:'Catalogue', incidents:'Incidents', chat:'Chat', debug:'Debug', exportlog:'Export Log', admin:'Admin' };
+  const fmtDate = iso => new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+
+  const sel = (email, tab, val) =>
+    `<select style="font-size:0.75rem;padding:2px 4px;border:1px solid #ccc;border-radius:3px;background:${val?'#d4edda':'#f8d7da'}"
+       onchange="window.adminSetPerm('${email}','${tab}',this.value==='true')">
+       <option value="true" ${val?'selected':''}>Yes</option>
+       <option value="false" ${val?'':'selected'}>No</option>
+     </select>`;
+
+  return `
+  <div class="card" style="margin-bottom:1.5rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h3 style="margin:0;font-size:1rem">User Permissions</h3>
+      <button class="btn btn-secondary btn-sm" onclick="loadAdminUsers()">↻ Refresh</button>
+    </div>
+    ${usersError ? `<div class="error-strip">⚠ ${usersError}</div>` : ''}
+    ${usersLoading ? `<div style="color:#6a6a6a;padding:1rem;text-align:center">Loading…</div>` : `
+    <div style="overflow-x:auto">
+      <table class="service-table" style="font-size:0.8rem;min-width:700px">
+        <thead>
+          <tr>
+            <th>Email</th>
+            ${TABS.map(t => `<th style="text-align:center">${TAB_LABELS[t]}</th>`).join('')}
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${users.map(u => `<tr>
+            <td style="white-space:nowrap">${u.email}</td>
+            ${TABS.map(t => `<td style="text-align:center">${sel(u.email, t, u['tab_'+t])}</td>`).join('')}
+            <td><button class="btn btn-secondary btn-sm" style="color:#dc3545" onclick="window.adminDeleteUser('${u.email}')">✕</button></td>
+          </tr>`).join('')}
+          <tr style="background:#f7f8f9">
+            <td><input type="text" placeholder="new@email.com" value="${newEmail}"
+              oninput="state.admin.newEmail=this.value"
+              style="width:100%;padding:0.3rem 0.5rem;font-size:0.8rem;border:1px solid #8696A9;border-radius:4px"
+              onkeydown="if(event.key==='Enter')window.adminAddUser()"/></td>
+            <td colspan="${TABS.length}"></td>
+            <td><button class="btn btn-primary btn-sm" onclick="window.adminAddUser()">+ Add</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`}
+  </div>
+
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h3 style="margin:0;font-size:1rem">Visitor Log</h3>
+      <button class="btn btn-secondary btn-sm" onclick="loadAdminVisitorLog()">↻ Refresh</button>
+    </div>
+    ${visitorError ? `<div class="error-strip">⚠ ${visitorError}</div>` : ''}
+    ${visitorLoading ? `<div style="color:#6a6a6a;padding:1rem;text-align:center">Loading…</div>` : `
+    <div style="margin-bottom:1.5rem">
+      <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem">Last Seen per User</div>
+      <table class="service-table" style="font-size:0.8rem">
+        <thead><tr><th>Email</th><th>Last Seen</th><th style="text-align:center">Total Visits</th></tr></thead>
+        <tbody>
+          ${visitorLastSeen.map(r => `<tr>
+            <td>${r.logon_name}</td>
+            <td style="white-space:nowrap">${fmtDate(r.last_seen)}</td>
+            <td style="text-align:center">${r.visit_count}</td>
+          </tr>`).join('') || '<tr><td colspan="3" style="color:#6a6a6a;text-align:center">No visits yet</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem">Recent Page Visits (last 1000)</div>
+      <table class="service-table" style="font-size:0.8rem">
+        <thead><tr><th>Date / Time</th><th>Email</th><th>Page</th><th>Session</th></tr></thead>
+        <tbody>
+          ${visitorLog.map(r => `<tr>
+            <td style="white-space:nowrap">${fmtDate(r.visited_at)}</td>
+            <td>${r.logon_name}</td>
+            <td>${r.page || '—'}</td>
+            <td style="font-size:0.7rem;color:#6a6a6a">${r.session_id || '—'}</td>
+          </tr>`).join('') || '<tr><td colspan="4" style="color:#6a6a6a;text-align:center">No visits yet</td></tr>'}
+        </tbody>
+      </table>
+    </div>`}
+  </div>`;
+}
+
 function render() {
   const app = document.getElementById('app');
   if (!app) return;
 
-  const pages = [
-    { id: 'catalog',   label: 'Catalogue Browser' },
-    { id: 'debug',     label: 'Matching Debug' },
-    { id: 'exportlog', label: 'Export Log' },
+  const allPages = [
+    { id: 'catalog',   label: 'Catalogue Browser', perm: 'catalog' },
+    { id: 'incidents', label: 'Incident Analysis',  perm: 'incidents' },
+    { id: 'chat',      label: 'Chat',               perm: 'chat' },
+    { id: 'debug',     label: 'Matching Debug',     perm: 'debug' },
+    { id: 'exportlog', label: 'Export Log',         perm: 'exportlog' },
+    { id: 'admin',     label: 'Admin',              perm: 'admin' },
   ];
+  const pages = allPages.filter(p => state.myPermissions[p.perm]);
 
   let content = '';
   switch (state.currentPage) {
@@ -1479,6 +1636,9 @@ function render() {
     case 'chat':      content = renderChatPage(); break;
     case 'debug':     content = renderDebugPage(); break;
     case 'exportlog': content = renderExportLogPage(); break;
+    case 'admin':     content = renderAdminPage(); break;
+    default:          content = renderCatalogPage();
+  }
   }
 
   app.innerHTML = `
@@ -1548,8 +1708,19 @@ function render() {
 render();
 loadCatalog();
 apiFetch(`${CAP_BACKEND_URL}/api/catalog/whoami`)
-  .then(d => { state.currentUser = (d.logonName || '').toLowerCase(); render(); })
+  .then(d => {
+    state.currentUser = (d.logonName || '').toLowerCase();
+    render();
+  })
+  .catch(() => {});
+apiFetch(`${CAP_BACKEND_URL}/api/catalog/my-permissions`)
+  .then(d => {
+    state.myPermissions = { catalog: !!d.catalog, incidents: !!d.incidents, chat: !!d.chat, debug: !!d.debug, exportlog: !!d.exportlog, admin: !!d.admin };
+    render();
+  })
   .catch(() => {});
 apiFetch(`${CAP_BACKEND_URL}/api/catalog/export-stats`)
   .then(d => { state.exportTotal = d.total ?? null; render(); })
   .catch(() => {});
+// Log app load visit
+apiFetch(`${CAP_BACKEND_URL}/api/catalog/visitor`, { method: 'POST', body: JSON.stringify({ page: 'app-load', sessionId: state.sessionId }) }).catch(() => {});

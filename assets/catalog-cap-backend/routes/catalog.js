@@ -1083,6 +1083,7 @@ router.get('/injection-log', async (req, res) => {
 });
 
 const EXPORT_LOG_ALLOWED = ['aituar.aubakirov@sap.com'];
+const ADMIN_USERS = ['aituar.aubakirov@sap.com'];
 
 function getJwtPayload(req) {
   try {
@@ -1130,6 +1131,109 @@ router.get('/export-stats', async (req, res) => {
     res.json({ total: result.rows[0].total });
   } catch (e) {
     res.json({ total: null });
+  }
+});
+
+// ── Permissions ───────────────────────────────────────────────────────────────
+
+router.get('/my-permissions', async (req, res) => {
+  const payload = getJwtPayload(req);
+  const logonName = (payload?.user_name || payload?.email || '').toLowerCase();
+  const isAdmin = ADMIN_USERS.includes(logonName);
+  if (isAdmin) {
+    return res.json({ catalog: true, incidents: true, chat: true, debug: true, exportlog: true, admin: true });
+  }
+  try {
+    const db = require('../store/db');
+    const result = await db.query(
+      `SELECT tab_catalog, tab_incidents, tab_chat, tab_debug, tab_exportlog, tab_admin
+       FROM catalog_user_permissions WHERE email = $1`, [logonName]
+    );
+    if (result.rows.length === 0) {
+      return res.json({ catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false });
+    }
+    const r = result.rows[0];
+    res.json({ catalog: r.tab_catalog, incidents: r.tab_incidents, chat: r.tab_chat, debug: r.tab_debug, exportlog: r.tab_exportlog, admin: r.tab_admin });
+  } catch (e) {
+    res.json({ catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false });
+  }
+});
+
+// ── Visitor log ───────────────────────────────────────────────────────────────
+
+router.post('/visitor', async (req, res) => {
+  const payload = getJwtPayload(req);
+  const logonName = (payload?.user_name || payload?.email || '').toLowerCase() || null;
+  const { page, sessionId } = req.body || {};
+  const db = require('../store/db');
+  db.logVisit({ logonName, page: page || null, sessionId: sessionId || null });
+  res.json({ ok: true });
+});
+
+// ── Admin — user permissions management ──────────────────────────────────────
+
+function requireAdmin(req, res, next) {
+  const payload = getJwtPayload(req);
+  const logonName = (payload?.user_name || payload?.email || '').toLowerCase();
+  if (!ADMIN_USERS.includes(logonName)) return res.status(403).json({ error: 'Forbidden' });
+  next();
+}
+
+router.get('/admin/users', requireAdmin, async (req, res) => {
+  try {
+    const db = require('../store/db');
+    const result = await db.query(
+      `SELECT email, tab_catalog, tab_incidents, tab_chat, tab_debug, tab_exportlog, tab_admin, created_at, updated_at
+       FROM catalog_user_permissions ORDER BY email`
+    );
+    res.json({ rows: result.rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/admin/users', requireAdmin, async (req, res) => {
+  const { email, tab_catalog, tab_incidents, tab_chat, tab_debug, tab_exportlog, tab_admin } = req.body || {};
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
+    return res.status(400).json({ error: 'Valid email required' });
+  }
+  try {
+    const db = require('../store/db');
+    await db.query(
+      `INSERT INTO catalog_user_permissions (email, tab_catalog, tab_incidents, tab_chat, tab_debug, tab_exportlog, tab_admin, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+       ON CONFLICT (email) DO UPDATE SET
+         tab_catalog=$2, tab_incidents=$3, tab_chat=$4, tab_debug=$5, tab_exportlog=$6, tab_admin=$7, updated_at=NOW()`,
+      [email.toLowerCase().trim(), !!tab_catalog, !!tab_incidents, !!tab_chat, !!tab_debug, !!tab_exportlog, !!tab_admin]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.delete('/admin/users/:email', requireAdmin, async (req, res) => {
+  try {
+    const db = require('../store/db');
+    await db.query(`DELETE FROM catalog_user_permissions WHERE email = $1`, [req.params.email]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/admin/visitor-log', requireAdmin, async (req, res) => {
+  try {
+    const db = require('../store/db');
+    const visits = await db.query(
+      `SELECT id, logon_name, page, session_id, visited_at FROM catalog_visitor_log ORDER BY visited_at DESC LIMIT 1000`
+    );
+    const lastSeen = await db.query(
+      `SELECT logon_name, last_seen, visit_count FROM catalog_visitor_last_seen ORDER BY last_seen DESC`
+    );
+    res.json({ visits: visits.rows, lastSeen: lastSeen.rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

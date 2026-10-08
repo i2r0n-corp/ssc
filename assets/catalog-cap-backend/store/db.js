@@ -205,6 +205,34 @@ CREATE TABLE IF NOT EXISTS catalog_matching_steps (
   result      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_msteps_log_row_id ON catalog_matching_steps(log_row_id);
+
+CREATE TABLE IF NOT EXISTS catalog_user_permissions (
+  email         TEXT PRIMARY KEY,
+  tab_catalog   BOOLEAN NOT NULL DEFAULT true,
+  tab_incidents BOOLEAN NOT NULL DEFAULT false,
+  tab_chat      BOOLEAN NOT NULL DEFAULT false,
+  tab_debug     BOOLEAN NOT NULL DEFAULT false,
+  tab_exportlog BOOLEAN NOT NULL DEFAULT false,
+  tab_admin     BOOLEAN NOT NULL DEFAULT false,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS catalog_visitor_log (
+  id           BIGSERIAL PRIMARY KEY,
+  logon_name   TEXT NOT NULL,
+  page         TEXT,
+  session_id   TEXT,
+  visited_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_visitor_log_logon   ON catalog_visitor_log(logon_name);
+CREATE INDEX IF NOT EXISTS idx_visitor_log_visited ON catalog_visitor_log(visited_at DESC);
+
+CREATE TABLE IF NOT EXISTS catalog_visitor_last_seen (
+  logon_name  TEXT PRIMARY KEY,
+  last_seen   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  visit_count INTEGER NOT NULL DEFAULT 1
+);
 `;
 
 async function initSchema() {
@@ -274,4 +302,22 @@ async function logExport({ userId, logonName, exportType, serviceCount, filterBs
   }
 }
 
-module.exports = { getPool, initSchema, query, transaction, logExport };
+async function logVisit({ logonName, page, sessionId }) {
+  try {
+    await query(
+      `INSERT INTO catalog_visitor_log (logon_name, page, session_id) VALUES ($1,$2,$3)`,
+      [logonName || 'anonymous', page || null, sessionId || null]
+    );
+    await query(
+      `INSERT INTO catalog_visitor_last_seen (logon_name, last_seen, visit_count)
+       VALUES ($1, NOW(), 1)
+       ON CONFLICT (logon_name) DO UPDATE
+         SET last_seen = NOW(), visit_count = catalog_visitor_last_seen.visit_count + 1`,
+      [logonName || 'anonymous']
+    );
+  } catch (e) {
+    console.error('[visitor-log] Failed to write visit:', e.message);
+  }
+}
+
+module.exports = { getPool, initSchema, query, transaction, logExport, logVisit };
