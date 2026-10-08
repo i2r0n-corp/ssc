@@ -320,12 +320,10 @@ function renderCatalogFilters() {
         <div class="filter-group" style="${activatePhaseActive ? '' : disabledStyle}">
           <label>Activate Phases</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <input type="checkbox" data-toggle="switchbutton"
-              ${(state.filters.phaseMode||'merge')==='merge' ? 'checked' : ''}
-              data-onlabel="<img src='merge.png' style='width:16px;height:16px;filter:brightness(0)invert(1)'>"
-              data-offlabel="<img src='intersect.png' style='width:16px;height:16px;filter:brightness(0)invert(1)'>"
-              data-onstyle="primary" data-offstyle="primary" data-width="50"
-              onchange="updateFilter('phaseMode', this.checked ? 'merge' : 'intersect')" />
+            <div class="mode-switch">
+              <button class="${(state.filters.phaseMode||'merge')==='merge'?'active':''}" onclick="updateFilter('phaseMode','merge')"><img src="merge.png" alt="Merge" /></button>
+              <button class="${state.filters.phaseMode==='intersect'?'active':''}" onclick="updateFilter('phaseMode','intersect')"><img src="intersect.png" alt="Intersect" /></button>
+            </div>
             ${(state.filters.phases||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('phases')">✕</button>` : ''}
           </div>
           <div class="check-panel">
@@ -358,12 +356,10 @@ function renderCatalogFilters() {
         <div class="filter-group" style="${advancedActive ? '' : disabledStyle}">
           <label>Advanced LoB${showAdvancedBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Advanced)</span>'}</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <input type="checkbox" data-toggle="switchbutton"
-              ${(state.filters.advancedLoSMode||'merge')==='merge' ? 'checked' : ''}
-              data-onlabel="<img src='merge.png' style='width:16px;height:16px;filter:brightness(0)invert(1)'>"
-              data-offlabel="<img src='intersect.png' style='width:16px;height:16px;filter:brightness(0)invert(1)'>"
-              data-onstyle="primary" data-offstyle="primary" data-width="50"
-              onchange="updateFilter('advancedLoSMode', this.checked ? 'merge' : 'intersect')" />
+            <div class="mode-switch">
+              <button class="${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}" onclick="updateFilter('advancedLoSMode','merge')"><img src="merge.png" alt="Merge" /></button>
+              <button class="${state.filters.advancedLoSMode==='intersect'?'active':''}" onclick="updateFilter('advancedLoSMode','intersect')"><img src="intersect.png" alt="Intersect" /></button>
+            </div>
             ${(state.filters.advancedLoS||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('advancedLoS')">✕</button>` : ''}
           </div>
           <div class="check-panel">
@@ -378,12 +374,10 @@ function renderCatalogFilters() {
         <div class="filter-group" style="${foundationalActive ? '' : disabledStyle}">
           <label>Foundation subcategories${showFoundationalBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Foundation)</span>'}</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-            <input type="checkbox" data-toggle="switchbutton"
-              ${(state.filters.foundationalCatsMode||'merge')==='merge' ? 'checked' : ''}
-              data-onlabel="<img src='merge.png' style='width:16px;height:16px;filter:brightness(0)invert(1)'>"
-              data-offlabel="<img src='intersect.png' style='width:16px;height:16px;filter:brightness(0)invert(1)'>"
-              data-onstyle="primary" data-offstyle="primary" data-width="50"
-              onchange="updateFilter('foundationalCatsMode', this.checked ? 'merge' : 'intersect')" />
+            <div class="mode-switch">
+              <button class="${(state.filters.foundationalCatsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('foundationalCatsMode','merge')"><img src="merge.png" alt="Merge" /></button>
+              <button class="${state.filters.foundationalCatsMode==='intersect'?'active':''}" onclick="updateFilter('foundationalCatsMode','intersect')"><img src="intersect.png" alt="Intersect" /></button>
+            </div>
             ${(state.filters.foundationalCats||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('foundationalCats')">✕</button>` : ''}
           </div>
           <div class="check-panel">
@@ -459,13 +453,10 @@ function renderCatalogResults() {
           <th style="cursor:default;user-select:none">
             <div style="display:flex;align-items:center;gap:0.5rem">
               ${bsSelected ? `
-              <span onclick="event.stopPropagation()">
-                <input type="checkbox" data-toggle="switchbutton"
-                  ${state.filters.namingType !== 'deck' ? 'checked' : ''}
-                  data-onlabel="Catalogue" data-offlabel="Deck"
-                  data-onstyle="primary" data-offstyle="primary" data-width="100"
-                  onchange="updateFilter('namingType', this.checked ? 'catalog' : 'deck')" />
-              </span>` : ''}
+              <div class="mode-switch" style="margin-bottom:0" onclick="event.stopPropagation()">
+                <button class="${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType','catalog')">Catalogue</button>
+                <button class="${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType','deck')">Deck</button>
+              </div>` : ''}
               <span style="cursor:pointer" onclick="toggleSort('name')">Service Name ${state.sort.col==='name' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}</span>
             </div>
           </th>
@@ -1760,13 +1751,6 @@ function render() {
       setTimeout(() => { state.pptx.downloadUrl = null; render(); }, 800);
     }, 5000);
   }
-  // Init BSB switch buttons after DOM update
-  requestAnimationFrame(() => {
-    document.querySelectorAll('input[type="checkbox"][data-toggle="switchbutton"]:not(.bsb-init)').forEach(el => {
-      el.classList.add('bsb-init');
-      el.switchButton();
-    });
-  });
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
