@@ -22,6 +22,9 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.raw({ type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/octet-stream'], limit: '20mb' }));
 
+// MCP server — mounted before XSUAA guard, protected by MCP_SECRET env var
+app.use('/mcp', require('./routes/mcp'));
+
 // XSUAA auth — only active when bound to CF (VCAP_SERVICES present)
 if (process.env.VCAP_SERVICES) {
   const vcap = JSON.parse(process.env.VCAP_SERVICES);

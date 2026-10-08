@@ -525,7 +525,7 @@ function renderServiceDetailModal() {
         <h3 style="margin:0 0 0.25rem">${svc.name || ''}</h3>
         ${svc.code ? `<span style="font-size:0.78rem;color:#6a6a6a">${svc.code}</span>` : ''}
         ${svc.serviceNumber ? `<span style="font-size:0.78rem;color:#6a6a6a;margin-left:1rem">#${svc.serviceNumber}</span>` : ''}
-        ${svc.url ? `<a href="${svc.url}" target="_blank" rel="noopener" style="font-size:0.78rem;color:#0070F2;margin-left:1rem">🔗 Open in SAP</a>` : ''}
+        ${svc.url ? `<a href="${svc.url}" target="_blank" rel="noopener" style="font-size:0.78rem;color:#0070F2;margin-left:1rem">↗ SAP Service &amp; Support Catalog</a>` : ''}
       </div>
       ${field('Short Description', strip(svc.shortDescription))}
       ${field('Teaser Text', strip(svc.serviceTeaserText || svc.teaserText))}
