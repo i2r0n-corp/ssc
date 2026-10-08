@@ -665,7 +665,7 @@ window.navigate = function(page) {
   }
   state.currentPage = page;
   render();
-  if (page === 'catalog' && state.catalog.services.length === 0) loadCatalog();
+  if (page === 'catalog' && !state.catalog.bsMap) loadCatalog();
   if (page === 'debug') loadDebugLog();
   if (page === 'exportlog') loadExportLog();
   if (page === 'admin') { loadAdminUsers(); loadAdminVisitorLog(); }
