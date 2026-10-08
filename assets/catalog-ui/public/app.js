@@ -1021,7 +1021,7 @@ function renderPptxListSettingsModal() {
         ${colCheck('phases',     'Activate Phases',  s.cols.phases,     false)}
         ${colCheck('component',  'Service Name',     s.cols.component,  false)}
         ${colCheck('tier',       'Type',             s.cols.tier,       false)}
-        ${colCheck('objectives', 'Objectives',       s.cols.objectives, false)}
+        ${colCheck('objectives', 'Short Description', s.cols.objectives, false)}
       </div>
 
       <!-- Stream | Timeline row 50/50 -->
@@ -1070,8 +1070,8 @@ function renderPptxListSettingsModal() {
       <!-- Options -->
       <div style="${sectionLabel}">Options</div>
       <div style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:1.25rem">
-        <label style="${checkLabel}">
-          <input type="checkbox" ${s.groupByET?'checked':''} onchange="setPptxGroupET(this.checked)"/>
+        <label style="${!activeET?checkLabel:checkLabelOff}" ${activeET?'title="Not available when Engagement Type filter is active"':''}>
+          <input type="checkbox" ${s.groupByET?'checked':''} ${activeET?'disabled':''} onchange="setPptxGroupET(this.checked)"/>
           Grouping rows by Engagement Type ${tip(bsActive && s.streamMode !== 'custom' ? 'Sorts rows within each module by tier: Max first, then Advanced, then Foundational' : 'Sorts all rows by tier across the full list: Max first, then Advanced, then Foundational')}
         </label>
         <label style="${bsActive?checkLabel:checkLabelOff}" ${!bsActive?'title="Only available when Business Scenario is selected"':''}>
@@ -1668,6 +1668,10 @@ function render() {
     default:          content = renderCatalogPage();
   }
 
+  // Preserve modal scroll position across re-renders
+  const modalBox = document.querySelector('.modal-box');
+  const modalScrollTop = modalBox ? modalBox.scrollTop : 0;
+
   app.innerHTML = `
     <div class="shell-top">
       <div class="shell-top-inner">
@@ -1709,6 +1713,12 @@ function render() {
         <button class="btn btn-primary" onclick="state.backendDown=false;loadCatalog()">Try Again</button>
       </div>
     </div>` : ''}`;
+  // Restore modal scroll position
+  if (modalScrollTop > 0) {
+    const newModalBox = document.querySelector('.modal-box');
+    if (newModalBox) newModalBox.scrollTop = modalScrollTop;
+  }
+
   // Restore year input values without disturbing focus — the inputs use no value= attr
   const yf = document.getElementById('pptx-year-from');
   const yt = document.getElementById('pptx-year-to');
