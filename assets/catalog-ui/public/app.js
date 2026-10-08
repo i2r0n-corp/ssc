@@ -11,7 +11,7 @@ const AGENT_BASE_URL  = window.AGENT_BASE_URL  || 'http://localhost:5000';
 // ── State ─────────────────────────────────────────────────────────────────────
 let state = {
   currentPage: 'catalog',
-  catalog: { services: [], lastUpdated: null, loading: false, error: null, bsDropdownOpen: false },
+  catalog: { services: [], lastUpdated: null, loading: false, error: null },
   filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', maxFocusTopics: [], maxFocusTopicsMode: 'merge', deckName: '', namingType: '' },
   filteredServices: [],
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
@@ -247,38 +247,25 @@ function renderCatalogFilters() {
 
         <!-- Left column: BS + hr + Keywords + ET -->
         <div class="filter-col-left">
-          <!-- BS field: custom dropdown with external link icons -->
+          <!-- BS field: native select + external link button -->
           <div style="width:100%;display:flex;flex-direction:column;gap:4px">
             <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600">Business Scenario</label>
-            <div style="position:relative">
-              <div id="bs-dropdown-trigger"
-                onclick="window.toggleBsDropdown(event)"
-                style="width:100%;padding:0.35rem 0.6rem;font-size:0.875rem;border:1px solid #c0c0c0;border-radius:4px;background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:space-between;min-height:2rem;${state.filters.businessScenario?'color:#1D2D3E':'color:#9BA8B0'}">
-                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">
-                  ${state.filters.businessScenario ? (uniqueBS.find(([c])=>c===state.filters.businessScenario)||['','',state.filters.businessScenario])[2] : ''}
-                </span>
-                <span style="margin-left:0.4rem;color:#6a6a6a;font-size:0.7rem">▾</span>
+            <div style="display:flex;align-items:center;gap:0.5rem">
+              <div class="fl-field" style="flex:1;min-width:0;margin:0">
+                <select id="filter-bs" ${!state.filters.businessScenario ? 'data-empty="true"' : ''}
+                  onchange="updateFilter('businessScenario', this.value); this.dataset.empty = this.value ? 'false' : 'true'">
+                  <option value=""></option>
+                  ${uniqueBS.map(([code,,label]) => `<option value="${code}" ${state.filters.businessScenario===code?'selected':''}>${label}</option>`).join('')}
+                </select>
+                <label>Business Scenario</label>
               </div>
-              ${state.catalog.bsDropdownOpen ? `
-              <div id="bs-dropdown-list"
-                onclick="event.stopPropagation()"
-                style="position:absolute;z-index:999;top:100%;left:0;right:0;background:#fff;border:1px solid #c0c0c0;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.12);max-height:260px;overflow-y:auto;margin-top:2px">
-                <div onclick="window.selectBs('')"
-                  style="padding:0.4rem 0.6rem;font-size:0.875rem;color:#9BA8B0;cursor:pointer;border-bottom:1px solid #f0f0f0"
-                  onmouseover="this.style.background='#f5f7fa'" onmouseout="this.style.background=''">
-                  — clear —
-                </div>
-                ${uniqueBS.map(([code,,label]) => {
-                  const url = (state.catalog.bsUrlMap||{})[code];
-                  const isSelected = state.filters.businessScenario === code;
-                  return `<div style="display:flex;align-items:center;padding:0.4rem 0.6rem;font-size:0.875rem;cursor:pointer;${isSelected?'background:#e8f0fe;font-weight:600':''}background-color:${isSelected?'#e8f0fe':''}"
-                    onmouseover="if(!${isSelected})this.style.background='#f5f7fa'" onmouseout="if(!${isSelected})this.style.background=''">
-                    <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="window.selectBs('${code}')">${label}</span>
-                    ${url ? `<a href="${url}" target="_blank" rel="noopener" onclick="event.stopPropagation()"
-                      style="margin-left:0.5rem;color:#0070F2;font-size:0.75rem;text-decoration:none;flex-shrink:0;opacity:0.7" title="Open in SAP Catalogue">↗</a>` : ''}
-                  </div>`;
-                }).join('')}
-              </div>` : ''}
+              ${(() => {
+                const bsUrl = state.filters.businessScenario ? (state.catalog.bsUrlMap||{})[state.filters.businessScenario] : null;
+                return bsUrl
+                  ? `<a href="${bsUrl}" target="_blank" rel="noopener"
+                      style="flex-shrink:0;padding:0.35rem 0.75rem;font-size:0.8rem;background:#0070F2;color:#fff;border:none;border-radius:4px;text-decoration:none;white-space:nowrap;line-height:1.4">in Service Catalog</a>`
+                  : `<span style="flex-shrink:0;padding:0.35rem 0.75rem;font-size:0.8rem;background:#c0c0c0;color:#fff;border-radius:4px;white-space:nowrap;line-height:1.4;cursor:default">in Service Catalog</span>`;
+              })()}
             </div>
           </div>
 
@@ -700,16 +687,6 @@ window.navigate = function(page) {
   apiFetch(`${CAP_BACKEND_URL}/api/catalog/visitor`, { method: 'POST', body: JSON.stringify({ page, sessionId: state.sessionId }) }).catch(() => {});
 };
 
-window.toggleBsDropdown = function(e) {
-  if (e) e.stopPropagation();
-  state.catalog.bsDropdownOpen = !state.catalog.bsDropdownOpen; render();
-};
-window.selectBs = function(code) {
-  state.catalog.bsDropdownOpen = false;
-  state.filters.businessScenario = code;
-  state.filters.modules = []; state.filters.module = ''; state.filters.deckName = ''; state.filters.namingType = '';
-  applyFilters(); render();
-};
 
 window.updateFilter = function(key, value) {
   state.filters[key] = value;
@@ -771,7 +748,6 @@ window.clearFilters = function() {
   state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', maxFocusTopics: [], maxFocusTopicsMode: 'merge', deckName: '', namingType: '' };
   state.filteredServices = [];
   state.catalog.hasSearched = false;
-  state.catalog.bsDropdownOpen = false;
   render();
 };
 
@@ -1800,8 +1776,3 @@ apiFetch(`${CAP_BACKEND_URL}/api/catalog/export-stats`)
 // Log app load visit
 apiFetch(`${CAP_BACKEND_URL}/api/catalog/visitor`, { method: 'POST', body: JSON.stringify({ page: 'app-load', sessionId: state.sessionId }) }).catch(() => {});
 
-// Close BS dropdown when clicking outside
-document.addEventListener('click', function() {
-  if (!state.catalog.bsDropdownOpen) return;
-  state.catalog.bsDropdownOpen = false; render();
-});
