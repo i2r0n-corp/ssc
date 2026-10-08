@@ -1140,9 +1140,6 @@ router.get('/my-permissions', async (req, res) => {
   const payload = getJwtPayload(req);
   const logonName = (payload?.user_name || payload?.email || '').toLowerCase();
   const isAdmin = ADMIN_USERS.includes(logonName);
-  if (isAdmin) {
-    return res.json({ catalog: true, incidents: true, chat: true, debug: true, exportlog: true, admin: true });
-  }
   try {
     const db = require('../store/db');
     const result = await db.query(
@@ -1150,12 +1147,12 @@ router.get('/my-permissions', async (req, res) => {
        FROM catalog_user_permissions WHERE email = $1`, [logonName]
     );
     if (result.rows.length === 0) {
-      return res.json({ catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false });
+      return res.json({ catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: isAdmin });
     }
     const r = result.rows[0];
-    res.json({ catalog: r.tab_catalog, incidents: r.tab_incidents, chat: r.tab_chat, debug: r.tab_debug, exportlog: r.tab_exportlog, admin: r.tab_admin });
+    res.json({ catalog: r.tab_catalog, incidents: r.tab_incidents, chat: r.tab_chat, debug: r.tab_debug, exportlog: r.tab_exportlog, admin: r.tab_admin || isAdmin });
   } catch (e) {
-    res.json({ catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false });
+    res.json({ catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: isAdmin });
   }
 });
 
