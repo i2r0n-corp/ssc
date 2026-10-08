@@ -32,11 +32,10 @@ if (process.env.VCAP_SERVICES) {
     passport.use('JWT', new XssecPassportStrategy(authService));
     app.use(passport.initialize());
     app.use('/api', passport.authenticate('JWT', { session: false, failWithError: false }));
-    app.use('/mcp', passport.authenticate('JWT', { session: false, failWithError: false }));
   }
 }
 
-// Mount routers
+// MCP server — mounted outside XSUAA, protected by MCP_SECRET env var
 app.use('/mcp', require('./routes/mcp'));
 
 // Mount routers

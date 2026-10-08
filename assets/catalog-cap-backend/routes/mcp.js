@@ -7,6 +7,15 @@
 const router = require('express').Router();
 const snapshot = require('../store/snapshot');
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
+function requireMcpSecret(req, res, next) {
+  const secret = process.env.MCP_SECRET;
+  if (!secret) return next();
+  const auth = req.headers['authorization'] || '';
+  if (auth !== `Bearer ${secret}`) return res.status(401).json({ error: 'Unauthorized' });
+  next();
+}
+
 // ── Tool definitions ──────────────────────────────────────────────────────────
 const TOOLS = [
   {
@@ -223,7 +232,7 @@ async function handleRpc(body) {
 // Clients connect here to receive the endpoint URL, then POST to /mcp/message
 const sseClients = new Map();
 
-router.get('/sse', (req, res) => {
+router.get('/sse', requireMcpSecret, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -249,7 +258,7 @@ router.get('/sse', (req, res) => {
 });
 
 // ── Message endpoint ──────────────────────────────────────────────────────────
-router.post('/message', async (req, res) => {
+router.post('/message', requireMcpSecret, async (req, res) => {
   const clientId = req.query.clientId;
   const sseRes = clientId ? sseClients.get(clientId) : null;
 
@@ -273,7 +282,7 @@ router.post('/message', async (req, res) => {
 });
 
 // ── Simple HTTP fallback (for clients that don't use SSE) ─────────────────────
-router.post('/rpc', async (req, res) => {
+router.post('/rpc', requireMcpSecret, async (req, res) => {
   const body = req.body;
   if (!body || typeof body !== 'object') return res.status(400).json({ error: 'Invalid JSON-RPC body' });
   const isBatch = Array.isArray(body);
