@@ -213,44 +213,55 @@ async function callGeneratePresentation(args) {
     return { error: 'serviceCodes must be a non-empty array' };
   }
   try {
-    const { v4: uuidv4 } = require('uuid');
-    const fs = require('fs');
-    const path = require('path');
-    const { generateListPptxBuffer } = require('../scripts/generate_list_pptx');
-    const db = require('../store/db');
+    const http = require('http');
+    const port = process.env.PORT || 4004;
+    const body = JSON.stringify({
+      serviceCodes,
+      template: template || 'list',
+      listOptions: { title: title || 'Services Description' }
+    });
 
-    const r = await db.query(
-      'SELECT code, name, engagement_type, raw_data FROM catalog_services WHERE code = ANY($1)',
-      [serviceCodes]
-    );
-    const svcs = r.rows.map(row => ({
-      code:              row.code,
-      name:              row.name || '',
-      short_description: (row.raw_data || {}).shortDescription || '',
-      engagement_type:   row.engagement_type || '',
-      parent_name:       '',
-      phases:            [],
-      business_scenario_naming: {}
-    }));
-
-    if (!svcs.length) return { error: 'None of the provided service codes were found' };
-
-    const buf = generateListPptxBuffer(svcs, { title: title || 'Services Description' });
-    const fileId = uuidv4();
-    const PPTX_TMP = path.join(__dirname, '..', 'data', 'pptx-tmp');
-    fs.mkdirSync(PPTX_TMP, { recursive: true });
-    fs.writeFileSync(path.join(PPTX_TMP, `${fileId}.pptx`), buf);
-
-    const host = process.env.VCAP_APPLICATION
-      ? JSON.parse(process.env.VCAP_APPLICATION).application_uris?.[0]
-      : 'localhost:' + (process.env.PORT || 4004);
-    const proto = process.env.VCAP_APPLICATION ? 'https' : 'http';
-    const { downloadTokens, DOWNLOAD_TOKEN_TTL_MS } = require('./pptx');
-    const downloadToken = uuidv4();
-    downloadTokens.set(downloadToken, { fileId, expires: Date.now() + DOWNLOAD_TOKEN_TTL_MS });
-    const downloadUrl = `${proto}://${host}/api/pptx/download/${fileId}?token=${downloadToken}`;
-
-    return { downloadUrl, serviceCount: svcs.length, message: `Presentation ready with ${svcs.length} services. Download: ${downloadUrl}` };
+    return await new Promise((resolve, reject) => {
+      const req = http.request({
+        hostname: 'localhost',
+        port,
+        path: '/api/pptx/generatePptx',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body)
+        }
+      }, res => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const result = JSON.parse(data);
+            if (result.downloadUrl) {
+              const host = process.env.VCAP_APPLICATION
+                ? JSON.parse(process.env.VCAP_APPLICATION).application_uris?.[0]
+                : 'localhost:' + port;
+              const proto = process.env.VCAP_APPLICATION ? 'https' : 'http';
+              const fullUrl = result.downloadUrl.startsWith('http')
+                ? result.downloadUrl
+                : `${proto}://${host}${result.downloadUrl}`;
+              resolve({
+                downloadUrl: fullUrl,
+                serviceCount: result.serviceCount,
+                message: `Presentation ready with ${result.serviceCount} services. Download: ${fullUrl}`
+              });
+            } else {
+              resolve(result);
+            }
+          } catch(e) {
+            reject(new Error('Failed to parse generatePptx response'));
+          }
+        });
+      });
+      req.on('error', reject);
+      req.write(body);
+      req.end();
+    });
   } catch(e) {
     return { error: e.message };
   }
