@@ -12,7 +12,7 @@ const AGENT_BASE_URL  = window.AGENT_BASE_URL  || 'http://localhost:5000';
 let state = {
   currentPage: 'catalog',
   catalog: { services: [], lastUpdated: null, loading: false, error: null },
-  filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', maxFocusTopics: [], maxFocusTopicsMode: 'merge', deckName: '', namingType: '' },
+  filters: { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', maxFocusTopics: [], maxFocusTopicsMode: 'merge', deckName: '', namingType: '', etLabelType: 'engagement' },
   filteredServices: [],
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
   filtersExpanded: false,
@@ -164,6 +164,11 @@ async function applyFilters() {
 // "Enterprise Support" → displayed as "Foundational" everywhere in results
 function mapEtDisplay(val) {
   if (!val) return val;
+  if (state.filters.etLabelType === 'service') {
+    if (val === 'Max Success Plan') return 'Premium Service';
+    if (val === 'Advanced Success Plan' || val === 'Enterprise Support') return 'Service Entitlement';
+    return val;
+  }
   return val === 'Enterprise Support' ? 'Foundational' : val;
 }
 
@@ -426,8 +431,8 @@ function renderCatalogResults() {
         ${state.selectedServices.size > 0 ? ` — <strong>${state.selectedServices.size} selected</strong>` : ''}
         ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="margin-left:0.75rem;color:#155724;font-weight:600">Successfully downloaded</span>` : ''}
       </span>
-      <button class="btn btn-secondary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)">
-        📋 PPTX List ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
+      <button class="btn btn-primary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)">
+        PPTX List ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
       <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px">
         <button class="btn btn-primary btn-sm" disabled style="opacity:0.45;cursor:not-allowed">
@@ -460,8 +465,14 @@ function renderCatalogResults() {
               <span style="cursor:pointer" onclick="toggleSort('name')">Service Name ${state.sort.col==='name' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}</span>
             </div>
           </th>
-          <th style="cursor:pointer;user-select:none;width:30%" onclick="toggleSort('et')">
-            Engagement Type ${state.sort.col==='et' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}
+          <th style="cursor:default;user-select:none;width:30%">
+            <div style="display:flex;align-items:center;gap:0.5rem">
+              <div class="mode-switch" onclick="event.stopPropagation()">
+                <button class="${state.filters.etLabelType !== 'service' ? 'active' : ''}" onclick="updateFilter('etLabelType','engagement')">Engagement</button>
+                <button class="${state.filters.etLabelType === 'service' ? 'active' : ''}" onclick="updateFilter('etLabelType','service')">Service</button>
+              </div>
+              <span style="cursor:pointer" onclick="toggleSort('et')">Type ${state.sort.col==='et' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}</span>
+            </div>
           </th>
         </tr>
       </thead>
@@ -710,7 +721,7 @@ window.updateFilter = function(key, value) {
       }
     });
     window._filterDebounce = setTimeout(applyFilters, 300);
-  } else if (key === 'namingType') {
+  } else if (key === 'namingType' || key === 'etLabelType') {
     patchResults();
   } else {
     window._filterDebounce = setTimeout(applyFilters, 300);
@@ -756,7 +767,7 @@ window.toggleMoreFilters = function() {
 };
 
 window.clearFilters = function() {
-  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', maxFocusTopics: [], maxFocusTopicsMode: 'merge', deckName: '', namingType: '' };
+  state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', maxFocusTopics: [], maxFocusTopicsMode: 'merge', deckName: '', namingType: '', etLabelType: 'engagement' };
   state.filteredServices = [];
   state.catalog.hasSearched = false;
   render();
