@@ -97,7 +97,7 @@ function patchFilters() {
   if (!el) { render(); return; }
   const sy = window.scrollY;
   el.innerHTML = renderCatalogFilters();
-  window.scrollTo(0, sy);
+  requestAnimationFrame(() => window.scrollTo({ top: sy, behavior: 'instant' }));
 }
 
 async function applyFilters() {
@@ -120,7 +120,10 @@ async function applyFilters() {
   if (!query && !engagementType && !businessScenario && !mod && mods.length === 0 && phases.length === 0 && allSupercats.length === 0 && advancedLoS.length === 0 && foundationalCats.length === 0 && maxFocusTopics.length === 0) {
     state.filteredServices = [];
     state.catalog.hasSearched = false;
-    patchResults(); return;
+    computeFilterCounts();
+    patchResults();
+    patchFilters();
+    return;
   }
 
   state.catalog.hasSearched = true;
@@ -159,7 +162,29 @@ async function applyFilters() {
   } catch (e) {
     state.filteredServices = [];
   }
-  state.catalog.loading = false; patchResults();
+  state.catalog.loading = false;
+  computeFilterCounts();
+  patchResults();
+  patchFilters();
+}
+
+function computeFilterCounts() {
+  const svcs = state.filteredServices;
+  const phases = {}, supercats = {}, maxTopics = {};
+  svcs.forEach(svc => {
+    (svc.classificationFeatures || []).filter(f => f.key === 'sapActivateProjectPhase').forEach(f => {
+      phases[f.value] = (phases[f.value] || 0) + 1;
+    });
+    (svc.supercategories || []).forEach(c => {
+      const n = typeof c === 'string' ? c : (c.name || '');
+      if (n) supercats[n] = (supercats[n] || 0) + 1;
+    });
+    (svc.maxFocusTopics || svc.focusTopics || []).forEach(t => {
+      const n = typeof t === 'string' ? t : (t.name || '');
+      if (n) maxTopics[n] = (maxTopics[n] || 0) + 1;
+    });
+  });
+  state.catalog.filterCounts = { phases, supercats, maxTopics };
 }
 
 // ── ET display mapping ────────────────────────────────────────────────────────
@@ -200,30 +225,11 @@ function engagementBadge(et) {
 function renderCatalogFilters() {
   const { error, moduleMap = {}, bsMap = {}, phases = [], supercategories = [], maxFocusTopics: allMaxTopics = [] } = state.catalog;
 
-  // Build counts from current filtered results for the 4 active panels
-  const svcs = state.filteredServices;
-  const phaseCounts = {};
-  const superCounts = {};
-  const maxTopicCounts = {};
-  if (svcs.length > 0) {
-    svcs.forEach(svc => {
-      const cf = svc.classificationFeatures || [];
-      cf.filter(f => f.key === 'sapActivateProjectPhase').forEach(f => {
-        phaseCounts[f.value] = (phaseCounts[f.value] || 0) + 1;
-      });
-      const cats = svc.supercategories || [];
-      cats.forEach(c => {
-        const name = typeof c === 'string' ? c : (c.name || '');
-        if (name) superCounts[name] = (superCounts[name] || 0) + 1;
-      });
-      const topics = svc.maxFocusTopics || svc.focusTopics || [];
-      topics.forEach(t => {
-        const name = typeof t === 'string' ? t : (t.name || '');
-        if (name) maxTopicCounts[name] = (maxTopicCounts[name] || 0) + 1;
-      });
-    });
-  }
-  const cnt = (map, key) => map[key] !== undefined ? ` <span style="font-size:0.7rem;color:#8696A9;font-weight:400">(${map[key]})</span>` : '';
+  const { phases: phaseCounts = {}, supercats: superCounts = {}, maxTopics: maxTopicCounts = {} } = state.catalog.filterCounts || {};
+  const cnt = (map, key) => {
+    const n = map[key];
+    return n !== undefined ? ` <span style="font-size:0.7rem;color:#8696A9;font-weight:400">(${n})</span>` : ' <span style="font-size:0.7rem;color:#8696A9;font-weight:400">(0)</span>';
+  };
 
   const ET_OPTIONS = [
     { value: 'Max Success Plan',      label: 'Max Success Plan' },
