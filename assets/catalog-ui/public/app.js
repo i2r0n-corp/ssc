@@ -100,6 +100,8 @@ function patchCounts() {
     el.textContent = '(' + (counts[key] || 0) + ')';
   });
 }
+
+function patchFilters() {
   const el = document.getElementById('catalog-filters');
   if (!el) { render(); return; }
   const sy = window.scrollY;
