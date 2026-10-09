@@ -282,7 +282,7 @@ function renderCatalogFilters() {
   const disabledStyle = 'opacity:0.4;pointer-events:none';
 
   const advancedLoSItems  = supercategories.filter(s => s.startsWith('Success Plans for'));
-  const foundationalItems = supercategories.filter(s => !s.startsWith('Success Plans for'));
+  const foundationalItems = supercategories.filter(s => !s.startsWith('Success Plans for') && (superCounts[s] > 0 || (state.filters.foundationalCats || []).includes(s)));
 
   const showAdvancedBadge     = et === 'Advanced Success Plan';
   const showFoundationalBadge = et === 'Enterprise Support';
