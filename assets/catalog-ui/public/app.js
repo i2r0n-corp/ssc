@@ -766,14 +766,12 @@ window.updateCheckboxFilter = function(key, value, checked) {
   if (checked && !arr.includes(value)) arr.push(value);
   else if (!checked) { const i = arr.indexOf(value); if (i > -1) arr.splice(i, 1); }
   state.filters[key] = arr;
-  patchFilters();
   clearTimeout(window._filterDebounce);
   window._filterDebounce = setTimeout(applyFilters, 300);
 };
 window.updateCheckboxFilter._clearKey = function(key) {
   state.filters[key] = [];
   if (key === 'modules') state.filters.module = '';
-  patchFilters();
   clearTimeout(window._filterDebounce);
   window._filterDebounce = setTimeout(applyFilters, 300);
 };
