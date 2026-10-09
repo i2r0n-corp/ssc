@@ -393,7 +393,7 @@ function renderCatalogFilters() {
           </div>
         </div>` : ''}
 
-        <button class="btn btn-secondary btn-sm" style="align-self:flex-end;margin-left:auto" onclick="clearFilters()">Clear</button>
+        <button class="btn btn-danger btn-sm" style="align-self:flex-end;margin-left:auto" onclick="clearFilters()">Clear</button>
       </div>
     </div>`;
 }
@@ -434,18 +434,16 @@ function renderCatalogResults() {
       <button class="btn btn-primary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)" style="display:inline-flex;align-items:center;gap:5px">
         <img src="pptx.svg" style="height:14px;width:auto" alt="" />List ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
-      <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px">
+      <div style="display:none">
         <button class="btn btn-primary btn-sm" disabled style="opacity:0.45;cursor:not-allowed">
           📄 PPTX One-Pagers
         </button>
-        <span style="font-size:0.68rem;color:#dc3545;font-weight:600">under construction</span>
       </div>
-      <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px">
+      <div style="display:none">
         ${state.selectedServices.size > 0
           ? `<button class="btn btn-secondary btn-sm" onclick="exportExcel()" title="Export selected to Excel">📊 Export Excel (${state.selectedServices.size})</button>`
           : `<button class="btn btn-secondary btn-sm" disabled style="opacity:0.45;cursor:not-allowed" title="Select services to export">📊 Export Excel (all)</button>`
         }
-        ${state.selectedServices.size === 0 ? `<span style="font-size:0.68rem;color:#dc3545;font-weight:600">under construction</span>` : ''}
       </div>
     </div>
     ${state.pptx.error ? `<div class="error-strip" style="margin-bottom:0.5rem">⚠ ${state.pptx.error}</div>` : ''}
@@ -706,7 +704,8 @@ window.updateFilter = function(key, value) {
   const isModeSwitch = key === 'phaseMode' || key === 'advancedLoSMode' || key === 'foundationalCatsMode' || key === 'maxFocusTopicsMode';
   clearTimeout(window._filterDebounce);
   if (needsFullRender) {
-    window._filterDebounce = setTimeout(() => { render(); applyFilters(); }, 300);
+    patchFilters();
+    window._filterDebounce = setTimeout(applyFilters, 300);
   } else if (isModeSwitch) {
     // Surgically update only the two buttons of the affected icon-switch
     const switchMap = { phaseMode: 'phaseMode', advancedLoSMode: 'advancedLoSMode', foundationalCatsMode: 'foundationalCatsMode', maxFocusTopicsMode: 'maxFocusTopicsMode' };
