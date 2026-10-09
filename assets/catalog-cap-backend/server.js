@@ -32,7 +32,10 @@ if (process.env.VCAP_SERVICES) {
     const authService = new XsuaaService(xsuaaCredentials);
     passport.use('JWT', new XssecPassportStrategy(authService));
     app.use(passport.initialize());
-    app.use('/api', passport.authenticate('JWT', { session: false, failWithError: false }));
+    app.use('/api', (req, res, next) => {
+      if (req.path.startsWith('/pptx/download/')) return next();
+      passport.authenticate('JWT', { session: false, failWithError: false })(req, res, next);
+    });
   }
 }
 

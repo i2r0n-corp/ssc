@@ -23,6 +23,9 @@ const db = require('../store/db');
 const { generateListPptxBuffer } = require('../scripts/generate_list_pptx');
 
 const PPTX_TMP = path.join(__dirname, '..', 'data', 'pptx-tmp');
+// In-memory pre-signed token store: { token -> { fileId, expires } }
+const downloadTokens = new Map();
+const DOWNLOAD_TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
 fs.mkdirSync(PPTX_TMP, { recursive: true });
 
 async function _loadFlatIndex() {
@@ -241,8 +244,10 @@ router.post('/generatePptx', async (req, res) => {
 
     console.log(`[M4.achieved]: PPTX generated — template="${templateName}" service_count=${services.length} file_size_kb=${fileSizeKb}`);
 
+    const downloadToken = uuidv4();
+    downloadTokens.set(downloadToken, { fileId, expires: Date.now() + DOWNLOAD_TOKEN_TTL_MS });
     res.json({
-      downloadUrl: `/api/pptx/download/${fileId}`,
+      downloadUrl: `/api/pptx/download/${fileId}?token=${downloadToken}`,
       filename,
       serviceCount: services.length,
       fileSizeKb
@@ -257,10 +262,18 @@ router.post('/generatePptx', async (req, res) => {
 // ── Download PPTX ─────────────────────────────────────────────────────────────
 router.get('/download/:fileId', (req, res) => {
   const { fileId } = req.params;
+  const { token } = req.query;
   // Sanitize: only allow UUID-style fileIds
   if (!/^[0-9a-f-]{36}$/.test(fileId)) {
     return res.status(400).json({ error: 'Invalid fileId' });
   }
+  // Validate pre-signed token
+  const entry = downloadTokens.get(token);
+  if (!entry || entry.fileId !== fileId || Date.now() > entry.expires) {
+    downloadTokens.delete(token);
+    return res.status(401).json({ error: 'Invalid or expired download token' });
+  }
+  downloadTokens.delete(token);
   const filePath = path.join(PPTX_TMP, `${fileId}.pptx`);
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'File not found or expired' });
