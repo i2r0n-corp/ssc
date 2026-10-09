@@ -92,7 +92,14 @@ function patchResults() {
   else render();
 }
 
-function patchFilters() {
+function patchCounts() {
+  const { phases = {}, supercats = {}, maxTopics = {} } = state.catalog.filterCounts || {};
+  document.querySelectorAll('[data-cnt]').forEach(el => {
+    const { cnt: key, cntmap: map } = el.dataset;
+    const counts = map === 'phase' ? phases : map === 'super' ? supercats : maxTopics;
+    el.textContent = '(' + (counts[key] || 0) + ')';
+  });
+}
   const el = document.getElementById('catalog-filters');
   if (!el) { render(); return; }
   const sy = window.scrollY;
@@ -122,7 +129,7 @@ async function applyFilters() {
     state.catalog.hasSearched = false;
     computeFilterCounts();
     patchResults();
-    patchFilters();
+    patchCounts();
     return;
   }
 
@@ -165,12 +172,12 @@ async function applyFilters() {
   state.catalog.loading = false;
   computeFilterCounts();
   patchResults();
-  patchFilters();
+  patchCounts();
 }
 
 function computeFilterCounts() {
   const svcs = state.filteredServices;
-  const phases = {}, supercats = {}, maxTopics = {};
+  const phases = {}, supercats = {}, maxTopics = {}, etCounts = { max: 0, advanced: 0, foundational: 0 };
   svcs.forEach(svc => {
     (svc.classificationFeatures || []).forEach(f => {
       const vals = Array.isArray(f.value) ? f.value : [f.value];
@@ -184,8 +191,14 @@ function computeFilterCounts() {
       const n = typeof c === 'string' ? c : (c.name || '');
       if (n) supercats[n] = (supercats[n] || 0) + 1;
     });
+    const ets = Array.isArray(svc.engagementType) ? svc.engagementType : (svc.engagementType ? [svc.engagementType] : []);
+    ets.forEach(e => {
+      if (e === 'Max Success Plan') etCounts.max++;
+      else if (e === 'Advanced Success Plan') etCounts.advanced++;
+      else if (e === 'Enterprise Support') etCounts.foundational++;
+    });
   });
-  state.catalog.filterCounts = { phases, supercats, maxTopics };
+  state.catalog.filterCounts = { phases, supercats, maxTopics, etCounts };
 }
 
 // ── ET display mapping ────────────────────────────────────────────────────────
@@ -227,9 +240,9 @@ function renderCatalogFilters() {
   const { error, moduleMap = {}, bsMap = {}, phases = [], supercategories = [], maxFocusTopics: allMaxTopics = [] } = state.catalog;
 
   const { phases: phaseCounts = {}, supercats: superCounts = {}, maxTopics: maxTopicCounts = {} } = state.catalog.filterCounts || {};
-  const cnt = (map, key) => {
-    const n = map[key];
-    return n !== undefined ? ` <span style="font-size:0.7rem;color:#8696A9;font-weight:400">(${n})</span>` : ' <span style="font-size:0.7rem;color:#8696A9;font-weight:400">(0)</span>';
+  const cnt = (map, key, mapname) => {
+    const n = map[key] || 0;
+    return ` <span data-cnt="${key.replace(/"/g,'&quot;')}" data-cntmap="${mapname}" style="font-size:0.7rem;color:#8696A9;font-weight:400">(${n})</span>`;
   };
 
   const ET_OPTIONS = [
@@ -373,7 +386,7 @@ function renderCatalogFilters() {
             }).map(p => `<label>
               <input type="checkbox" value="${p}" ${(state.filters.phases||[]).includes(p)?'checked':''}
                 onchange="updateCheckboxFilter('phases', '${p}', this.checked)" />
-              ${p}${cnt(phaseCounts, p)}</label>`).join('')}
+              ${p}${cnt(phaseCounts, p, 'phase')}</label>`).join('')}
           </div>
         </div>` : ''}
 
@@ -387,7 +400,7 @@ function renderCatalogFilters() {
             ${allMaxTopics.map(t => `<label>
               <input type="checkbox" value="${t}" ${(state.filters.maxFocusTopics||[]).includes(t)?'checked':''}
                 onchange="updateCheckboxFilter('maxFocusTopics', '${t.replace(/'/g,"\\'")}', this.checked)" />
-              ${t}${cnt(maxTopicCounts, t)}</label>`).join('')}
+              ${t}${cnt(maxTopicCounts, t, 'maxTopic')}</label>`).join('')}
           </div>
         </div>` : ''}
 
@@ -405,7 +418,7 @@ function renderCatalogFilters() {
             ${advancedLoSItems.map(s => `<label>
               <input type="checkbox" value="${s}" ${(state.filters.advancedLoS||[]).includes(s)?'checked':''}
                 onchange="updateCheckboxFilter('advancedLoS', '${s.replace(/'/g,"\\'")}', this.checked)" />
-              ${s.replace('Success Plans for ', '')}${cnt(superCounts, s)}</label>`).join('')}
+              ${s.replace('Success Plans for ', '')}${cnt(superCounts, s, 'super')}</label>`).join('')}
           </div>
         </div>` : ''}
 
@@ -423,7 +436,7 @@ function renderCatalogFilters() {
             ${foundationalItems.map(s => `<label>
               <input type="checkbox" value="${s}" ${(state.filters.foundationalCats||[]).includes(s)?'checked':''}
                 onchange="updateCheckboxFilter('foundationalCats', '${s.replace(/'/g,"\\'")}', this.checked)" />
-              ${s}${cnt(superCounts, s)}</label>`).join('')}
+              ${s}${cnt(superCounts, s, 'super')}</label>`).join('')}
           </div>
         </div>` : ''}
 
@@ -461,8 +474,23 @@ function renderCatalogResults() {
         <p>No services found. Try adjusting your filters.</p>
       </div>` : !loading ? `
     <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center;flex-wrap:wrap">
-      <span class="results-info" style="margin:0;flex:1">${state.filteredServices.length} service(s) found
-        ${state.selectedServices.size > 0 ? ` — <strong>${state.selectedServices.size} selected</strong>` : ''}
+      <span class="results-info" style="margin:0;flex:1;display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap">
+        ${(() => {
+          const { etCounts = { max: 0, advanced: 0, foundational: 0 } } = state.catalog.filterCounts || {};
+          const total = state.filteredServices.length;
+          const isService = state.filters.etLabelType === 'service';
+          const pills = [];
+          if (etCounts.max > 0)         pills.push(`<span class="badge badge-max">${isService ? 'Premium' : 'Max'} — ${etCounts.max}</span>`);
+          if (isService) {
+            const svcEnt = etCounts.advanced + etCounts.foundational;
+            if (svcEnt > 0) pills.push(`<span class="badge badge-adv">Service Entitlement — ${svcEnt}</span>`);
+          } else {
+            if (etCounts.advanced > 0)    pills.push(`<span class="badge badge-adv">Advanced — ${etCounts.advanced}</span>`);
+            if (etCounts.foundational > 0) pills.push(`<span class="badge badge-ent">Foundational — ${etCounts.foundational}</span>`);
+          }
+          return `${pills.join('')}<span style="font-size:0.8rem;color:#6a6a6a">overall: <strong>${total}</strong></span>`;
+        })()}
+        ${state.selectedServices.size > 0 ? `<span style="font-size:0.8rem;color:#6a6a6a"> — <strong>${state.selectedServices.size} selected</strong></span>` : ''}
         ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="margin-left:0.75rem;color:#155724;font-weight:600">Successfully downloaded</span>` : ''}
       </span>
       <button class="btn btn-primary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)" style="display:inline-flex;align-items:center;gap:5px">
