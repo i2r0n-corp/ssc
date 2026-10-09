@@ -245,7 +245,10 @@ async function callGeneratePresentation(args) {
       ? JSON.parse(process.env.VCAP_APPLICATION).application_uris?.[0]
       : 'localhost:' + (process.env.PORT || 4004);
     const proto = process.env.VCAP_APPLICATION ? 'https' : 'http';
-    const downloadUrl = `${proto}://${host}/api/pptx/download/${fileId}`;
+    const { downloadTokens, DOWNLOAD_TOKEN_TTL_MS } = require('./pptx');
+    const downloadToken = uuidv4();
+    downloadTokens.set(downloadToken, { fileId, expires: Date.now() + DOWNLOAD_TOKEN_TTL_MS });
+    const downloadUrl = `${proto}://${host}/api/pptx/download/${fileId}?token=${downloadToken}`;
 
     return { downloadUrl, serviceCount: svcs.length, message: `Presentation ready with ${svcs.length} services. Download: ${downloadUrl}` };
   } catch(e) {

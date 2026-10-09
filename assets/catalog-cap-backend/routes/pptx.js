@@ -389,4 +389,6 @@ function _buildOnePagePptx(pptx, services) {
   }
 }
 
+router.downloadTokens = downloadTokens;
+router.DOWNLOAD_TOKEN_TTL_MS = DOWNLOAD_TOKEN_TTL_MS;
 module.exports = router;
