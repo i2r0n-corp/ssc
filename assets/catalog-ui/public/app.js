@@ -172,16 +172,17 @@ function computeFilterCounts() {
   const svcs = state.filteredServices;
   const phases = {}, supercats = {}, maxTopics = {};
   svcs.forEach(svc => {
-    (svc.classificationFeatures || []).filter(f => f.key === 'sapActivateProjectPhase').forEach(f => {
-      phases[f.value] = (phases[f.value] || 0) + 1;
+    (svc.classificationFeatures || []).forEach(f => {
+      const vals = Array.isArray(f.value) ? f.value : [f.value];
+      if (f.key === 'sapActivateProjectPhase') {
+        vals.forEach(v => { if (v) phases[v] = (phases[v] || 0) + 1; });
+      } else if (f.key === 'maxFocusTopic') {
+        vals.forEach(v => { if (v) maxTopics[v] = (maxTopics[v] || 0) + 1; });
+      }
     });
     (svc.supercategories || []).forEach(c => {
       const n = typeof c === 'string' ? c : (c.name || '');
       if (n) supercats[n] = (supercats[n] || 0) + 1;
-    });
-    (svc.maxFocusTopics || svc.focusTopics || []).forEach(t => {
-      const n = typeof t === 'string' ? t : (t.name || '');
-      if (n) maxTopics[n] = (maxTopics[n] || 0) + 1;
     });
   });
   state.catalog.filterCounts = { phases, supercats, maxTopics };
