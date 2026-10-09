@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 24 24" width="100" height="100">
+  <title>Overlapping Circles Venn Diagram Icon</title>
+  <metadata>
+    <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#">
+      <cc:Work rdf:about="">
+        <dc:title>Overlapping Circles Venn Diagram Icon</dc:title>
+        <dc:description>Minimalist icon of two overlapping circles forming a Venn diagram, representing intersection, connection, or shared concepts. Ideal for presentations, infographics, and educational materials.</dc:description>
+        <dc:creator>
+          <cc:Agent>
+            <dc:title>Google</dc:title>
+          </cc:Agent>
+        </dc:creator>
+        <dc:source>https://github.com/google/material-design-icons</dc:source>
+        <dc:rights>
+          <cc:Agent>
+            <dc:title>Google</dc:title>
+          </cc:Agent>
+        </dc:rights>
+        <cc:license rdf:resource="https://github.com/google/material-design-icons/blob/master/LICENSE"/>
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+        <dc:subject>
+          <rdf:Bag>
+            <rdf:li>Venn-diagram</rdf:li>
+            <rdf:li>overlapping-circles</rdf:li>
+            <rdf:li>intersection-icon</rdf:li>
+            <rdf:li>connection-symbol</rdf:li>
+            <rdf:li>shared-concepts</rdf:li>
+            <rdf:li>minimal-design</rdf:li>
+            <rdf:li>abstract-icon</rdf:li>
+            <rdf:li>data-visualization</rdf:li>
+            <rdf:li>relationship-icon</rdf:li>
+            <rdf:li>union-symbol</rdf:li>
+            <rdf:li>diagram-icon</rdf:li>
+            <rdf:li>infographic-element</rdf:li>
+            <rdf:li>educational-icon</rdf:li>
+            <rdf:li>logic-diagram</rdf:li>
+            <rdf:li>set-theory</rdf:li>
+          </rdf:Bag>
+        </dc:subject>
+      </cc:Work>
+      <cc:License rdf:about="https://github.com/google/material-design-icons/blob/master/LICENSE">
+        <dc:title>Apache 2.0 (Apache-2.0)</dc:title>
+      </cc:License>
+    </rdf:RDF>
+  </metadata>
+  <path fill="currentColor" d="M16 18q-.93 0-1.766-.272t-1.538-.772q1.014-1.1 1.601-2.359q.588-1.258.588-2.597t-.588-2.597t-1.6-2.359q.701-.5 1.537-.772Q15.069 6 16 6q2.502 0 4.251 1.749T22 12t-1.749 4.251T16 18m-4-1.558q-.933-.815-1.466-1.96Q10 13.34 10 12t.534-2.483q.533-1.144 1.466-1.96q.933.816 1.466 1.96Q14 10.662 14 12t-.534 2.483T12 16.443M8 18q-2.502 0-4.251-1.749T2 12t1.749-4.251T8 6q.93 0 1.766.272t1.538.772q-1.014 1.1-1.601 2.359q-.588 1.259-.588 2.597q0 1.494.572 2.768q.573 1.274 1.575 2.218q-.697.495-1.527.754Q8.906 18 8 18"/>
+</svg>

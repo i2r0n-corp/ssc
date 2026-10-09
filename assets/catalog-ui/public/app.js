@@ -261,9 +261,9 @@ function renderCatalogFilters() {
               const bsUrl = state.filters.businessScenario ? (state.catalog.bsUrlMap||{})[state.filters.businessScenario] : null;
               return bsUrl
                 ? `<a href="${bsUrl}" target="_blank" rel="noopener" title="Open in Service Catalog"
-                    style="flex-shrink:0;display:flex;align-items:center;justify-content:center;width:2.25rem;height:2.25rem;background:#0070F2;border-radius:4px;text-decoration:none;margin-bottom:0"><img src="url.png" style="height:15px;width:auto" alt="" /></a>`
+                    style="flex-shrink:0;display:flex;align-items:center;justify-content:center;width:2.25rem;height:2.25rem;background:#0070F2;border-radius:4px;text-decoration:none;margin-bottom:0"><img src="url.svg" style="height:15px;width:auto" alt="" /></a>`
                 : `<span title="Open in Service Catalog"
-                    style="flex-shrink:0;display:flex;align-items:center;justify-content:center;width:2.25rem;height:2.25rem;background:#d0d0d0;border-radius:4px;cursor:default;margin-bottom:0"><img src="url.png" style="height:15px;width:auto" alt="" /></span>`;
+                    style="flex-shrink:0;display:flex;align-items:center;justify-content:center;width:2.25rem;height:2.25rem;background:#d0d0d0;border-radius:4px;cursor:default;margin-bottom:0"><img src="url.svg" style="height:15px;width:auto" alt="" /></span>`;
             })()}
           </div>
 
@@ -321,8 +321,8 @@ function renderCatalogFilters() {
           <label>Activate Phases</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
             <div class="icon-switch">
-              <button class="${(state.filters.phaseMode||'merge')==='merge'?'active':''}" onclick="updateFilter('phaseMode','merge')"><img src="merge.png" alt="Merge" /></button>
-              <button class="${state.filters.phaseMode==='intersect'?'active':''}" onclick="updateFilter('phaseMode','intersect')"><img src="intersect.png" alt="Intersect" /></button>
+              <button class="${(state.filters.phaseMode||'merge')==='merge'?'active':''}" onclick="updateFilter('phaseMode','merge')"><img src="merge.svg" alt="Merge" /></button>
+              <button class="${state.filters.phaseMode==='intersect'?'active':''}" onclick="updateFilter('phaseMode','intersect')"><img src="intersect.svg" alt="Intersect" /></button>
             </div>
             ${(state.filters.phases||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('phases')">✕</button>` : ''}
           </div>
@@ -357,8 +357,8 @@ function renderCatalogFilters() {
           <label>Advanced LoB${showAdvancedBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Advanced)</span>'}</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
             <div class="icon-switch">
-              <button class="${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}" onclick="updateFilter('advancedLoSMode','merge')"><img src="merge.png" alt="Merge" /></button>
-              <button class="${state.filters.advancedLoSMode==='intersect'?'active':''}" onclick="updateFilter('advancedLoSMode','intersect')"><img src="intersect.png" alt="Intersect" /></button>
+              <button class="${(state.filters.advancedLoSMode||'merge')==='merge'?'active':''}" onclick="updateFilter('advancedLoSMode','merge')"><img src="merge.svg" alt="Merge" /></button>
+              <button class="${state.filters.advancedLoSMode==='intersect'?'active':''}" onclick="updateFilter('advancedLoSMode','intersect')"><img src="intersect.svg" alt="Intersect" /></button>
             </div>
             ${(state.filters.advancedLoS||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('advancedLoS')">✕</button>` : ''}
           </div>
@@ -375,8 +375,8 @@ function renderCatalogFilters() {
           <label>Foundation subcategories${showFoundationalBadge ? '' : ' <span style="font-size:0.65rem;color:#8696A9;font-weight:400">(Foundation)</span>'}</label>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
             <div class="icon-switch">
-              <button class="${(state.filters.foundationalCatsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('foundationalCatsMode','merge')"><img src="merge.png" alt="Merge" /></button>
-              <button class="${state.filters.foundationalCatsMode==='intersect'?'active':''}" onclick="updateFilter('foundationalCatsMode','intersect')"><img src="intersect.png" alt="Intersect" /></button>
+              <button class="${(state.filters.foundationalCatsMode||'merge')==='merge'?'active':''}" onclick="updateFilter('foundationalCatsMode','merge')"><img src="merge.svg" alt="Merge" /></button>
+              <button class="${state.filters.foundationalCatsMode==='intersect'?'active':''}" onclick="updateFilter('foundationalCatsMode','intersect')"><img src="intersect.svg" alt="Intersect" /></button>
             </div>
             ${(state.filters.foundationalCats||[]).length > 0 ? `<button class="mode-switch-clear" title="Clear" onclick="updateCheckboxFilter._clearKey('foundationalCats')">✕</button>` : ''}
           </div>
