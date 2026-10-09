@@ -4,6 +4,13 @@
   "sessionTimeout": 30,
   "routes": [
     {
+      "source": "^/api/pptx/download/(.*)$",
+      "target": "/api/pptx/download/$1",
+      "destination": "ssc-catalog-backend",
+      "authenticationType": "none",
+      "csrfProtection": false
+    },
+    {
       "source": "^/api/(.*)$",
       "target": "/api/$1",
       "destination": "ssc-catalog-backend",
