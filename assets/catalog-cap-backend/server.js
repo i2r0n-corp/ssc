@@ -34,6 +34,7 @@ if (process.env.VCAP_SERVICES) {
     app.use(passport.initialize());
     app.use('/api', (req, res, next) => {
       if (req.path.startsWith('/pptx/download/')) return next();
+      if (req.path.startsWith('/pptx/generatePptx') && req.headers['x-internal-mcp'] === 'true') return next();
       passport.authenticate('JWT', { session: false, failWithError: false })(req, res, next);
     });
   }
