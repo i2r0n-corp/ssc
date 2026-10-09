@@ -94,8 +94,10 @@ function patchResults() {
 
 function patchFilters() {
   const el = document.getElementById('catalog-filters');
-  if (el) el.innerHTML = renderCatalogFilters();
-  else render();
+  if (!el) { render(); return; }
+  const sy = window.scrollY;
+  el.innerHTML = renderCatalogFilters();
+  window.scrollTo(0, sy);
 }
 
 async function applyFilters() {
@@ -197,6 +199,31 @@ function engagementBadge(et) {
 
 function renderCatalogFilters() {
   const { error, moduleMap = {}, bsMap = {}, phases = [], supercategories = [], maxFocusTopics: allMaxTopics = [] } = state.catalog;
+
+  // Build counts from current filtered results for the 4 active panels
+  const svcs = state.filteredServices;
+  const phaseCounts = {};
+  const superCounts = {};
+  const maxTopicCounts = {};
+  if (svcs.length > 0) {
+    svcs.forEach(svc => {
+      const cf = svc.classificationFeatures || [];
+      cf.filter(f => f.key === 'sapActivateProjectPhase').forEach(f => {
+        phaseCounts[f.value] = (phaseCounts[f.value] || 0) + 1;
+      });
+      const cats = svc.supercategories || [];
+      cats.forEach(c => {
+        const name = typeof c === 'string' ? c : (c.name || '');
+        if (name) superCounts[name] = (superCounts[name] || 0) + 1;
+      });
+      const topics = svc.maxFocusTopics || svc.focusTopics || [];
+      topics.forEach(t => {
+        const name = typeof t === 'string' ? t : (t.name || '');
+        if (name) maxTopicCounts[name] = (maxTopicCounts[name] || 0) + 1;
+      });
+    });
+  }
+  const cnt = (map, key) => map[key] !== undefined ? ` <span style="font-size:0.7rem;color:#8696A9;font-weight:400">(${map[key]})</span>` : '';
 
   const ET_OPTIONS = [
     { value: 'Max Success Plan',      label: 'Max Success Plan' },
@@ -339,7 +366,7 @@ function renderCatalogFilters() {
             }).map(p => `<label>
               <input type="checkbox" value="${p}" ${(state.filters.phases||[]).includes(p)?'checked':''}
                 onchange="updateCheckboxFilter('phases', '${p}', this.checked)" />
-              ${p}</label>`).join('')}
+              ${p}${cnt(phaseCounts, p)}</label>`).join('')}
           </div>
         </div>` : ''}
 
@@ -353,7 +380,7 @@ function renderCatalogFilters() {
             ${allMaxTopics.map(t => `<label>
               <input type="checkbox" value="${t}" ${(state.filters.maxFocusTopics||[]).includes(t)?'checked':''}
                 onchange="updateCheckboxFilter('maxFocusTopics', '${t.replace(/'/g,"\\'")}', this.checked)" />
-              ${t}</label>`).join('')}
+              ${t}${cnt(maxTopicCounts, t)}</label>`).join('')}
           </div>
         </div>` : ''}
 
@@ -371,7 +398,7 @@ function renderCatalogFilters() {
             ${advancedLoSItems.map(s => `<label>
               <input type="checkbox" value="${s}" ${(state.filters.advancedLoS||[]).includes(s)?'checked':''}
                 onchange="updateCheckboxFilter('advancedLoS', '${s.replace(/'/g,"\\'")}', this.checked)" />
-              ${s.replace('Success Plans for ', '')}</label>`).join('')}
+              ${s.replace('Success Plans for ', '')}${cnt(superCounts, s)}</label>`).join('')}
           </div>
         </div>` : ''}
 
@@ -389,11 +416,11 @@ function renderCatalogFilters() {
             ${foundationalItems.map(s => `<label>
               <input type="checkbox" value="${s}" ${(state.filters.foundationalCats||[]).includes(s)?'checked':''}
                 onchange="updateCheckboxFilter('foundationalCats', '${s.replace(/'/g,"\\'")}', this.checked)" />
-              ${s}</label>`).join('')}
+              ${s}${cnt(superCounts, s)}</label>`).join('')}
           </div>
         </div>` : ''}
 
-        <button class="btn btn-danger btn-sm" style="align-self:flex-end;margin-left:auto" onclick="clearFilters()">Clear</button>
+        <button class="btn btn-secondary btn-sm" style="align-self:flex-end;margin-left:auto" onclick="clearFilters()">Clear</button>
       </div>
     </div>`;
 }
