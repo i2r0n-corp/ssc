@@ -431,8 +431,8 @@ function renderCatalogResults() {
         ${state.selectedServices.size > 0 ? ` — <strong>${state.selectedServices.size} selected</strong>` : ''}
         ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="margin-left:0.75rem;color:#155724;font-weight:600">Successfully downloaded</span>` : ''}
       </span>
-      <button class="btn btn-primary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)">
-        PPTX List ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
+      <button class="btn btn-primary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)" style="display:inline-flex;align-items:center;gap:5px">
+        <img src="pptx.svg" style="height:14px;width:auto" alt="" />List ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
       <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px">
         <button class="btn btn-primary btn-sm" disabled style="opacity:0.45;cursor:not-allowed">
