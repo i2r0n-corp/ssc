@@ -112,7 +112,12 @@ function patchFilters() {
   const el = document.getElementById('catalog-filters');
   if (!el) { render(); return; }
   const sy = window.scrollY;
+  const panels = [...el.querySelectorAll('.check-panel')];
+  const panelScrolls = panels.map(p => p.scrollTop);
   el.innerHTML = renderCatalogFilters();
+  [...el.querySelectorAll('.check-panel')].forEach((p, i) => {
+    if (panelScrolls[i] > 0) p.scrollTop = panelScrolls[i];
+  });
   requestAnimationFrame(() => window.scrollTo({ top: sy, behavior: 'instant' }));
 }
 
@@ -504,7 +509,7 @@ function renderCatalogResults() {
         ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="margin-left:0.75rem;color:#155724;font-weight:600">Successfully downloaded</span>` : ''}
       </span>
       <span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Export to:</span>
-      <button class="btn btn-primary btn-sm" onclick="openExcelSettings()" title="Export to Excel" style="display:inline-flex;align-items:center;gap:5px;padding-left:5px">
+      <button class="btn btn-primary btn-sm" onclick="openExcelSettings()" title="Export to Excel" style="display:inline-flex;align-items:center;gap:5px">
         <img src="excel.svg" style="height:18px;width:auto" alt="" />${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
       <button class="btn btn-primary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)" style="display:inline-flex;align-items:center;gap:5px">
