@@ -1365,35 +1365,6 @@ router.post('/export-excel', async (req, res) => {
       } catch { /* fall through — module names will be empty */ }
     }
 
-    // Ensures xl/styles.xml has a bold xf entry; returns the xf index (0-based)
-    async function ensureBoldStyle(zip) {
-      const stylesFile = zip.file('xl/styles.xml');
-      if (!stylesFile) return 0;
-      let xml = await stylesFile.async('string');
-
-      // Count existing fonts to find new font index
-      const fontMatches = xml.match(/<font[\s>]/g) || [];
-      const boldFontIdx = fontMatches.length;
-
-      // Add bold font entry
-      xml = xml.replace('</fonts>', '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>');
-
-      // Count existing xf entries in cellXfs to find new xf index
-      const xfMatches = xml.match(/<xf /g) || [];
-      const boldXfIdx = xfMatches.length;
-
-      // Add xf referencing the bold font
-      xml = xml.replace('</cellXfs>', `<xf numFmtId="0" fontId="${boldFontIdx}" fillId="0" borderId="0" applyFont="1"/></cellXfs>`);
-
-      // Update fonts count
-      xml = xml.replace(/(<fonts count=")(\d+)(")/, (m, a, n, b) => `${a}${parseInt(n)+1}${b}`);
-      // Update cellXfs count
-      xml = xml.replace(/(<cellXfs count=")(\d+)(")/, (m, a, n, b) => `${a}${parseInt(n)+1}${b}`);
-
-      zip.file('xl/styles.xml', xml);
-      return boldXfIdx;
-    }
-
     // Inject a real Excel Table (TableStyleMedium9) into the xlsx buffer via JSZip
     // numericStartCol: first column index (0-based) that should get totalsRowFunction=sum
     // numericEndCol: last column index (0-based, inclusive) that gets sum; columns after get none
@@ -1469,18 +1440,44 @@ router.post('/export-excel', async (req, res) => {
       // Apply bold to target column cells via styles (separate pass, ws may have been updated above)
       if (boldColIdx != null) {
         const wsFileBold = zip.file('xl/worksheets/sheet1.xml');
-        if (wsFileBold) {
-          let wsXml = await wsFileBold.async('string');
-          const boldStyleIdx = await ensureBoldStyle(zip);
-          const boldColLetter = XLSX.utils.encode_col(boldColIdx);
-          wsXml = wsXml.replace(/<c r="([^"]+)"([^>]*?)(\s*\/>|>)/g, (match, addr, attrs, close) => {
-            const colLetter = addr.replace(/\d+/g, '');
-            const rowNum = parseInt(addr.match(/\d+/)[0], 10);
-            if (colLetter !== boldColLetter || rowNum < 2) return match;
-            const cleanAttrs = attrs.replace(/\s+s="[^"]*"/, '');
-            return `<c r="${addr}"${cleanAttrs} s="${boldStyleIdx}"${close}`;
-          });
-          zip.file('xl/worksheets/sheet1.xml', wsXml);
+        const stylesFileBold = zip.file('xl/styles.xml');
+        if (wsFileBold && stylesFileBold) {
+          let stylesXml = await stylesFileBold.async('string');
+
+          // Only proceed if we can safely locate cellXfs section
+          const cellXfsMatch = stylesXml.match(/<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/);
+          if (cellXfsMatch) {
+            const cellXfsContent = cellXfsMatch[1];
+            const xfCount = (cellXfsContent.match(/<xf[\s>]/g) || []).length;
+
+            // Count fonts only inside <fonts> block
+            const fontsMatch = stylesXml.match(/<fonts[^>]*>([\s\S]*?)<\/fonts>/);
+            const boldFontIdx = fontsMatch ? (fontsMatch[1].match(/<font[\s>]/g) || []).length : 0;
+
+            // Inject bold font
+            stylesXml = stylesXml.replace('</fonts>',
+              `<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>`);
+            stylesXml = stylesXml.replace(/(<fonts\s+count=")(\d+)(")/, (m, a, n, b) => `${a}${parseInt(n)+1}${b}`);
+
+            // Inject bold xf at end of cellXfs
+            stylesXml = stylesXml.replace('</cellXfs>',
+              `<xf numFmtId="0" fontId="${boldFontIdx}" fillId="0" borderId="0" applyFont="1"/></cellXfs>`);
+            stylesXml = stylesXml.replace(/(<cellXfs\s+count=")(\d+)(")/, (m, a, n, b) => `${a}${parseInt(n)+1}${b}`);
+
+            zip.file('xl/styles.xml', stylesXml);
+
+            // Patch worksheet: add s attr to bold column data cells
+            let wsXml = await wsFileBold.async('string');
+            const boldColLetter = XLSX.utils.encode_col(boldColIdx);
+            wsXml = wsXml.replace(/<c r="([^"]+)"([^>]*?)(\s*\/>|>)/g, (match, addr, attrs, close) => {
+              const colLetter = addr.replace(/\d+/g, '');
+              const rowNum = parseInt(addr.match(/\d+/)[0], 10);
+              if (colLetter !== boldColLetter || rowNum < 2) return match;
+              const cleanAttrs = attrs.replace(/\s+s="[^"]*"/, '');
+              return `<c r="${addr}"${cleanAttrs} s="${xfCount}"${close}`;
+            });
+            zip.file('xl/worksheets/sheet1.xml', wsXml);
+          }
         }
       }
 
