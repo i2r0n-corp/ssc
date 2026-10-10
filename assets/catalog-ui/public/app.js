@@ -24,7 +24,7 @@ let state = {
   sort: { col: null, dir: 'asc' },
   pptxListSettings: {
     open: false,
-    cols: { stream: true, phases: true, component: true, tier: false, objectives: true },
+    cols: { stream: true, phases: true, component: true, tier: false, objectives: true, pd: false },
     years: false, yearFrom: '2026', yearTo: '2030', yearBorders: false,
     groupByET: false, useDeckName: false,
     title: 'Services Description',
@@ -1082,6 +1082,7 @@ function renderPptxListSettingsModal() {
 
   const activeET = state.filters.engagementType || '';
   const truncateEnabled = !activeET || activeET.toLowerCase().includes('foundational') || activeET.toLowerCase().includes('enterprise support');
+  const pdEnabled = !activeET || activeET.toLowerCase().includes('max');
 
   const streamOn = s.cols.stream && bsActive;
 
@@ -1196,6 +1197,10 @@ function renderPptxListSettingsModal() {
         <label style="${checkLabel}">
           <input type="checkbox" ${s.switchTypes?'checked':''} onchange="setPptxSwitchTypes(this.checked)"/>
           Switch Types to Premium / Entitlements ${tip('Replaces engagement type labels with service types: Max → Premium Service, others → Service Entitlement')}
+        </label>
+        <label style="${pdEnabled?checkLabel:checkLabelOff}" ${!pdEnabled?'title="Not available when Engagement Type is Advanced or Foundational"':''}>
+          <input type="checkbox" ${s.cols.pd?'checked':''} ${!pdEnabled?'disabled':''} onchange="togglePptxCol('pd')"/>
+          Show typical effort estimates (if any) in PD column ${tip('Adds a narrow PD column after the objectives with effort estimate numbers for Max services')}
         </label>
       </div>
 

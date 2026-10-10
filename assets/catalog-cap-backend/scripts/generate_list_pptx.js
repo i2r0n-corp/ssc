@@ -72,6 +72,7 @@ const COL_W = {
   phases:     540000,  // ~2/3 of template value (810822)
   component: 1232132,
   tier:       810822,
+  pd:         380000,  // narrow: 3-char effort number
   year:       400000,
 };
 
@@ -233,13 +234,14 @@ function buildStreamOverlays(streamBlocks, colW, rowHeights, tableX) {
 // ── Column layout calculator ──────────────────────────────────────────────────
 
 function calcLayout(cols, yearCount) {
-  // cols: { stream, phases, component, tier, objectives } — booleans
+  // cols: { stream, phases, component, tier, objectives, pd } — booleans
   // yearCount: 0..6
   let used = 0;
   if (cols.stream)    used += COL_W.stream;
   if (cols.phases)    used += COL_W.phases;
   if (cols.component) used += COL_W.component;
   if (cols.tier)      used += COL_W.tier;
+  if (cols.pd)        used += COL_W.pd;
   used += yearCount * COL_W.year;
   const objW = Math.max(500000, TABLE_W - used);  // objectives gets the rest, min 500k EMU
   return { objW, yearCount };
@@ -254,6 +256,7 @@ function buildTblGrid(cols, objW, yearCount) {
   if (cols.component) g += `<a:gridCol w="${COL_W.component}"/>`;
   if (cols.tier)      g += `<a:gridCol w="${COL_W.tier}"/>`;
   g += `<a:gridCol w="${objW}"/>`;
+  if (cols.pd)        g += `<a:gridCol w="${COL_W.pd}"/>`;
   for (let i=0; i<yearCount; i++) g += `<a:gridCol w="${COL_W.year}"/>`;
   return `<a:tblGrid>${g}</a:tblGrid>`;
 }
@@ -268,6 +271,7 @@ function buildHeaderRows(cols, objW, yearCount, yearFrom, yearBorders) {
   if (cols.component) cells += headerCell('Service Name');
   if (cols.tier)      cells += headerCell('Type');
   cells += headerCell('Objectives', undefined, yearCount > 0 && yearBorders);
+  if (cols.pd) cells += headerCell('PD');
   for (let i = 0; i < yearCount; i++) {
     cells += yearBorders
       ? cellYear(String(yearFrom + i), true, i === yearCount - 1)
@@ -288,6 +292,7 @@ function buildDataRows(dataRows, cols, objW, yearCount, yearBorders) {
     if (cols.component) cells += cellData(dr.component);
     if (cols.tier)      cells += cellData(dr.tier);
     cells += cellData(dr.objectives, undefined, yearCount > 0 && yearBorders);
+    if (cols.pd)        cells += cellData(dr.pd || '', 'ctr');
     for (let i=0; i<yearCount; i++) {
       cells += yearBorders ? cellYear('', false, i === yearCount - 1) : cellData('', 'ctr');
     }
@@ -353,7 +358,8 @@ function buildSlideXml(templateSlideXml, dataRows, slideTitle, streamBlocks, col
  * @param {boolean}  opts.useDeckName
  * @param {number}   opts.yearFrom    — 0 = no years
  * @param {number}   opts.yearTo
- * @param {object}   opts.cols        — { stream, phases, component, tier, objectives }
+ * @param {object}   opts.cols        — { stream, phases, component, tier, objectives, pd }
+ * @param {boolean}  opts.showPD      — show effort estimate PD column
  */
 function generateListPptxBuffer(services, opts = {}) {
   const templateFile = opts.templateFile || path.join(__dirname, '..', 'data', 'ListTemplate.pptx');
@@ -376,6 +382,7 @@ function generateListPptxBuffer(services, opts = {}) {
     component: opts.cols ? !!opts.cols.component : true,
     tier:      opts.cols ? !!opts.cols.tier      : false,
     objectives:opts.cols ? !!opts.cols.objectives: true,
+    pd:        !!opts.showPD,
   };
 
   // Year range — 0 yearCount means no year columns
@@ -462,6 +469,7 @@ function generateListPptxBuffer(services, opts = {}) {
     const allPhases = PHASE_ORDER.every(p => phases.includes(p));
     const phasesText = allPhases ? 'All' : phases.join(', ');
     const objText = cols.objectives ? stripHtml(getObjectives(svc)) : '';
+    const pdText  = cols.pd ? (svc.effort_days || '') : '';
     const tierLabel = switchTypes
       ? (ET_LABEL_PREMIUM[svc.engagement_type] || svc.engagement_type || '')
       : ((svc.engagement_type || '').includes('Enterprise Support')
@@ -481,6 +489,7 @@ function generateListPptxBuffer(services, opts = {}) {
       component: name,
       tier:      tierLabel,
       objectives: objText,
+      pd:        pdText,
       rowH,
     };
   }

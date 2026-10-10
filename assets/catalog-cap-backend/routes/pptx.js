@@ -53,6 +53,13 @@ async function _loadFlatIndex() {
     for (const [code, phases] of Object.entries(phasesMap)) {
       if (flatIndex[code]) flatIndex[code]._phases = [...new Set(phases)];
     }
+    // Build effort estimates from catalog_classification
+    const effortRes = await db.query(
+      "SELECT service_code, feature_value FROM catalog_classification WHERE feature_key = 'effortEstimateDays'"
+    );
+    for (const row of effortRes.rows) {
+      if (flatIndex[row.service_code]) flatIndex[row.service_code]._effortDays = row.feature_value || '';
+    }
     // Build deck names from catalog_bs_naming
     const bsNamingRes = await db.query('SELECT service_code, bs_code, deck_name FROM catalog_bs_naming');
     for (const row of bsNamingRes.rows) {
@@ -172,6 +179,7 @@ router.post('/generatePptx', async (req, res) => {
           parent_name:      parentName,
           phases,
           business_scenario_naming: s._bsNaming || {},
+          effort_days:      s._effortDays || '',
         };
       });
 
@@ -199,6 +207,7 @@ router.post('/generatePptx', async (req, res) => {
         truncateObjectives: !!opts.truncateObjectives,
         yearBorders:        !!opts.yearBorders,
         switchTypes:        !!opts.switchTypes,
+        showPD:             !!(opts.cols && opts.cols.pd),
       });
       fs.writeFileSync(filePath, buf);
 
