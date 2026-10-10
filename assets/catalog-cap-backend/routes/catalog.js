@@ -544,14 +544,15 @@ router.get('/metadata', async (req, res) => {
       const db = require('../store/db');
       db.getPool();
 
-      const [syncRes, bsRes, modRes, etRes, phaseRes, supercatRes, maxTopicRes] = await Promise.all([
+      const [syncRes, bsRes, modRes, etRes, phaseRes, supercatRes, maxTopicRes, foundCatRes] = await Promise.all([
         db.query('SELECT last_updated, service_count FROM catalog_sync ORDER BY id DESC LIMIT 1'),
         db.query('SELECT code, name, raw_data->>\'url\' AS url FROM catalog_services WHERE service_object=\'Business Scenario\' ORDER BY name'),
         db.query('SELECT h.parent_code AS bs_code, s.code AS mod_code, s.name AS mod_name FROM catalog_hierarchy h JOIN catalog_services s ON s.code = h.child_code WHERE s.service_object = \'Business Scenario module\' ORDER BY h.position'),
         db.query('SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key=\'engagementType\' ORDER BY feature_value'),
         db.query('SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key=\'sapActivateProjectPhase\' ORDER BY feature_value'),
         db.query('SELECT DISTINCT category_name FROM catalog_supercategories ORDER BY category_name'),
-        db.query('SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key=\'maxFocusTopic\' ORDER BY feature_value')
+        db.query('SELECT DISTINCT feature_value FROM catalog_classification WHERE feature_key=\'maxFocusTopic\' ORDER BY feature_value'),
+        db.query('SELECT DISTINCT cs.category_name FROM catalog_supercategories cs JOIN catalog_classification cc ON cc.service_code = cs.service_code WHERE cc.feature_key = \'engagementType\' AND cc.feature_value = \'Enterprise Support\' AND cs.category_name NOT LIKE \'Success Plans for%\' ORDER BY cs.category_name')
       ]);
 
       if (syncRes.rows.length) {
@@ -572,7 +573,8 @@ router.get('/metadata', async (req, res) => {
           engagementTypes: etRes.rows.map(r => r.feature_value),
           phases: phaseRes.rows.map(r => r.feature_value),
           supercategories: supercatRes.rows.map(r => r.category_name),
-          maxFocusTopics: maxTopicRes.rows.map(r => r.feature_value)
+          maxFocusTopics: maxTopicRes.rows.map(r => r.feature_value),
+          foundationalCatsWithServices: foundCatRes.rows.map(r => r.category_name)
         });
       }
     } catch(dbErr) {
@@ -587,7 +589,7 @@ router.get('/metadata', async (req, res) => {
     const flatIndex = JSON.parse(data.payload).flat_index || {};
 
     const bsMap = {}, moduleMap = {}, bsToMods = {}, bsUrlMap = {};
-    const etSet = new Set(), phaseSet = new Set(), supercatMap = {};
+    const etSet = new Set(), phaseSet = new Set(), supercatMap = {}, foundCatSet = new Set();
 
     for (const [code, svc] of Object.entries(flatIndex)) {
       if (svc.serviceObject === 'Business Scenario') {
@@ -603,6 +605,7 @@ router.get('/metadata', async (req, res) => {
       }
       const ets = Array.isArray(svc.engagementType) ? svc.engagementType : (svc.engagementType ? [svc.engagementType] : []);
       ets.forEach(et => etSet.add(et));
+      const isFoundational = ets.includes('Enterprise Support');
       const cf = svc.classificationFeatures;
       if (Array.isArray(cf)) {
         for (const item of cf) {
@@ -614,7 +617,12 @@ router.get('/metadata', async (req, res) => {
       }
       const cats = svc.supercategories;
       if (Array.isArray(cats)) {
-        for (const c of cats) { if (c && c.name) supercatMap[c.name] = true; }
+        for (const c of cats) {
+          if (c && c.name) {
+            supercatMap[c.name] = true;
+            if (isFoundational && !c.name.startsWith('Success Plans for')) foundCatSet.add(c.name);
+          }
+        }
       }
     }
 
@@ -623,7 +631,8 @@ router.get('/metadata', async (req, res) => {
       bsMap, moduleMap, bsToMods, bsUrlMap,
       engagementTypes: [...etSet].sort(),
       phases: [...phaseSet].sort(),
-      supercategories: Object.keys(supercatMap).sort()
+      supercategories: Object.keys(supercatMap).sort(),
+      foundationalCatsWithServices: [...foundCatSet].sort()
     });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

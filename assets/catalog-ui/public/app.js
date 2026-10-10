@@ -70,6 +70,7 @@ async function loadCatalog() {
     state.catalog.phases = data.phases || [];
     state.catalog.supercategories = data.supercategories || [];
     state.catalog.maxFocusTopics = data.maxFocusTopics || [];
+    state.catalog.foundationalCatsWithServices = data.foundationalCatsWithServices || [];
     state.catalog.lastUpdated = data.lastUpdated;
     state.catalog.serviceCount = data.serviceCount;
     state.catalog.services = []; // not loaded upfront
@@ -231,7 +232,7 @@ function engagementBadge(et) {
   }
   return arr.map(val => {
     const display = mapEtDisplay(val);
-    const cls = display.includes('Max') ? 'badge-max' : display.includes('Advanced') ? 'badge-adv' : 'badge-ent';
+    const cls = val === 'Max Success Plan' ? 'badge-max' : val === 'Advanced Success Plan' ? 'badge-adv' : 'badge-ent';
     return `<span class="badge ${cls}">${display}</span>`;
   }).join(' ');
 }
@@ -239,7 +240,7 @@ function engagementBadge(et) {
 // ── Pages ─────────────────────────────────────────────────────────────────────
 
 function renderCatalogFilters() {
-  const { error, moduleMap = {}, bsMap = {}, phases = [], supercategories = [], maxFocusTopics: allMaxTopics = [] } = state.catalog;
+  const { error, moduleMap = {}, bsMap = {}, phases = [], supercategories = [], maxFocusTopics: allMaxTopics = [], foundationalCatsWithServices = [] } = state.catalog;
 
   const { phases: phaseCounts = {}, supercats: superCounts = {}, maxTopics: maxTopicCounts = {} } = state.catalog.filterCounts || {};
   const cnt = (map, key, mapname) => {
@@ -282,7 +283,7 @@ function renderCatalogFilters() {
   const disabledStyle = 'opacity:0.4;pointer-events:none';
 
   const advancedLoSItems  = supercategories.filter(s => s.startsWith('Success Plans for'));
-  const foundationalItems = supercategories.filter(s => !s.startsWith('Success Plans for'));
+  const foundationalItems = supercategories.filter(s => !s.startsWith('Success Plans for') && (foundationalCatsWithServices.length === 0 || foundationalCatsWithServices.includes(s)));
 
   const showAdvancedBadge     = et === 'Advanced Success Plan';
   const showFoundationalBadge = et === 'Enterprise Support';
@@ -463,6 +464,7 @@ function renderCatalogResults() {
   const hasSearched = state.catalog.hasSearched;
   const et = state.filters.engagementType;
   const bsSelected = !!state.filters.businessScenario && et !== 'Max Success Plan';
+  const showEffort = !et || et === 'Max Success Plan';
   return `
     ${loading ? '<div class="loading"><div class="loading-spinner"></div> Loading...</div>' : ''}
     ${!hasSearched && !loading ? `
@@ -536,6 +538,7 @@ function renderCatalogResults() {
               <span style="cursor:pointer" onclick="toggleSort('et')">Type ${state.sort.col==='et' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}</span>
             </div>
           </th>
+          ${showEffort ? `<th style="width:8rem;white-space:nowrap">Typical Effort</th>` : ''}
         </tr>
       </thead>
       <tbody>
@@ -555,6 +558,14 @@ function renderCatalogResults() {
           const deckNameVal = useDeck ? (bsNaming[bsCode] || null) : null;
           const displayName = deckNameVal || svc.name;
           const subName     = deckNameVal && deckNameVal !== svc.name ? svc.name : null;
+          const effortDays = (() => {
+            if (!showEffort) return null;
+            const cf = svc.classificationFeatures || [];
+            const f = cf.find(x => x.key === 'effortEstimateDays');
+            if (!f) return null;
+            const v = Array.isArray(f.value) ? f.value[0] : f.value;
+            return v ? `${v} days` : null;
+          })();
           return `
           <tr class="${state.selectedServices.has(svc.code) ? 'selected' : ''}">
             <td><input type="checkbox" ${state.selectedServices.has(svc.code)?'checked':''} onchange="toggleSelect('${svc.code}')" /></td>
@@ -564,6 +575,7 @@ function renderCatalogResults() {
               ${subName ? `<div style="font-size:0.75rem;color:#6a6a6a">${subName}</div>` : ''}
             </td>
             <td>${engagementBadge(svc.engagementType)}</td>
+            ${showEffort ? `<td style="font-size:0.8rem;color:#556B82">${effortDays || '—'}</td>` : ''}
           </tr>`;
         }).join('');
         })()}
