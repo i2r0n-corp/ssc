@@ -67,7 +67,7 @@ const TOOLS = [
   },
   {
     name: 'generatePresentation',
-    description: 'Generate a PowerPoint presentation for a list of services and return a download URL. Use serviceCodes from searchServices results.',
+    description: 'Generate a PowerPoint presentation for a list of services and return a download URL. Supports list table format (with optional columns: phases, component, tier, objectives, PD effort estimate; optional year timeline columns with borders; ET grouping; type label switching) as well as short-description and one-pager templates.',
     inputSchema: {
       type: 'object',
       required: ['serviceCodes'],
@@ -113,6 +113,7 @@ async function callTool(name, args, logonName) {
   try {
     const db = require('../store/db');
     db.getPool();
+    db.logVisit({ logonName, page: 'MCP', sessionId: null }).catch(() => {});
     return await callToolDb(name, args, db, logonName);
   } catch {
     return callToolSnapshot(name, args);
@@ -244,7 +245,6 @@ async function callGeneratePresentation(args, logonName) {
     return { error: 'serviceCodes must be a non-empty array' };
   }
   const db = (() => { try { return require('../store/db'); } catch { return null; } })();
-  if (db) db.logVisit({ logonName, page: 'MCP', sessionId: null });
   try {
     const http = require('http');
     const port = process.env.PORT || 4004;
