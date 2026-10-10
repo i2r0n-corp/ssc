@@ -234,6 +234,17 @@ CREATE TABLE IF NOT EXISTS catalog_visitor_last_seen (
   last_seen   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   visit_count INTEGER NOT NULL DEFAULT 1
 );
+
+CREATE TABLE IF NOT EXISTS catalog_mcp_requests (
+  id           BIGSERIAL PRIMARY KEY,
+  email        TEXT NOT NULL,
+  requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  status       TEXT NOT NULL DEFAULT 'open',
+  closed_at    TIMESTAMPTZ,
+  closed_by    TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_requests_email_open
+  ON catalog_mcp_requests(email) WHERE status = 'open';
 `;
 
 async function initSchema() {

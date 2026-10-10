@@ -37,7 +37,8 @@ let state = {
   exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null, sortCol: 'logged_at', sortDir: 'desc' },
   currentUser: null,
   myPermissions: { catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false },
-  admin: { users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null },
+  admin: { users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, selectedVisitorUser: null },
+  mcpModal: { open: false, sent: false, sending: false, error: null },
   accessDeniedModal: false,
   backendDown: false,
   exportTotal: null,
@@ -772,7 +773,7 @@ window.navigate = function(page) {
   if (page === 'catalog' && !state.catalog.bsMap) loadCatalog();
   if (page === 'debug') loadDebugLog();
   if (page === 'exportlog') loadExportLog();
-  if (page === 'admin') { loadAdminUsers(); loadAdminVisitorLog(); }
+  if (page === 'admin') { loadAdminUsers(); loadAdminVisitorLog(); loadAdminMcpRequests(); }
   // Log page visit
   apiFetch(`${CAP_BACKEND_URL}/api/catalog/visitor`, { method: 'POST', body: JSON.stringify({ page, sessionId: state.sessionId }) }).catch(() => {});
 };
@@ -1633,6 +1634,28 @@ async function loadAdminVisitorLog() {
   state.admin.visitorLoading = false; render();
 }
 
+async function loadAdminMcpRequests() {
+  state.admin.mcpRequestsLoading = true; state.admin.mcpRequestsError = null; render();
+  try {
+    const data = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/mcp-requests`);
+    state.admin.mcpRequests = data.rows || [];
+  } catch (e) { state.admin.mcpRequestsError = e.message; }
+  state.admin.mcpRequestsLoading = false; render();
+}
+
+window.adminCloseMcpRequest = async function(id) {
+  try {
+    await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/mcp-requests/close`, { method: 'POST', body: JSON.stringify({ id }) });
+    await loadAdminMcpRequests();
+  } catch (e) { state.admin.mcpRequestsError = e.message; render(); }
+};
+
+window.adminToggleMcpOpen = function() { state.admin.mcpOpenCollapsed = !state.admin.mcpOpenCollapsed; render(); };
+window.adminSelectVisitorUser = function(email) {
+  state.admin.selectedVisitorUser = state.admin.selectedVisitorUser === email ? null : email;
+  render();
+};
+
 window.adminSetPerm = async function(email, tab, value) {
   const user = state.admin.users.find(u => u.email === email);
   if (!user) return;
@@ -1681,7 +1704,8 @@ window.adminDeleteUser = async function(email) {
 };
 
 function renderAdminPage() {
-  const { users, usersLoading, usersError, newEmail, visitorLog, visitorLastSeen, visitorLoading, visitorError } = state.admin;
+  const { users, usersLoading, usersError, newEmail, visitorLog, visitorLastSeen, visitorLoading, visitorError,
+          mcpRequests, mcpRequestsLoading, mcpRequestsError, mcpOpenCollapsed, selectedVisitorUser } = state.admin;
   const TABS = ['incidents','chat','debug','exportlog','admin'];
   const TAB_LABELS = { incidents:'Incidents', chat:'Chat', debug:'Debug', exportlog:'Export Log', admin:'Admin' };
   const fmtDate = iso => new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
@@ -1693,78 +1717,201 @@ function renderAdminPage() {
        <option value="false" ${val?'':'selected'}>No</option>
      </select>`;
 
-  return `
-  <div class="card" style="margin-bottom:1.5rem">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
-      <h3 style="margin:0;font-size:1rem">User Permissions</h3>
-      <button class="btn btn-secondary btn-sm" onclick="loadAdminUsers()">↻ Refresh</button>
-    </div>
-    ${usersError ? `<div class="error-strip">⚠ ${usersError}</div>` : ''}
-    ${usersLoading ? `<div style="color:#6a6a6a;padding:1rem;text-align:center">Loading…</div>` : `
-    <div style="overflow-x:auto">
-      <table class="service-table" style="font-size:0.8rem;min-width:700px">
-        <thead>
-          <tr>
+  const openReqs   = mcpRequests.filter(r => r.status === 'open');
+  const closedReqs = mcpRequests.filter(r => r.status === 'closed');
+  const filteredVisits = selectedVisitorUser
+    ? visitorLog.filter(r => r.logon_name === selectedVisitorUser)
+    : visitorLog;
+
+  const colLeft = `
+    <!-- User Permissions -->
+    <div class="card" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <h3 style="margin:0;font-size:1rem">User Permissions</h3>
+        <button class="btn btn-secondary btn-sm" onclick="loadAdminUsers()">↻ Refresh</button>
+      </div>
+      ${usersError ? `<div class="error-strip">⚠ ${usersError}</div>` : ''}
+      ${usersLoading ? `<div style="color:#6a6a6a;padding:1rem;text-align:center">Loading…</div>` : `
+      <div style="overflow-x:auto">
+        <table class="service-table" style="font-size:0.8rem;min-width:600px">
+          <thead><tr>
             <th>Email</th>
             ${TABS.map(t => `<th style="text-align:center">${TAB_LABELS[t]}</th>`).join('')}
             <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          ${users.map(u => `<tr>
-            <td style="white-space:nowrap">${u.email}</td>
-            ${TABS.map(t => `<td style="text-align:center">${sel(u.email, t, u['tab_'+t])}</td>`).join('')}
-            <td><button class="btn btn-secondary btn-sm" style="color:#dc3545" onclick="window.adminDeleteUser('${u.email}')">✕</button></td>
-          </tr>`).join('')}
-          <tr style="background:#f7f8f9">
-            <td><input type="text" placeholder="new@email.com" value="${newEmail}"
-              oninput="window.adminEmailInput(this.value)"
-              style="width:100%;padding:0.3rem 0.5rem;font-size:0.8rem;border:1px solid #8696A9;border-radius:4px"
-              onkeydown="if(event.key==='Enter')window.adminAddUser()"/></td>
-            <td colspan="${TABS.length}"></td>
-            <td><button class="btn btn-primary btn-sm" onclick="window.adminAddUser()">+ Add</button></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>`}
-  </div>
+          </tr></thead>
+          <tbody>
+            ${users.map(u => `<tr>
+              <td style="white-space:nowrap">${u.email}</td>
+              ${TABS.map(t => `<td style="text-align:center">${sel(u.email, t, u['tab_'+t])}</td>`).join('')}
+              <td><button class="btn btn-secondary btn-sm" style="color:#dc3545" onclick="window.adminDeleteUser('${u.email}')">✕</button></td>
+            </tr>`).join('')}
+            <tr style="background:#f7f8f9">
+              <td><input type="text" placeholder="new@email.com" value="${newEmail}"
+                oninput="window.adminEmailInput(this.value)"
+                style="width:100%;padding:0.3rem 0.5rem;font-size:0.8rem;border:1px solid #8696A9;border-radius:4px"
+                onkeydown="if(event.key==='Enter')window.adminAddUser()"/></td>
+              <td colspan="${TABS.length}"></td>
+              <td><button class="btn btn-primary btn-sm" onclick="window.adminAddUser()">+ Add</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>`}
+    </div>
 
-  <div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
-      <h3 style="margin:0;font-size:1rem">Visitor Log</h3>
-      <button class="btn btn-secondary btn-sm" onclick="loadAdminVisitorLog()">↻ Refresh</button>
-    </div>
-    ${visitorError ? `<div class="error-strip">⚠ ${visitorError}</div>` : ''}
-    ${visitorLoading ? `<div style="color:#6a6a6a;padding:1rem;text-align:center">Loading…</div>` : `
-    <div style="margin-bottom:1.5rem">
-      <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem">Last Seen per User</div>
+    <!-- Open MCP Requests -->
+    <div class="card" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${mcpOpenCollapsed?'0':'1rem'}">
+        <h3 style="margin:0;font-size:1rem">Open MCP Credentials Requests ${openReqs.length>0?`<span style="background:#dc3545;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;font-weight:700;margin-left:6px">${openReqs.length}</span>`:''}</h3>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <button class="btn btn-secondary btn-sm" onclick="loadAdminMcpRequests()">↻</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.adminToggleMcpOpen()" title="${mcpOpenCollapsed?'Expand':'Collapse'}">${mcpOpenCollapsed?'▶':'▼'}</button>
+        </div>
+      </div>
+      ${mcpRequestsError ? `<div class="error-strip">⚠ ${mcpRequestsError}</div>` : ''}
+      ${!mcpOpenCollapsed ? (mcpRequestsLoading ? `<div style="color:#6a6a6a;padding:0.5rem;text-align:center">Loading…</div>` : `
       <table class="service-table" style="font-size:0.8rem">
-        <thead><tr><th>Email</th><th>Last Seen</th><th style="text-align:center">Total Visits</th></tr></thead>
+        <thead><tr><th>Email</th><th>Requested</th><th></th></tr></thead>
         <tbody>
-          ${visitorLastSeen.map(r => `<tr>
-            <td>${r.logon_name}</td>
-            <td style="white-space:nowrap">${fmtDate(r.last_seen)}</td>
-            <td style="text-align:center">${r.visit_count}</td>
-          </tr>`).join('') || '<tr><td colspan="3" style="color:#6a6a6a;text-align:center">No visits yet</td></tr>'}
+          ${openReqs.map(r => `<tr>
+            <td>${r.email}</td>
+            <td style="white-space:nowrap">${fmtDate(r.requested_at)}</td>
+            <td><button class="btn btn-secondary btn-sm" style="font-size:0.75rem" onclick="window.adminCloseMcpRequest(${r.id})">Close</button></td>
+          </tr>`).join('') || '<tr><td colspan="3" style="color:#6a6a6a;text-align:center">No open requests</td></tr>'}
         </tbody>
-      </table>
+      </table>`) : ''}
     </div>
-    <div>
-      <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem">Recent Page Visits (last 1000)</div>
+
+    <!-- Closed MCP Requests -->
+    <div class="card">
+      <h3 style="margin:0 0 1rem;font-size:1rem">Closed MCP Credentials Requests</h3>
+      ${mcpRequestsLoading ? `<div style="color:#6a6a6a;padding:0.5rem;text-align:center">Loading…</div>` : `
       <table class="service-table" style="font-size:0.8rem">
-        <thead><tr><th>Date / Time</th><th>Email</th><th>Page</th><th>Session</th></tr></thead>
+        <thead><tr><th>Email</th><th>Requested</th><th>Closed</th><th>By</th></tr></thead>
         <tbody>
-          ${visitorLog.map(r => `<tr>
-            <td style="white-space:nowrap">${fmtDate(r.visited_at)}</td>
-            <td>${r.logon_name}</td>
-            <td>${r.page || '—'}</td>
-            <td style="font-size:0.7rem;color:#6a6a6a">${r.session_id || '—'}</td>
-          </tr>`).join('') || '<tr><td colspan="4" style="color:#6a6a6a;text-align:center">No visits yet</td></tr>'}
+          ${closedReqs.map(r => `<tr>
+            <td>${r.email}</td>
+            <td style="white-space:nowrap">${fmtDate(r.requested_at)}</td>
+            <td style="white-space:nowrap">${r.closed_at ? fmtDate(r.closed_at) : '—'}</td>
+            <td style="font-size:0.75rem;color:#6a6a6a">${r.closed_by || '—'}</td>
+          </tr>`).join('') || '<tr><td colspan="4" style="color:#6a6a6a;text-align:center">No closed requests</td></tr>'}
         </tbody>
-      </table>
-    </div>`}
+      </table>`}
+    </div>`;
+
+  const colRight = `
+    <!-- Visitor Log -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <h3 style="margin:0;font-size:1rem">Visitor Log</h3>
+        <button class="btn btn-secondary btn-sm" onclick="loadAdminVisitorLog()">↻ Refresh</button>
+      </div>
+      ${visitorError ? `<div class="error-strip">⚠ ${visitorError}</div>` : ''}
+      ${visitorLoading ? `<div style="color:#6a6a6a;padding:1rem;text-align:center">Loading…</div>` : `
+      <div style="margin-bottom:1.5rem">
+        <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem">Last Seen per User
+          ${selectedVisitorUser ? `<button class="btn btn-secondary btn-sm" style="margin-left:0.75rem;font-size:0.72rem" onclick="window.adminSelectVisitorUser(null)">✕ Clear filter</button>` : ''}
+        </div>
+        <table class="service-table" style="font-size:0.8rem">
+          <thead><tr><th>Email</th><th>Last Seen</th><th style="text-align:center">Total Visits</th></tr></thead>
+          <tbody>
+            ${visitorLastSeen.map(r => {
+              const isSelected = selectedVisitorUser === r.logon_name;
+              const isDimmed   = selectedVisitorUser && !isSelected;
+              return `<tr style="cursor:pointer;${isSelected?'background:#d0e8f5;':''}${isDimmed?'color:#b0bec5;':''}"
+                onclick="window.adminSelectVisitorUser('${r.logon_name.replace(/'/g,"\\'")}')">
+                <td>${r.logon_name}</td>
+                <td style="white-space:nowrap">${fmtDate(r.last_seen)}</td>
+                <td style="text-align:center">${r.visit_count}</td>
+              </tr>`;
+            }).join('') || '<tr><td colspan="3" style="color:#6a6a6a;text-align:center">No visits yet</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem">
+          Recent Page Visits (last 1000)${selectedVisitorUser ? ` — <span style="font-weight:400;color:#1D6FA4">${selectedVisitorUser}</span>` : ''}
+        </div>
+        <table class="service-table" style="font-size:0.8rem">
+          <thead><tr><th>Date / Time</th><th>Email</th><th>Page</th><th>Session</th></tr></thead>
+          <tbody>
+            ${filteredVisits.map(r => `<tr>
+              <td style="white-space:nowrap">${fmtDate(r.visited_at)}</td>
+              <td>${r.logon_name}</td>
+              <td>${r.page || '—'}</td>
+              <td style="font-size:0.7rem;color:#6a6a6a">${r.session_id || '—'}</td>
+            </tr>`).join('') || '<tr><td colspan="4" style="color:#6a6a6a;text-align:center">No visits yet</td></tr>'}
+          </tbody>
+        </table>
+      </div>`}
+    </div>`;
+
+  return `
+  <style>
+    .admin-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start; }
+    @media (max-width:765px) { .admin-grid { grid-template-columns:1fr; } }
+  </style>
+  <div class="admin-grid">
+    <div>${colLeft}</div>
+    <div>${colRight}</div>
   </div>`;
 }
+
+
+function renderMcpModal() {
+  const m = state.mcpModal;
+  if (!m.open) return '';
+  const capabilities = [
+    { name: 'Search Services',         desc: 'Find catalog services by keyword, engagement type, or business scenario' },
+    { name: 'Get Service Details',     desc: 'Retrieve full details of any service by its code' },
+    { name: 'List Business Scenarios', desc: 'Get the full list of available business scenarios with codes and names' },
+    { name: 'Catalog Statistics',      desc: 'Fetch total service count and last catalog update timestamp' },
+    { name: 'Generate Presentation',   desc: 'Build and download a PowerPoint list from any set of services' },
+    { name: 'Custom PPTX Columns',     desc: 'Control which columns appear in the generated presentation', comingSoon: true },
+  ];
+  return `
+  <div class="modal-overlay" onclick="if(event.target===this)window.closeMcpModal()">
+    <div class="modal-box" style="max-width:560px">
+      <button class="modal-close" onclick="window.closeMcpModal()">✕</button>
+      <h3 style="margin-top:0;font-size:1.05rem">MCP for Joule Work Desktop</h3>
+      <p style="font-size:0.875rem;color:#3a3a3a;line-height:1.55;margin:0 0 1rem">
+        You can use the capabilities of this service via your Joule Work Desktop to create agents that utilise
+        the following capabilities through MCP (Model Context Protocol):
+      </p>
+      <ul style="margin:0 0 1.25rem;padding-left:1.25rem;display:flex;flex-direction:column;gap:0.5rem">
+        ${capabilities.map(c => `
+        <li style="font-size:0.875rem;color:${c.comingSoon?'#8696A9':'#1D2D3E'}">
+          <span style="font-weight:600">${c.name}</span>${c.comingSoon?' <span style="font-size:0.72rem;background:#e8f0f7;color:#1D6FA4;border-radius:3px;padding:1px 5px;vertical-align:middle">coming soon</span>':''}<br>
+          <span style="color:#556B82;font-size:0.82rem">${c.desc}</span>
+        </li>`).join('')}
+      </ul>
+      ${m.error ? `<div class="error-strip" style="margin-bottom:0.75rem">⚠ ${m.error}</div>` : ''}
+      ${m.sent
+        ? `<div style="background:#d4edda;color:#155724;border-radius:6px;padding:0.65rem 1rem;font-size:0.875rem;margin-bottom:0.75rem">
+             ✓ Your request has been submitted. The administrator will follow up with you.
+           </div>`
+        : `<p style="font-size:0.875rem;color:#556B82;margin:0 0 1rem">
+             Interested in connecting your JWD agents to this catalog?
+           </p>`}
+      <div style="display:flex;justify-content:flex-end;gap:0.75rem">
+        <button class="btn btn-secondary btn-sm" onclick="window.closeMcpModal()">Close</button>
+        ${!m.sent ? `<button class="btn btn-primary btn-sm" ${m.sending?'disabled':''} onclick="window.requestMcpAccess()">
+          ${m.sending?'Sending…':'Request MCP Access'}
+        </button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+window.openMcpModal  = function() { state.mcpModal = { open: true, sent: false, sending: false, error: null }; render(); };
+window.closeMcpModal = function() { state.mcpModal.open = false; render(); };
+window.requestMcpAccess = async function() {
+  state.mcpModal.sending = true; state.mcpModal.error = null; render();
+  try {
+    await apiFetch(`${CAP_BACKEND_URL}/api/catalog/mcp-request`, { method: 'POST' });
+    state.mcpModal.sent = true;
+  } catch (e) { state.mcpModal.error = e.message; }
+  state.mcpModal.sending = false; render();
+};
 
 function render() {
   const app = document.getElementById('app');
@@ -1799,7 +1946,8 @@ function render() {
     <div class="shell-top">
       <div class="shell-top-inner">
         <span class="shell-bar-title">Success Plans Catalogue Intelligence</span>
-        <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" class="btn btn-secondary btn-sm" style="margin-left:auto;font-size:0.8rem">Feedback</a>
+        <button class="btn btn-secondary btn-sm" onclick="window.openMcpModal()" style="margin-left:auto;font-size:0.8rem">MCP for JWD</button>
+        <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" class="btn btn-secondary btn-sm" style="font-size:0.8rem">Feedback</a>
       </div>
     </div>
     <div class="shell-bar">
@@ -1814,6 +1962,7 @@ function render() {
     ${renderServiceDetailModal()}
     ${renderPptxListSettingsModal()}
     ${renderExportLogDetailModal()}
+    ${renderMcpModal()}
     ${state.accessDeniedModal ? `
     <div class="modal-overlay" onclick="if(event.target===this)window.closeAccessDenied()">
       <div class="modal-box" style="max-width:420px">

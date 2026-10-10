@@ -1249,4 +1249,53 @@ router.get('/admin/visitor-log', requireAdmin, async (req, res) => {
   }
 });
 
+// ── MCP credential requests ───────────────────────────────────────────────────
+
+router.post('/mcp-request', async (req, res) => {
+  const payload = getJwtPayload(req);
+  const email = (payload?.user_name || payload?.email || '').toLowerCase();
+  if (!email) return res.status(401).json({ error: 'Not authenticated' });
+  try {
+    const db = require('../store/db');
+    await db.query(
+      `INSERT INTO catalog_mcp_requests (email) VALUES ($1)
+       ON CONFLICT (email) WHERE status = 'open' DO NOTHING`,
+      [email]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/admin/mcp-requests', requireAdmin, async (req, res) => {
+  try {
+    const db = require('../store/db');
+    const r = await db.query(
+      `SELECT id, email, requested_at, status, closed_at, closed_by
+       FROM catalog_mcp_requests ORDER BY requested_at DESC`
+    );
+    res.json({ rows: r.rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/admin/mcp-requests/close', requireAdmin, async (req, res) => {
+  const payload = getJwtPayload(req);
+  const closedBy = (payload?.user_name || payload?.email || '').toLowerCase();
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ error: 'id required' });
+  try {
+    const db = require('../store/db');
+    await db.query(
+      `UPDATE catalog_mcp_requests SET status='closed', closed_at=NOW(), closed_by=$1 WHERE id=$2`,
+      [closedBy, id]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
