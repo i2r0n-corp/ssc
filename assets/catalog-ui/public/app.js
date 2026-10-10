@@ -28,10 +28,15 @@ let state = {
     years: false, yearFrom: '2026', yearTo: '2030', yearBorders: false,
     groupByET: false, useDeckName: false,
     title: 'Services Description',
-    streamMode: 'bsAndModule',  // 'bsAndModule' | 'moduleOnly' | 'custom' | 'customNoBS'
+    streamMode: 'bsAndModule',
     streamCustom: '',
     truncateObjectives: false,
     switchTypes: false,
+  },
+  excelSettings: {
+    open: false,
+    pdMode: false,
+    yearFrom: '2026', yearTo: '2030',
   },
   chat: { messages: [], loading: false, input: '' },
   exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null, sortCol: 'logged_at', sortDir: 'desc' },
@@ -498,6 +503,9 @@ function renderCatalogResults() {
         ${state.selectedServices.size > 0 ? `<span style="font-size:0.8rem;color:#6a6a6a"> — <strong>${state.selectedServices.size} selected</strong></span>` : ''}
         ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="margin-left:0.75rem;color:#155724;font-weight:600">Successfully downloaded</span>` : ''}
       </span>
+      <button class="btn btn-primary btn-sm" onclick="openExcelSettings()" title="Export to Excel" style="display:inline-flex;align-items:center;gap:5px">
+        <img src="excel.svg" style="height:14px;width:auto" alt="" />${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
+      </button>
       <button class="btn btn-primary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)" style="display:inline-flex;align-items:center;gap:5px">
         <img src="pptx.svg" style="height:14px;width:auto" alt="" />List ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
@@ -505,12 +513,6 @@ function renderCatalogResults() {
         <button class="btn btn-primary btn-sm" disabled style="opacity:0.45;cursor:not-allowed">
           📄 PPTX One-Pagers
         </button>
-      </div>
-      <div>
-        ${state.selectedServices.size > 0
-          ? `<button class="btn btn-secondary btn-sm" onclick="exportExcel()" title="Export selected to Excel">📊 Export Excel (${state.selectedServices.size})</button>`
-          : `<button class="btn btn-secondary btn-sm" onclick="exportExcel()" title="Export all to Excel">📊 Export Excel (all)</button>`
-        }
       </div>
     </div>
     ${state.pptx.error ? `<div class="error-strip" style="margin-bottom:0.5rem">⚠ ${state.pptx.error}</div>` : ''}
@@ -1035,6 +1037,12 @@ window.closeServiceDetail = function() {
 window.openPptxListSettings = function() {
   state.pptxListSettings.open = true; render();
 };
+window.openExcelSettings = function() {
+  state.excelSettings.open = true; render();
+};
+window.closeExcelSettings = function() {
+  state.excelSettings.open = false; render();
+};
 window.closePptxListSettings = function() {
   state.pptxListSettings.open = false; render();
 };
@@ -1232,37 +1240,69 @@ function colCheck(key, label, checked, disabled, title) {
   </label>`;
 }
 
-window.exportExcel = function() {
+window.exportExcel = async function() {
+  const s = state.excelSettings;
   const svcs = state.selectedServices.size > 0
-    ? state.filteredServices.filter(s => state.selectedServices.has(s.code))
+    ? state.filteredServices.filter(x => state.selectedServices.has(x.code))
     : state.filteredServices;
   if (svcs.length === 0) { alert('No services to export.'); return; }
-
-  // Build CSV
-  const strip = html => (html||'').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  const esc = v => `"${String(v||'').replace(/"/g,'""')}"`;
-
-  const headers = ['Code','ServiceNumber','Name','ShortDescription','EngagementType','BusinessScenarioNaming','Summary','TeaserText','BusinessNeeds','KeyBenefits','DeliveryApproach','Description'];
-  const rows = [headers.join(',')];
-  for (const s of svcs) {
-    const bsNaming = s.business_scenario_naming || s.businessScenarioNaming || {};
-    const bsNamingStr = Object.entries(bsNaming).map(([k,v]) => `${k}:${v}`).join('; ');
-    const et = Array.isArray(s.engagementType) ? s.engagementType.join('; ') : (s.engagementType||'');
-    rows.push([
-      esc(s.code), esc(s.serviceNumber||s.number||''), esc(s.name), esc(strip(s.shortDescription)),
-      esc(et), esc(bsNamingStr),
-      esc(strip(s.summary)), esc(strip(s.serviceTeaserText||s.teaserText)),
-      esc(strip(s.businessNeeds)), esc(strip(s.keyBenefits)),
-      esc(strip(s.deliveryApproach)), esc(strip(s.description))
-    ].join(','));
-  }
-  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `ssc_services_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  state.excelSettings.open = false; render();
+  try {
+    const bsCode = state.filters.businessScenario || null;
+    const res = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/export-excel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        services: svcs,
+        pdMode: s.pdMode,
+        yearFrom: s.pdMode ? s.yearFrom : null,
+        yearTo:   s.pdMode ? s.yearTo   : null,
+        bsCode,
+      })
+    });
+    const a = document.createElement('a'); a.href = res.downloadUrl;
+    a.download = `ssc_export_${new Date().toISOString().slice(0,10)}.xlsx`;
+    a.click();
+  } catch(e) { alert('Export failed: ' + e.message); }
 };
+
+function renderExcelSettingsModal() {
+  const s = state.excelSettings;
+  if (!s.open) return '';
+  const yf = parseInt(s.yearFrom,10)||0, yt = parseInt(s.yearTo,10)||0;
+  const yearValid = !s.pdMode || (s.yearFrom.length===4 && s.yearTo.length===4 && yf>=2000 && yf<=2050 && yt>=yf);
+  const inp = 'width:70px;padding:0.3rem 0.4rem;font-size:0.875rem;border:1px solid #8696A9;border-radius:4px;text-align:center';
+  return `
+  <div class="modal-overlay" onclick="if(event.target===this)closeExcelSettings()">
+    <div class="modal-box" style="max-width:480px">
+      <button class="modal-close" onclick="closeExcelSettings()">✕</button>
+      <h3 style="margin-top:0;display:flex;align-items:center;gap:8px">
+        <img src="excel.svg" style="height:18px;width:auto" alt=""/>Excel Export Settings
+      </h3>
+      <div style="font-size:0.82rem;color:#6a6a6a;margin-bottom:1.25rem">
+        Configure the export format before downloading.
+      </div>
+      <label style="display:flex;align-items:flex-start;gap:0.6rem;cursor:pointer;font-size:0.875rem;margin-bottom:1rem">
+        <input type="checkbox" ${s.pdMode?'checked':''} onchange="state.excelSettings.pdMode=this.checked;render()" style="margin-top:2px"/>
+        <span><strong>Export option for premium days calculation</strong><br/>
+        <span style="font-size:0.78rem;color:#6a6a6a">Exports CRM ID, link, Name, PD and year columns formatted as an Excel table with totals row</span></span>
+      </label>
+      <div style="${s.pdMode?'':'opacity:0.45;pointer-events:none'}">
+        <div style="font-weight:600;font-size:0.82rem;margin-bottom:0.5rem">Year range</div>
+        <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem">
+          <input type="text" maxlength="4" value="${s.yearFrom}" oninput="state.excelSettings.yearFrom=this.value.replace(/\\D/g,'').slice(0,4);render()" style="${inp}" placeholder="2026" ${s.pdMode?'':'disabled'}/>
+          <span>—</span>
+          <input type="text" maxlength="4" value="${s.yearTo}" oninput="state.excelSettings.yearTo=this.value.replace(/\\D/g,'').slice(0,4);render()" style="${inp}" placeholder="2030" ${s.pdMode?'':'disabled'}/>
+          ${!yearValid && s.pdMode ? `<span style="color:#c00;font-size:0.78rem">Invalid range</span>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:1.5rem">
+        <button class="btn btn-secondary btn-sm" onclick="closeExcelSettings()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="exportExcel()" ${!yearValid?'disabled':''}>⬇ Export Now</button>
+      </div>
+    </div>
+  </div>`;
+}
 
 window.sendMessage = async function() {
   const input = document.getElementById('chat-input')?.value || state.chat.input;
@@ -2000,6 +2040,7 @@ function render() {
     <div class="page-content">${content}</div>
     ${renderServiceDetailModal()}
     ${renderPptxListSettingsModal()}
+    ${renderExcelSettingsModal()}
     ${renderExportLogDetailModal()}
     ${renderMcpModal()}
     ${state.accessDeniedModal ? `
