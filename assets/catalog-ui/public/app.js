@@ -1058,7 +1058,7 @@ window.toggleExcelPdMode = function() {
 window.setExcelYear = function(field, val) {
   state.excelSettings[field] = val.replace(/\D/g,'').slice(0,4);
   clearTimeout(window._excelYearDebounce);
-  window._excelYearDebounce = setTimeout(render, 600);
+  window._excelYearDebounce = setTimeout(render, 1000);
 };
 window.closePptxListSettings = function() {
   state.pptxListSettings.open = false; render();
@@ -1309,9 +1309,9 @@ function renderExcelSettingsModal() {
       <div style="${s.pdMode?'':'opacity:0.45;pointer-events:none'}">
         <div style="font-weight:600;font-size:0.82rem;margin-bottom:0.5rem">Year range</div>
         <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem">
-          <input type="text" maxlength="4" value="${s.yearFrom}" oninput="setExcelYear('yearFrom',this.value)" style="${inp}" placeholder="2026" ${s.pdMode?'':'disabled'}/>
+          <input type="text" id="excel-year-from" maxlength="4" oninput="setExcelYear('yearFrom',this.value)" style="${inp}" placeholder="2026" ${s.pdMode?'':'disabled'}/>
           <span>—</span>
-          <input type="text" maxlength="4" value="${s.yearTo}" oninput="setExcelYear('yearTo',this.value)" style="${inp}" placeholder="2030" ${s.pdMode?'':'disabled'}/>
+          <input type="text" id="excel-year-to" maxlength="4" oninput="setExcelYear('yearTo',this.value)" style="${inp}" placeholder="2030" ${s.pdMode?'':'disabled'}/>
           ${!yearValid && s.pdMode ? `<span style="color:#c00;font-size:0.78rem">Invalid range</span>` : ''}
         </div>
       </div>
@@ -2106,6 +2106,12 @@ function render() {
   if (yt && document.activeElement !== yt) yt.value = state.pptxListSettings.yearTo;
   if (yf && !yf.value) yf.value = state.pptxListSettings.yearFrom;
   if (yt && !yt.value) yt.value = state.pptxListSettings.yearTo;
+  const eyf = document.getElementById('excel-year-from');
+  const eyt = document.getElementById('excel-year-to');
+  if (eyf && document.activeElement !== eyf) eyf.value = state.excelSettings.yearFrom;
+  if (eyt && document.activeElement !== eyt) eyt.value = state.excelSettings.yearTo;
+  if (eyf && !eyf.value) eyf.value = state.excelSettings.yearFrom;
+  if (eyt && !eyt.value) eyt.value = state.excelSettings.yearTo;
 
   // Fade out "Successfully downloaded" after 5s then clear state
   const dlMsg = document.getElementById('pptx-dl-msg');
