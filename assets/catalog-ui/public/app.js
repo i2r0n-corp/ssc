@@ -1964,16 +1964,13 @@ function renderMcpModal() {
     { name: 'List Business Scenarios', desc: 'Browse all available scenarios with codes and names' },
     { name: 'Catalog Statistics',      desc: 'Check total service count and last catalog update' },
     { name: 'Generate Presentation',   desc: 'Build and download a PowerPoint list from any set of services' },
-    { name: 'Custom PPTX Columns',     desc: 'Control which columns appear in the generated presentation', comingSoon: true },
+    { name: 'Custom PPTX Columns',     desc: 'Control which columns appear in the generated presentation' },
   ];
   return `
   <div class="modal-overlay" onclick="if(event.target===this)window.closeMcpModal()">
     <div class="modal-box" style="max-width:580px">
       <button class="modal-close" onclick="window.closeMcpModal()">✕</button>
       <h3 style="margin-top:0;font-size:1.05rem">SSC Catalog Agent for Joule Work Desktop</h3>
-      <p style="margin:0 0 1.1rem">
-        <a href="#" onclick="window.closeMcpModal();return false" style="font-size:0.78rem;color:#0070F2;text-decoration:none">Agent + MCP for your Joule Work Desktop</a>
-      </p>
 
       <p style="font-size:0.82rem;font-weight:600;color:#1D2D3E;margin:0 0 0.4rem">Install the skill:</p>
       <ol style="margin:0 0 1rem;padding-left:1.25rem;display:flex;flex-direction:column;gap:0.3rem;font-size:0.875rem;color:#3a3a3a;line-height:1.55">
@@ -1989,12 +1986,12 @@ function renderMcpModal() {
         Once skill set, create a new connection to the <strong><em>MCP server</em></strong> running as part of this app
         to use most of its capabilities directly in Joule Work Desktop:
       </p>
-      <ul style="margin:0 0 1.1rem;padding-left:1.25rem;display:flex;flex-direction:column;gap:0.3rem">
+      <div style="margin:0 0 1.1rem;display:flex;flex-direction:column;gap:0.35rem">
         ${capabilities.map(c => `
-        <li style="font-size:0.875rem;color:${c.comingSoon?'#8696A9':'#1D2D3E'}">
-          <strong>${c.name}</strong>${c.comingSoon?' <span style="font-size:0.72rem;background:#e8f0f7;color:#1D6FA4;border-radius:3px;padding:1px 5px;vertical-align:middle">coming soon</span>':''} — <span style="color:#556B82">${c.desc}</span>
-        </li>`).join('')}
-      </ul>
+        <div style="font-size:0.875rem;color:#1D2D3E;padding:0.25rem 0;border-bottom:1px solid #f0f0f0">
+          <strong>${c.name}</strong> — <span style="color:#556B82">${c.desc}</span>
+        </div>`).join('')}
+      </div>
 
       <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:0.65rem 1rem;font-size:0.875rem;color:#5d4037;margin-bottom:1.1rem;line-height:1.55">
         * <strong>Access required:</strong> <em>This MCP server is for internal use only. To get MCP connection credentials, please submit a request below and the administrator will follow up with you.</em>
@@ -2062,6 +2059,7 @@ function render() {
     <div class="shell-top">
       <div class="shell-top-inner">
         <span class="shell-bar-title">Success Plans Catalogue Intelligence</span>
+        <a href="#" onclick="window.openMcpModal();return false" style="margin-left:0.75rem;font-size:0.72rem;color:#556B82;text-decoration:none">Agent + MCP for your Joule Work Desktop</a>
         <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" style="margin-left:auto;font-size:0.75rem;color:#556B82;text-decoration:none">Leave a feedback</a>
       </div>
     </div>
@@ -2070,8 +2068,7 @@ function render() {
         <nav class="shell-nav">
           ${pages.map(p => `<a href="#" class="shell-nav-item ${state.currentPage===p.id?'active':''}" onclick="navigate('${p.id}');return false">${p.label}</a>`).join('')}
         </nav>
-        <a href="#" onclick="window.openMcpModal();return false" style="margin-left:auto;font-size:0.75rem;color:rgba(255,255,255,0.75);text-decoration:none">Agent + MCP for your Joule Work Desktop</a>
-        ${state.exportTotal != null ? `<span style="font-size:0.8rem;color:rgba(255,255,255,0.7);margin-left:1rem">Documents created: <strong style="color:#fff">${state.exportTotal}</strong></span>` : ''}
+        ${state.exportTotal != null ? `<span style="margin-left:auto;font-size:0.8rem;color:rgba(255,255,255,0.7)">Documents created: <strong style="color:#fff">${state.exportTotal}</strong></span>` : ''}
       </div>
       </div>
     </div>
