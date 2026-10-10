@@ -2061,8 +2061,7 @@ function render() {
     <div class="shell-top">
       <div class="shell-top-inner">
         <span class="shell-bar-title">Success Plans Catalogue Intelligence</span>
-        <a href="#" onclick="window.openMcpModal();return false" style="margin-left:auto;font-size:0.75rem;color:rgba(255,255,255,0.8);text-decoration:none">Agent for JWD</a>
-        <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" style="font-size:0.75rem;color:rgba(255,255,255,0.8);text-decoration:none">Leave a feedback</a>
+        <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" style="margin-left:auto;font-size:0.75rem;color:#556B82;text-decoration:none">Leave a feedback</a>
       </div>
     </div>
     <div class="shell-bar">
@@ -2070,7 +2069,9 @@ function render() {
         <nav class="shell-nav">
           ${pages.map(p => `<a href="#" class="shell-nav-item ${state.currentPage===p.id?'active':''}" onclick="navigate('${p.id}');return false">${p.label}</a>`).join('')}
         </nav>
-        ${state.exportTotal != null ? `<span style="margin-left:auto;font-size:0.8rem;color:rgba(255,255,255,0.7)">Documents created: <strong style="color:#fff">${state.exportTotal}</strong></span>` : ''}
+        <a href="#" onclick="window.openMcpModal();return false" style="margin-left:auto;font-size:0.75rem;color:rgba(255,255,255,0.75);text-decoration:none">Agent + MCP for your Joule Work Desktop</a>
+        ${state.exportTotal != null ? `<span style="font-size:0.8rem;color:rgba(255,255,255,0.7);margin-left:1rem">Documents created: <strong style="color:#fff">${state.exportTotal}</strong></span>` : ''}
+      </div>
       </div>
     </div>
     <div class="page-content">${content}</div>
