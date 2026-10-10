@@ -504,10 +504,10 @@ function renderCatalogResults() {
         ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="margin-left:0.75rem;color:#155724;font-weight:600">Successfully downloaded</span>` : ''}
       </span>
       <button class="btn btn-primary btn-sm" onclick="openExcelSettings()" title="Export to Excel" style="display:inline-flex;align-items:center;gap:5px">
-        <img src="excel.svg" style="height:14px;width:auto" alt="" />Export to Excel ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
+        <img src="excel.svg" style="height:18px;width:auto" alt="" />Export to Excel ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
       <button class="btn btn-primary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)" style="display:inline-flex;align-items:center;gap:5px">
-        <img src="pptx.svg" style="height:14px;width:auto" alt="" />List ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
+        <img src="pptx.svg" style="height:18px;width:auto" alt="" />Export to PowerPoint ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
       <div style="display:none">
         <button class="btn btn-primary btn-sm" disabled style="opacity:0.45;cursor:not-allowed">
