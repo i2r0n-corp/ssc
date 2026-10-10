@@ -1306,9 +1306,6 @@ router.post('/export-excel', async (req, res) => {
 
     const { services: allServices = [], pdMode = false, yearFrom, yearTo, bsCode, bsName } = req.body || {};
     if (!allServices.length) return res.status(400).json({ error: 'No services provided' });
-    const first = allServices[0] || {};
-    console.log('[excel-export] pdMode=%j yearFrom=%s yearTo=%s total=%d et_sample=%j',
-      pdMode, yearFrom, yearTo, allServices.length, first.engagementType);
     const services = pdMode
       ? allServices.filter(s => {
           const et = Array.isArray(s.engagementType) ? s.engagementType : [s.engagementType || s.engagement_type || ''];
@@ -1369,22 +1366,34 @@ router.post('/export-excel', async (req, res) => {
     }
 
     // Inject a real Excel Table (TableStyleMedium9) into the xlsx buffer via JSZip
-    async function injectTable(buf, ref, tableName, columns, withTotals) {
+    // numericStartCol: first column index (0-based) that should get totalsRowFunction=sum
+    async function injectTable(buf, ref, tableName, columns, withTotals, numericStartCol) {
       const zip = await JSZip.loadAsync(buf);
 
-      // Build table XML
+      // autoFilter ref excludes the totals row
+      let autoFilterRef = ref;
+      if (withTotals) {
+        const lastRowNum = parseInt(ref.match(/\d+$/)[0], 10);
+        autoFilterRef = ref.replace(/\d+$/, String(lastRowNum - 1));
+      }
+
       const totalsRowCount = withTotals ? 1 : 0;
+      const numStart = numericStartCol != null ? numericStartCol : columns.length;
       const colXml = columns.map((c, i) => {
         const safeName = c.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         let extra = '';
-        if (withTotals) extra = i === 0 ? ' totalsRowLabel="Total"' : ' totalsRowFunction="sum"';
+        if (withTotals) {
+          if (i === 0) extra = ' totalsRowLabel="Total"';
+          else if (i >= numStart) extra = ' totalsRowFunction="sum"';
+          else extra = ' totalsRowFunction="none"';
+        }
         return `<tableColumn id="${i+1}" name="${safeName}"${extra}/>`;
       }).join('');
       const tableXml =
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
         `<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ` +
         `id="1" name="${tableName}" displayName="${tableName}" ref="${ref}" totalsRowCount="${totalsRowCount}">` +
-        `<autoFilter ref="${ref}"/>` +
+        `<autoFilter ref="${autoFilterRef}"/>` +
         `<tableColumns count="${columns.length}">${colXml}</tableColumns>` +
         `<tableStyleInfo name="TableStyleMedium9" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/>` +
         `</table>`;
@@ -1430,7 +1439,7 @@ router.post('/export-excel', async (req, res) => {
     if (pdMode) {
       const yf = parseInt(yearFrom, 10), yt = parseInt(yearTo, 10);
       const years = (yf >= 2000 && yt >= yf) ? Array.from({length: Math.min(yt-yf+1,15)}, (_,i) => yf+i) : [];
-      tableColumns = ['CRM ID', 'Link', 'Name', 'PD', ...years.map(String)];
+      tableColumns = ['CRM ID', 'Link', 'Name', 'Typical Effort', ...years.map(String)];
       withTotals = true;
       sheetName = 'PD Export';
 
@@ -1439,28 +1448,18 @@ router.post('/export-excel', async (req, res) => {
         const pdVal = getEffort(s);
         aoa.push([
           s.serviceNumber || s.number || '',
-          s.url ? { l: { Target: s.url, Tooltip: 'Service Catalog' }, v: 'link', t: 's' } : '',
+          s.url || '',
           s.name || '',
           pdVal !== '' ? Number(pdVal) : null,
           ...years.map(() => null),
         ]);
       }
-      if (withTotals) aoa.push(new Array(tableColumns.length).fill(null)); // totals row placeholder
 
       const ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws['!cols'] = [{wch:18},{wch:8},{wch:40},{wch:8}, ...years.map(()=>({wch:10}))];
-
-      // Number format + center align for PD and year columns (rows 1..N, skip header row 0)
-      for (let R = 1; R <= services.length; R++) {
-        for (let C = 3; C < tableColumns.length; C++) {
-          const addr = XLSX.utils.encode_cell({r:R, c:C});
-          if (!ws[addr]) ws[addr] = {t:'n', v:null};
-          ws[addr].s = { numFmt:'0', alignment:{horizontal:'center',vertical:'center'} };
-        }
-      }
+      ws['!cols'] = [{wch:18},{wch:50},{wch:40},{wch:16}, ...years.map(()=>({wch:10}))];
 
       const lastCol = XLSX.utils.encode_col(tableColumns.length - 1);
-      const lastRow = services.length + 1 + 1; // header + data + totals
+      const lastRow = services.length + 1 + 1; // header + data + totals row (owned by table XML)
       tableRef = `A1:${lastCol}${lastRow}`;
       ws['!ref'] = tableRef;
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
@@ -1517,7 +1516,7 @@ router.post('/export-excel', async (req, res) => {
 
     // Write xlsx buffer, then inject real Excel table via JSZip
     let buf = XLSX.write(wb, {type:'buffer', bookType:'xlsx'});
-    buf = await injectTable(buf, tableRef, sheetName.replace(/\s/g,''), tableColumns, withTotals);
+    buf = await injectTable(buf, tableRef, sheetName.replace(/\s/g,''), tableColumns, withTotals, pdMode ? 3 : null);
 
     res.json({ downloadUrl: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${buf.toString('base64')}`, ok: true });
   } catch (e) {
