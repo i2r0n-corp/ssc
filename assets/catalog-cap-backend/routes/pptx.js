@@ -226,7 +226,8 @@ router.post('/generatePptx', async (req, res) => {
     const stat = fs.statSync(filePath);
     const fileSizeKb = Math.round(stat.size / 1024);
 
-    // Log export event
+    // Log export event — skip when called internally from MCP (MCP route logs its own entry)
+    if (!req.headers['x-internal-mcp']) {
     const jwtPayload = getJwtPayload(req);
     const opts = listOptions || {};
     db.logExport({
@@ -250,6 +251,7 @@ router.post('/generatePptx', async (req, res) => {
       pptxTruncateObj:  opts.truncateObjectives ?? null,
       pptxSwitchTypes:  opts.switchTypes     ?? null,
     });
+    } // end if (!x-internal-mcp)
 
     console.log(`[M4.achieved]: PPTX generated — template="${templateName}" service_count=${services.length} file_size_kb=${fileSizeKb}`);
 
