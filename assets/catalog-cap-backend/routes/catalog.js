@@ -1238,7 +1238,7 @@ router.get('/admin/visitor-log', requireAdmin, async (req, res) => {
   try {
     const db = require('../store/db');
     const visits = await db.query(
-      `SELECT id, logon_name, page, session_id, visited_at FROM catalog_visitor_log ORDER BY visited_at DESC LIMIT 1000`
+      `SELECT id, logon_name, page, session_id, detail, visited_at FROM catalog_visitor_log ORDER BY visited_at DESC LIMIT 1000`
     );
     const lastSeen = await db.query(
       `SELECT logon_name, last_seen, visit_count FROM catalog_visitor_last_seen ORDER BY last_seen DESC`

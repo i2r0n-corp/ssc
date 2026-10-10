@@ -113,7 +113,7 @@ async function callTool(name, args, logonName) {
   try {
     const db = require('../store/db');
     db.getPool();
-    db.logVisit({ logonName, page: 'MCP', sessionId: null }).catch(() => {});
+    db.logVisit({ logonName, page: 'MCP', sessionId: null, detail: { tool: name, args } }).catch(() => {});
     return await callToolDb(name, args, db, logonName);
   } catch {
     return callToolSnapshot(name, args);

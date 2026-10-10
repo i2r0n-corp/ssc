@@ -37,7 +37,7 @@ let state = {
   exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null, sortCol: 'logged_at', sortDir: 'desc' },
   currentUser: null,
   myPermissions: { catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false },
-  admin: { users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, selectedVisitorUser: null },
+  admin: { users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null },
   mcpModal: { open: false, sent: false, sending: false, error: null },
   accessDeniedModal: false,
   backendDown: false,
@@ -1655,6 +1655,14 @@ window.adminSelectVisitorUser = function(email) {
   state.admin.selectedVisitorUser = state.admin.selectedVisitorUser === email ? null : email;
   render();
 };
+window.adminVisitSort = function(col) {
+  const a = state.admin;
+  if (a.visitSortCol === col) a.visitSortDir = a.visitSortDir === 'asc' ? 'desc' : 'asc';
+  else { a.visitSortCol = col; a.visitSortDir = 'asc'; }
+  render();
+};
+window.adminOpenVisit = function(idx) { state.admin.selectedVisit = { idx }; render(); };
+window.adminCloseVisit = function() { state.admin.selectedVisit = null; render(); };
 
 window.adminSetPerm = async function(email, tab, value) {
   const user = state.admin.users.find(u => u.email === email);
@@ -1705,7 +1713,8 @@ window.adminDeleteUser = async function(email) {
 
 function renderAdminPage() {
   const { users, usersLoading, usersError, newEmail, visitorLog, visitorLastSeen, visitorLoading, visitorError,
-          mcpRequests, mcpRequestsLoading, mcpRequestsError, mcpOpenCollapsed, selectedVisitorUser } = state.admin;
+          mcpRequests, mcpRequestsLoading, mcpRequestsError, mcpOpenCollapsed, selectedVisitorUser,
+          visitSortCol, visitSortDir, selectedVisit } = state.admin;
   const TABS = ['incidents','chat','debug','exportlog','admin'];
   const TAB_LABELS = { incidents:'Incidents', chat:'Chat', debug:'Debug', exportlog:'Export Log', admin:'Admin' };
   const fmtDate = iso => new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
@@ -1719,9 +1728,13 @@ function renderAdminPage() {
 
   const openReqs   = mcpRequests.filter(r => r.status === 'open');
   const closedReqs = mcpRequests.filter(r => r.status === 'closed');
-  const filteredVisits = selectedVisitorUser
+  const filteredVisits = (selectedVisitorUser
     ? visitorLog.filter(r => r.logon_name === selectedVisitorUser)
-    : visitorLog;
+    : visitorLog
+  ).slice().sort((a, b) => {
+    const av = a[visitSortCol] || '', bv = b[visitSortCol] || '';
+    return visitSortDir === 'asc' ? (av < bv ? -1 : av > bv ? 1 : 0) : (av > bv ? -1 : av < bv ? 1 : 0);
+  });
 
   const colLeft = `
     <!-- User Permissions -->
@@ -1832,12 +1845,17 @@ function renderAdminPage() {
           Recent Page Visits (last 1000)${selectedVisitorUser ? ` — <span style="font-weight:400;color:#1D6FA4">${selectedVisitorUser}</span>` : ''}
         </div>
         <table class="service-table" style="font-size:0.8rem">
-          <thead><tr><th>Date / Time</th><th>Email</th><th>Page</th><th>Session</th></tr></thead>
+          <thead><tr>
+            <th style="cursor:pointer;user-select:none" onclick="window.adminVisitSort('visited_at')">Date / Time ${visitSortCol==='visited_at'?(visitSortDir==='asc'?'▲':'▼'):''}</th>
+            <th>Email</th>
+            <th style="cursor:pointer;user-select:none" onclick="window.adminVisitSort('page')">Page ${visitSortCol==='page'?(visitSortDir==='asc'?'▲':'▼'):''}</th>
+            <th>Session</th>
+          </tr></thead>
           <tbody>
-            ${filteredVisits.map(r => `<tr>
+            ${filteredVisits.map((r, i) => `<tr style="cursor:${r.detail?'pointer':'default'}" onclick="${r.detail?`window.adminOpenVisit(${i})`:''}">
               <td style="white-space:nowrap">${fmtDate(r.visited_at)}</td>
               <td>${r.logon_name}</td>
-              <td>${r.page || '—'}</td>
+              <td>${r.page || '—'}${r.detail ? ' <span style="font-size:0.65rem;color:#1D6FA4;vertical-align:middle">●</span>' : ''}</td>
               <td style="font-size:0.7rem;color:#6a6a6a">${r.session_id || '—'}</td>
             </tr>`).join('') || '<tr><td colspan="4" style="color:#6a6a6a;text-align:center">No visits yet</td></tr>'}
           </tbody>
@@ -1845,11 +1863,32 @@ function renderAdminPage() {
       </div>`}
     </div>`;
 
+  const visitDetailPopup = selectedVisit ? (() => {
+    const r = filteredVisits[selectedVisit.idx];
+    if (!r) return '';
+    const d = r.detail || {};
+    return `
+    <div class="modal-overlay" onclick="if(event.target===this)window.adminCloseVisit()">
+      <div class="modal-box" style="max-width:520px">
+        <button class="modal-close" onclick="window.adminCloseVisit()">✕</button>
+        <h3 style="margin-top:0;font-size:1rem">MCP Tool Call Detail</h3>
+        <div style="font-size:0.82rem;margin-bottom:0.5rem"><strong>Time:</strong> ${fmtDate(r.visited_at)}</div>
+        <div style="font-size:0.82rem;margin-bottom:0.5rem"><strong>User:</strong> ${r.logon_name}</div>
+        <div style="font-size:0.82rem;margin-bottom:0.75rem"><strong>Tool:</strong> ${d.tool || '—'}</div>
+        ${d.args && Object.keys(d.args).length ? `
+        <div style="font-size:0.82rem;font-weight:600;margin-bottom:0.4rem">Arguments:</div>
+        <pre style="background:#f4f4f4;border-radius:4px;padding:0.75rem;font-size:0.75rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:320px;overflow-y:auto">${JSON.stringify(d.args, null, 2).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>
+        ` : '<div style="font-size:0.82rem;color:#6a6a6a">No arguments</div>'}
+      </div>
+    </div>`;
+  })() : '';
+
   return `
   <style>
     .admin-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start; }
     @media (max-width:765px) { .admin-grid { grid-template-columns:1fr; } }
   </style>
+  ${visitDetailPopup}
   <div class="admin-grid">
     <div>${colLeft}</div>
     <div>${colRight}</div>

@@ -224,6 +224,7 @@ CREATE TABLE IF NOT EXISTS catalog_visitor_log (
   logon_name   TEXT NOT NULL,
   page         TEXT,
   session_id   TEXT,
+  detail       JSONB,
   visited_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_visitor_log_logon   ON catalog_visitor_log(logon_name);
@@ -266,6 +267,7 @@ async function initSchema() {
     await client.query(`ALTER TABLE catalog_export_log ADD COLUMN IF NOT EXISTS pptx_use_deck_name BOOLEAN`);
     await client.query(`ALTER TABLE catalog_export_log ADD COLUMN IF NOT EXISTS pptx_truncate_obj BOOLEAN`);
     await client.query(`ALTER TABLE catalog_export_log ADD COLUMN IF NOT EXISTS pptx_switch_types BOOLEAN`);
+    await client.query(`ALTER TABLE catalog_visitor_log ADD COLUMN IF NOT EXISTS detail JSONB`);
     console.log('[db] Schema initialised');
   } finally {
     client.release();
@@ -315,11 +317,11 @@ async function logExport({ userId, logonName, exportType, serviceCount, filterBs
   }
 }
 
-async function logVisit({ logonName, page, sessionId }) {
+async function logVisit({ logonName, page, sessionId, detail }) {
   try {
     await query(
-      `INSERT INTO catalog_visitor_log (logon_name, page, session_id) VALUES ($1,$2,$3)`,
-      [logonName || 'anonymous', page || null, sessionId || null]
+      `INSERT INTO catalog_visitor_log (logon_name, page, session_id, detail) VALUES ($1,$2,$3,$4)`,
+      [logonName || 'anonymous', page || null, sessionId || null, detail ? JSON.stringify(detail) : null]
     );
     await query(
       `INSERT INTO catalog_visitor_last_seen (logon_name, last_seen, visit_count)
