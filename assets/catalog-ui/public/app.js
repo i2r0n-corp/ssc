@@ -813,11 +813,13 @@ window.updateFilter = function(key, value) {
   }
 };
 
+const MODE_KEYS = { phases: 'phaseMode', advancedLoS: 'advancedLoSMode', foundationalCats: 'foundationalCatsMode' };
 window.updateCheckboxFilter = function(key, value, checked) {
   const arr = state.filters[key] ? [...state.filters[key]] : [];
   if (checked && !arr.includes(value)) arr.push(value);
   else if (!checked) { const i = arr.indexOf(value); if (i > -1) arr.splice(i, 1); }
   state.filters[key] = arr;
+  if (MODE_KEYS[key] && arr.length < 2) state.filters[MODE_KEYS[key]] = 'merge';
   patchFilters();
   clearTimeout(window._filterDebounce);
   window._filterDebounce = setTimeout(applyFilters, 300);
@@ -825,6 +827,7 @@ window.updateCheckboxFilter = function(key, value, checked) {
 window.updateCheckboxFilter._clearKey = function(key) {
   state.filters[key] = [];
   if (key === 'modules') state.filters.module = '';
+  if (MODE_KEYS[key]) state.filters[MODE_KEYS[key]] = 'merge';
   patchFilters();
   clearTimeout(window._filterDebounce);
   window._filterDebounce = setTimeout(applyFilters, 300);
