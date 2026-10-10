@@ -1968,28 +1968,41 @@ function renderMcpModal() {
   ];
   return `
   <div class="modal-overlay" onclick="if(event.target===this)window.closeMcpModal()">
-    <div class="modal-box" style="max-width:560px">
+    <div class="modal-box" style="max-width:580px">
       <button class="modal-close" onclick="window.closeMcpModal()">✕</button>
-      <h3 style="margin-top:0;font-size:1.05rem">MCP for Joule Work Desktop</h3>
-      <p style="font-size:0.875rem;color:#3a3a3a;line-height:1.55;margin:0 0 1rem">
-        You can use the capabilities of this service via your Joule Work Desktop to create agents that utilise
-        the following capabilities through MCP (Model Context Protocol):
+      <h3 style="margin-top:0;font-size:1.05rem">SSC Catalog Agent for Joule Work Desktop</h3>
+
+      <p style="font-size:0.875rem;color:#3a3a3a;line-height:1.6;margin:0 0 0.75rem">
+        A ready-to-use <strong>JWD skill</strong> is available that teaches your Joule agent how to search
+        the catalog, retrieve service details, and generate PowerPoint presentations — all from a conversation.
+        The skill file (<code style="font-size:0.8rem;background:#f0f4f8;padding:1px 4px;border-radius:3px">jwd-skill.md</code>)
+        is included in this repository and can be attached directly to your JWD agent.
       </p>
-      <ul style="margin:0 0 1.25rem;padding-left:1.25rem;display:flex;flex-direction:column;gap:0.5rem">
+
+      <p style="font-size:0.875rem;color:#3a3a3a;line-height:1.6;margin:0 0 0.75rem">
+        For the agent to work, it also needs to be connected to the <strong>MCP server</strong> of this application.
+        The MCP server exposes the following capabilities:
+      </p>
+
+      <ul style="margin:0 0 1.25rem;padding-left:1.25rem;display:flex;flex-direction:column;gap:0.4rem">
         ${capabilities.map(c => `
         <li style="font-size:0.875rem;color:${c.comingSoon?'#8696A9':'#1D2D3E'}">
           <span style="font-weight:600">${c.name}</span>${c.comingSoon?' <span style="font-size:0.72rem;background:#e8f0f7;color:#1D6FA4;border-radius:3px;padding:1px 5px;vertical-align:middle">coming soon</span>':''}<br>
           <span style="color:#556B82;font-size:0.82rem">${c.desc}</span>
         </li>`).join('')}
       </ul>
+
+      <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:0.65rem 1rem;font-size:0.875rem;color:#5d4037;margin-bottom:1.1rem;line-height:1.55">
+        <strong>Access required:</strong> This MCP server is not a public SAP internal tool — it runs as part of this app.
+        To get the MCP credentials needed to connect JWD, please submit a request below and the administrator will follow up with you.
+      </div>
+
       ${m.error ? `<div class="error-strip" style="margin-bottom:0.75rem">⚠ ${m.error}</div>` : ''}
       ${m.sent
         ? `<div style="background:#d4edda;color:#155724;border-radius:6px;padding:0.65rem 1rem;font-size:0.875rem;margin-bottom:0.75rem">
              ✓ Your request has been submitted. The administrator will follow up with you.
            </div>`
-        : `<p style="font-size:0.875rem;color:#556B82;margin:0 0 1rem">
-             Interested in connecting your JWD agents to this catalog?
-           </p>`}
+        : ''}
       <div style="display:flex;justify-content:flex-end;gap:0.75rem">
         <button class="btn btn-secondary btn-sm" onclick="window.closeMcpModal()">Close</button>
         ${!m.sent ? `<button class="btn btn-primary btn-sm" ${m.sending?'disabled':''} onclick="window.requestMcpAccess()">
@@ -2048,8 +2061,8 @@ function render() {
     <div class="shell-top">
       <div class="shell-top-inner">
         <span class="shell-bar-title">Success Plans Catalogue Intelligence</span>
-        <button class="btn btn-secondary btn-sm" onclick="window.openMcpModal()" style="margin-left:auto;font-size:0.8rem">MCP for JWD</button>
-        <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" class="btn btn-secondary btn-sm" style="font-size:0.8rem">Feedback</a>
+        <a href="#" onclick="window.openMcpModal();return false" style="margin-left:auto;font-size:0.75rem;color:rgba(255,255,255,0.8);text-decoration:none">Agent for JWD</a>
+        <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" style="font-size:0.75rem;color:rgba(255,255,255,0.8);text-decoration:none">Leave a feedback</a>
       </div>
     </div>
     <div class="shell-bar">
