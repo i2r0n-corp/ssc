@@ -1301,67 +1301,125 @@ router.post('/admin/mcp-requests/close', requireAdmin, async (req, res) => {
 // ── Excel export ──────────────────────────────────────────────────────────────
 router.post('/export-excel', async (req, res) => {
   try {
-    const XLSX = require('xlsx');
-    const { v4: uuidv4 } = require('uuid');
-    const os = require('os');
-    const path = require('path');
-    const fs = require('fs');
+    const XLSX  = require('xlsx');
+    const JSZip = require('jszip');
 
-    const { services = [], pdMode = false, yearFrom, yearTo, bsCode, bsName } = req.body || {};
-    if (!services.length) return res.status(400).json({ error: 'No services provided' });
+    const { services: allServices = [], pdMode = false, yearFrom, yearTo, bsCode, bsName } = req.body || {};
+    if (!allServices.length) return res.status(400).json({ error: 'No services provided' });
+    const services = pdMode
+      ? allServices.filter(s => {
+          const et = Array.isArray(s.engagementType) ? s.engagementType : [s.engagementType || s.engagement_type || ''];
+          return et.some(e => e === 'Max Success Plan');
+        })
+      : allServices;
 
     const PHASES = ['Prepare','Discover','Explore','Realize','Deploy','Run'];
-    const strip = s => (s||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+    const strip = v => (v||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
 
-    // Extract effort from classificationFeatures array
     const getEffort = s => {
-      const cf = s.classificationFeatures || [];
-      const f = cf.find(x => x.key === 'effortEstimateDays');
+      const f = (s.classificationFeatures || []).find(x => x.key === 'effortEstimateDays');
       return f ? (f.value || '') : '';
     };
 
-    // Module name: strip "Module N: " prefix (same as PPTX stream logic)
-    const getModName = s => {
-      const n = s.parent_name || s.parentName || '';
-      const sepIdx = n.indexOf(' // ');
-      const afterSep = sepIdx !== -1 ? n.slice(sepIdx + 4) : n;
-      return afterSep.replace(/^Module\s+[^:]+:\s*/i, '');
-    };
+    const getSvcPhases = s =>
+      (s.classificationFeatures || []).filter(f => f.key === 'sapActivateProjectPhase').map(f => f.value);
 
-    // Phases from classificationFeatures
-    const getPhases = s => {
-      const cf = s.classificationFeatures || [];
-      return cf.filter(f => f.key === 'sapActivateProjectPhase').map(f => f.value);
-    };
+    // Build service → module name map from DB when BS is selected
+    let svcModuleMap = {};
+    if (bsCode) {
+      try {
+        const db = require('../store/db');
+        db.getPool();
+        const svcCodes = services.map(s => s.code).filter(Boolean);
+        if (svcCodes.length) {
+          const r = await db.query(
+            `SELECT h.child_code AS svc_code, s.name AS mod_name
+             FROM catalog_hierarchy h
+             JOIN catalog_services s ON s.code = h.parent_code
+             WHERE s.service_object = 'Business Scenario module'
+               AND h.child_code = ANY($1)`,
+            [svcCodes]
+          );
+          for (const row of r.rows) {
+            if (!svcModuleMap[row.svc_code]) {
+              // Strip "Module N: " prefix (same logic as PPTX stream)
+              const raw = row.mod_name || '';
+              const sepIdx = raw.indexOf(' // ');
+              const afterSep = sepIdx !== -1 ? raw.slice(sepIdx + 4) : raw;
+              svcModuleMap[row.svc_code] = afterSep.replace(/^Module\s+[^:]+:\s*/i, '');
+            }
+          }
+        }
+      } catch { /* fall through — module names will be empty */ }
+    }
+
+    // Inject a real Excel Table (TableStyleMedium9) into the xlsx buffer via JSZip
+    async function injectTable(buf, ref, tableName, columns, withTotals) {
+      const zip = await JSZip.loadAsync(buf);
+
+      // Build table XML
+      const totalsRowCount = withTotals ? 1 : 0;
+      const colXml = columns.map((c, i) => {
+        const safeName = c.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        let extra = '';
+        if (withTotals) extra = i === 0 ? ' totalsRowLabel="Total"' : ' totalsRowFunction="sum"';
+        return `<tableColumn id="${i+1}" name="${safeName}"${extra}/>`;
+      }).join('');
+      const tableXml =
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<table xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ` +
+        `id="1" name="${tableName}" displayName="${tableName}" ref="${ref}" totalsRowCount="${totalsRowCount}">` +
+        `<autoFilter ref="${ref}"/>` +
+        `<tableColumns count="${columns.length}">${colXml}</tableColumns>` +
+        `<tableStyleInfo name="TableStyleMedium9" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/>` +
+        `</table>`;
+
+      zip.file('xl/tables/table1.xml', tableXml);
+
+      // Worksheet relationship
+      const relsXml =
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" ` +
+        `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" ` +
+        `Target="../tables/table1.xml"/>` +
+        `</Relationships>`;
+      zip.file('xl/worksheets/_rels/sheet1.xml.rels', relsXml);
+
+      // Patch worksheet XML: add tablePart + r namespace if missing
+      const wsFile = zip.file('xl/worksheets/sheet1.xml');
+      if (wsFile) {
+        let wsXml = await wsFile.async('string');
+        if (!wsXml.includes('xmlns:r=')) {
+          wsXml = wsXml.replace('<worksheet ', '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
+        }
+        wsXml = wsXml.replace('</worksheet>', `<tableParts count="1"><tablePart r:id="rId1"/></tableParts></worksheet>`);
+        zip.file('xl/worksheets/sheet1.xml', wsXml);
+      }
+
+      // Patch [Content_Types].xml
+      const ctFile = zip.file('[Content_Types].xml');
+      if (ctFile) {
+        let ctXml = await ctFile.async('string');
+        ctXml = ctXml.replace('</Types>',
+          `<Override PartName="/xl/tables/table1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml"/></Types>`);
+        zip.file('[Content_Types].xml', ctXml);
+      }
+
+      return zip.generateAsync({type:'nodebuffer', compression:'DEFLATE'});
+    }
 
     const wb = XLSX.utils.book_new();
-
-    // Helper: add Excel Table to worksheet
-    function addTable(ws, headers, dataCount, sheetName, withTotals) {
-      const lastCol = XLSX.utils.encode_col(headers.length - 1);
-      const lastRow = dataCount + 1 + (withTotals ? 1 : 0);
-      ws['!ref'] = `A1:${lastCol}${lastRow}`;
-      ws['!tables'] = ws['!tables'] || [];
-      ws['!tables'].push({
-        name: sheetName.replace(/\s/g,''),
-        ref: `A1:${lastCol}${lastRow}`,
-        headerRow: true,
-        totalsRow: !!withTotals,
-        style: { name: 'TableStyleMedium9', showFirstColumn: false, showLastColumn: false, showRowStripes: true, showColumnStripes: false },
-        columns: headers.map((h, i) => ({
-          name: h,
-          totalsRowLabel: withTotals && i === 2 ? 'Total' : undefined,
-          totalsRowFunction: withTotals && i >= 3 ? 'sum' : (withTotals && i < 3 ? 'none' : undefined),
-        })),
-      });
-    }
+    let tableRef, tableColumns, withTotals, sheetName;
 
     if (pdMode) {
       const yf = parseInt(yearFrom, 10), yt = parseInt(yearTo, 10);
       const years = (yf >= 2000 && yt >= yf) ? Array.from({length: Math.min(yt-yf+1,15)}, (_,i) => yf+i) : [];
-      const headers = ['CRM ID', 'Link', 'Name', 'PD', ...years.map(String)];
+      tableColumns = ['CRM ID', 'Link', 'Name', 'PD', ...years.map(String)];
+      withTotals = true;
+      sheetName = 'PD Export';
 
-      const aoa = [headers];
+      const aoa = [tableColumns];
       for (const s of services) {
         const pdVal = getEffort(s);
         aoa.push([
@@ -1372,55 +1430,59 @@ router.post('/export-excel', async (req, res) => {
           ...years.map(() => null),
         ]);
       }
+      if (withTotals) aoa.push(new Array(tableColumns.length).fill(null)); // totals row placeholder
 
       const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols'] = [{wch:18},{wch:8},{wch:40},{wch:8}, ...years.map(()=>({wch:10}))];
 
-      // Center-align PD + year cols, number format
-      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-      for (let R = 1; R < aoa.length; R++) {
-        for (let C = 3; C < headers.length; C++) {
+      // Number format + center align for PD and year columns (rows 1..N, skip header row 0)
+      for (let R = 1; R <= services.length; R++) {
+        for (let C = 3; C < tableColumns.length; C++) {
           const addr = XLSX.utils.encode_cell({r:R, c:C});
           if (!ws[addr]) ws[addr] = {t:'n', v:null};
           ws[addr].s = { numFmt:'0', alignment:{horizontal:'center',vertical:'center'} };
         }
       }
 
-      addTable(ws, headers, services.length, 'PDExport', true);
-      XLSX.utils.book_append_sheet(wb, ws, 'PD Export');
+      const lastCol = XLSX.utils.encode_col(tableColumns.length - 1);
+      const lastRow = services.length + 1 + 1; // header + data + totals
+      tableRef = `A1:${lastCol}${lastRow}`;
+      ws['!ref'] = tableRef;
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
     } else {
       const hasBs = !!bsCode;
-      const headers = [
+      tableColumns = [
         'Service Code', 'CRM ID',
         ...(hasBs ? ['Business Scenario', 'Module Name', 'Name'] : ['Name']),
-        'Efforts', 'Engagement Type', 'Short Description', 'Summary',
+        'Efforts', 'Engagement Type', 'Summary',
         'Teaser', 'Business Needs', 'Key Benefits', 'Delivery Approach', 'Description',
         ...PHASES
       ];
+      withTotals = false;
+      sheetName = 'Services';
 
-      const aoa = [headers];
+      const aoa = [tableColumns];
       for (const s of services) {
         const et = Array.isArray(s.engagementType) ? s.engagementType.join('; ') : (s.engagementType || s.engagement_type || '');
-        const phases = getPhases(s);
+        const svcPhases = getSvcPhases(s);
         aoa.push([
           s.code || '',
           s.serviceNumber || s.number || '',
           ...(hasBs ? [
             bsName || bsCode || '',
-            getModName(s),
+            svcModuleMap[s.code] || '',
             s.name || '',
           ] : [s.name || '']),
           getEffort(s),
           et,
-          strip(s.shortDescription),
           strip(s.summary),
           strip(s.serviceTeaserText || s.teaserText),
           strip(s.businessNeeds),
           strip(s.keyBenefits),
           strip(s.deliveryApproach),
           strip(s.description),
-          ...PHASES.map(p => phases.includes(p) ? 'v' : ''),
+          ...PHASES.map(p => svcPhases.includes(p) ? 'v' : ''),
         ]);
       }
 
@@ -1428,19 +1490,21 @@ router.post('/export-excel', async (req, res) => {
       ws['!cols'] = [
         {wch:22},{wch:16},
         ...(hasBs ? [{wch:40},{wch:35},{wch:40}] : [{wch:40}]),
-        {wch:10},{wch:24},{wch:50},{wch:40},{wch:40},{wch:40},{wch:40},{wch:40},{wch:60},
+        {wch:10},{wch:24},{wch:40},{wch:40},{wch:40},{wch:40},{wch:40},{wch:60},
         ...PHASES.map(()=>({wch:10}))
       ];
 
-      addTable(ws, headers, services.length, 'Services', false);
-      XLSX.utils.book_append_sheet(wb, ws, 'Services');
+      const lastCol = XLSX.utils.encode_col(tableColumns.length - 1);
+      tableRef = `A1:${lastCol}${services.length + 1}`;
+      ws['!ref'] = tableRef;
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
     }
 
-    const tmpFile = path.join(os.tmpdir(), `ssc_export_${uuidv4()}.xlsx`);
-    XLSX.writeFile(wb, tmpFile);
-    const fileData = fs.readFileSync(tmpFile);
-    fs.unlinkSync(tmpFile);
-    res.json({ downloadUrl: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${fileData.toString('base64')}`, ok: true });
+    // Write xlsx buffer, then inject real Excel table via JSZip
+    let buf = XLSX.write(wb, {type:'buffer', bookType:'xlsx'});
+    buf = await injectTable(buf, tableRef, sheetName.replace(/\s/g,''), tableColumns, withTotals);
+
+    res.json({ downloadUrl: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${buf.toString('base64')}`, ok: true });
   } catch (e) {
     console.error('[excel-export]', e);
     res.status(500).json({ error: e.message });
