@@ -545,10 +545,17 @@ function renderCatalogResults() {
         ${(() => {
           let svcs = state.filteredServices.slice(0, 2000);
           if (state.sort.col) {
+            const ET_SORT_ORDER = ['Max Success Plan','Advanced Success Plan','Enterprise Support','Embedded Launch Activities','Cloud Prepackaged Services'];
             svcs = [...svcs].sort((a, b) => {
-              const va = state.sort.col === 'name' ? (a.name||'') : (Array.isArray(a.engagementType)?a.engagementType[0]:a.engagementType||'');
-              const vb = state.sort.col === 'name' ? (b.name||'') : (Array.isArray(b.engagementType)?b.engagementType[0]:b.engagementType||'');
-              return state.sort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+              if (state.sort.col === 'name') {
+                const va = a.name||'', vb = b.name||'';
+                return state.sort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+              }
+              const etsA = Array.isArray(a.engagementType) ? a.engagementType : (a.engagementType ? [a.engagementType] : []);
+              const etsB = Array.isArray(b.engagementType) ? b.engagementType : (b.engagementType ? [b.engagementType] : []);
+              const rankA = etsA.reduce((min, e) => { const i = ET_SORT_ORDER.indexOf(e); return i >= 0 ? Math.min(min, i) : min; }, 99);
+              const rankB = etsB.reduce((min, e) => { const i = ET_SORT_ORDER.indexOf(e); return i >= 0 ? Math.min(min, i) : min; }, 99);
+              return state.sort.dir === 'asc' ? rankA - rankB : rankB - rankA;
             });
           }
           return svcs.map(svc => {
