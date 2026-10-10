@@ -38,7 +38,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         query:          { type: 'string',  description: 'Keyword to match against name and short description' },
-        engagementType: { type: 'string',  description: 'Filter by engagement type (e.g. "Max Success Plan")' },
+        engagementType: { type: 'string',  description: 'Filter by engagement type. Use "Max" for Max Success Plan, "Advanced" for Advanced Success Plan, "Foundational" (or "Foundation") for Enterprise Support / Embedded Launch Activities / Cloud Prepackaged Services. Exact values also accepted.' },
         businessScenario: { type: 'string', description: 'Filter by business scenario code (e.g. "MAX00001")' },
         limit:          { type: 'integer', description: 'Max results to return (default 20, max 100)', default: 20 }
       }
@@ -158,7 +158,15 @@ async function callToolDb(name, args, db, logonName) {
       pIdx++;
     }
     if (args.engagementType) {
-      params.push(args.engagementType);
+      const ET_ALIASES = {
+        'foundational': 'Enterprise Support',
+        'foundation':   'Enterprise Support',
+        'max':          'Max Success Plan',
+        'advanced':     'Advanced Success Plan',
+      };
+      const key = args.engagementType.toLowerCase().trim();
+      const etValue = ET_ALIASES[key] || args.engagementType;
+      params.push(etValue);
       sql += ` AND EXISTS (SELECT 1 FROM catalog_classification cc WHERE cc.service_code=s.code AND cc.feature_key='engagementType' AND cc.feature_value=$${pIdx})`;
       pIdx++;
     }
