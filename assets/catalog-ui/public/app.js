@@ -504,11 +504,11 @@ function renderCatalogResults() {
         ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="margin-left:0.75rem;color:#155724;font-weight:600">Successfully downloaded</span>` : ''}
       </span>
       <span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Export to:</span>
-      <button class="btn btn-primary btn-sm" onclick="openExcelSettings()" title="Export to Excel" style="display:inline-flex;align-items:center;gap:5px">
-        <img src="excel.svg" style="height:22px;width:auto" alt="" />Excel ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
+      <button class="btn btn-primary btn-sm" onclick="openExcelSettings()" title="Export to Excel" style="display:inline-flex;align-items:center;gap:5px;padding-left:5px">
+        <img src="excel.svg" style="height:22px;width:auto" alt="" />${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
       <button class="btn btn-primary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)" style="display:inline-flex;align-items:center;gap:5px">
-        <img src="pptx.svg" style="height:18px;width:auto" alt="" />PowerPoint ${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
+        <img src="pptx.svg" style="height:18px;width:auto" alt="" />${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
       </button>
       <div style="display:none">
         <button class="btn btn-primary btn-sm" disabled style="opacity:0.45;cursor:not-allowed">
