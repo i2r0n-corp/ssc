@@ -6,6 +6,20 @@
 const router = require('express').Router();
 const snapshot = require('../store/snapshot');
 
+function getJwtPayload(req) {
+  try {
+    const auth = req.headers['authorization'] || '';
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    if (!token) return null;
+    return JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
+  } catch { return null; }
+}
+
+function getLogonName(req) {
+  const p = getJwtPayload(req);
+  return (p?.user_name || p?.email || '').toLowerCase() || null;
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function requireMcpSecret(req, res, next) {
   const secret = process.env.MCP_SECRET;
@@ -58,9 +72,26 @@ const TOOLS = [
       type: 'object',
       required: ['serviceCodes'],
       properties: {
-        serviceCodes: { type: 'array', items: { type: 'string' }, description: 'List of service codes to include' },
-        title:        { type: 'string', description: 'Presentation title (default: "Services Description")' },
-        template:     { type: 'string', description: 'Template: "list" (table format, recommended), "short-description", or "one-pager"', default: 'list' }
+        serviceCodes:  { type: 'array', items: { type: 'string' }, description: 'List of service codes to include' },
+        title:         { type: 'string', description: 'Presentation title (default: "Services Description")' },
+        template:      { type: 'string', description: 'Template: "list" (table format, recommended), "short-description", or "one-pager"', default: 'list' },
+        cols: {
+          type: 'object',
+          description: 'Columns to include in the list table',
+          properties: {
+            phases:    { type: 'boolean', description: 'Show Activate Phases column' },
+            component: { type: 'boolean', description: 'Show Service Name column' },
+            tier:      { type: 'boolean', description: 'Show Type column' },
+            objectives:{ type: 'boolean', description: 'Show Short Description / Objectives column' },
+            pd:        { type: 'boolean', description: 'Show PD (effort estimate) column — Max ET only' },
+          }
+        },
+        yearFrom:      { type: 'string', description: 'Start year for timeline columns, e.g. "2026" (omit to skip timeline)' },
+        yearTo:        { type: 'string', description: 'End year for timeline columns, e.g. "2030"' },
+        yearBorders:   { type: 'boolean', description: 'Show borders between year columns' },
+        groupByET:     { type: 'boolean', description: 'Group rows by Engagement Type (Max first, then Advanced, then Foundational)' },
+        switchTypes:   { type: 'boolean', description: 'Replace ET labels with Premium Service / Service Entitlement' },
+        truncateObjectives: { type: 'boolean', description: 'Truncate EGI descriptions to 3 sentences' },
       }
     }
   }
@@ -77,18 +108,18 @@ function getIndex() {
 }
 
 // ── Tool handlers ─────────────────────────────────────────────────────────────
-async function callTool(name, args) {
+async function callTool(name, args, logonName) {
   // Try DB path first, fall back to snapshot
   try {
     const db = require('../store/db');
     db.getPool();
-    return await callToolDb(name, args, db);
+    return await callToolDb(name, args, db, logonName);
   } catch {
     return callToolSnapshot(name, args);
   }
 }
 
-async function callToolDb(name, args, db) {
+async function callToolDb(name, args, db, logonName) {
   if (name === 'getCatalogStats') {
     const r = await db.query('SELECT COUNT(*) AS cnt FROM catalog_services WHERE service_object NOT IN (\'Business Scenario\',\'Business Scenario module\') AND name IS NOT NULL');
     const snap = snapshot.load();
@@ -150,7 +181,7 @@ async function callToolDb(name, args, db) {
   }
 
   if (name === 'generatePresentation') {
-    return callGeneratePresentation(args);
+    return callGeneratePresentation(args, logonName);
   }
 
   throw new Error(`Unknown tool: ${name}`);
@@ -207,21 +238,33 @@ function callToolSnapshot(name, args) {
 }
 
 // ── PPTX generation ───────────────────────────────────────────────────────────
-async function callGeneratePresentation(args) {
-  const { serviceCodes, title, template } = args;
+async function callGeneratePresentation(args, logonName) {
+  const { serviceCodes, title, template, cols, yearFrom, yearTo, yearBorders, groupByET, switchTypes, truncateObjectives } = args;
   if (!Array.isArray(serviceCodes) || serviceCodes.length === 0) {
     return { error: 'serviceCodes must be a non-empty array' };
   }
+  const db = (() => { try { return require('../store/db'); } catch { return null; } })();
+  if (db) db.logVisit({ logonName, page: 'MCP', sessionId: null });
   try {
     const http = require('http');
     const port = process.env.PORT || 4004;
+    const listOptions = {
+      title: title || 'Services Description',
+      ...(cols       ? { cols }          : {}),
+      ...(yearFrom   ? { yearFrom }      : {}),
+      ...(yearTo     ? { yearTo }        : {}),
+      ...(yearBorders !== undefined ? { yearBorders } : {}),
+      ...(groupByET  !== undefined ? { groupByET }   : {}),
+      ...(switchTypes !== undefined ? { switchTypes } : {}),
+      ...(truncateObjectives !== undefined ? { truncateObjectives } : {}),
+    };
     const body = JSON.stringify({
       serviceCodes,
       template: template || 'list',
-      listOptions: { title: title || 'Services Description' }
+      listOptions,
     });
 
-    return await new Promise((resolve, reject) => {
+    const result = await new Promise((resolve, reject) => {
       const req = http.request({
         hostname: 'localhost',
         port,
@@ -236,40 +279,50 @@ async function callGeneratePresentation(args) {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
-          try {
-            const result = JSON.parse(data);
-            if (result.downloadUrl) {
-              const host = process.env.VCAP_APPLICATION
-                ? JSON.parse(process.env.VCAP_APPLICATION).application_uris?.[0]
-                : 'localhost:' + port;
-              const proto = process.env.VCAP_APPLICATION ? 'https' : 'http';
-              const fullUrl = result.downloadUrl.startsWith('http')
-                ? result.downloadUrl
-                : `${proto}://${host}${result.downloadUrl}`;
-              resolve({
-                downloadUrl: fullUrl,
-                serviceCount: result.serviceCount,
-                message: `Presentation ready with ${result.serviceCount} services. Download: ${fullUrl}`
-              });
-            } else {
-              resolve(result);
-            }
-          } catch(e) {
-            reject(new Error('Failed to parse generatePptx response'));
-          }
+          try { resolve(JSON.parse(data)); }
+          catch(e) { reject(new Error('Failed to parse generatePptx response')); }
         });
       });
       req.on('error', reject);
       req.write(body);
       req.end();
     });
+
+    if (result.downloadUrl) {
+      if (db) db.logExport({
+        logonName,
+        exportType: 'MCP-PPTX',
+        serviceCount: result.serviceCount || serviceCodes.length,
+        pptxTitle: listOptions.title,
+        pptxCols: cols || null,
+        pptxYearFrom: yearFrom || null,
+        pptxYearTo: yearTo || null,
+        pptxYearBorders: yearBorders ?? null,
+        pptxGroupByEt: groupByET ?? null,
+        pptxSwitchTypes: switchTypes ?? null,
+        pptxTruncateObj: truncateObjectives ?? null,
+      });
+      const host = process.env.VCAP_APPLICATION
+        ? JSON.parse(process.env.VCAP_APPLICATION).application_uris?.[0]
+        : 'localhost:' + port;
+      const proto = process.env.VCAP_APPLICATION ? 'https' : 'http';
+      const fullUrl = result.downloadUrl.startsWith('http')
+        ? result.downloadUrl
+        : `${proto}://${host}${result.downloadUrl}`;
+      return {
+        downloadUrl: fullUrl,
+        serviceCount: result.serviceCount,
+        message: `Presentation ready with ${result.serviceCount} services. Download: ${fullUrl}`
+      };
+    }
+    return result;
   } catch(e) {
     return { error: e.message };
   }
 }
 
 // ── JSON-RPC dispatch ─────────────────────────────────────────────────────────
-async function handleRpc(body) {
+async function handleRpc(body, logonName) {
   const { id, method, params } = body;
 
   if (method === 'initialize') {
@@ -290,7 +343,7 @@ async function handleRpc(body) {
   if (method === 'tools/call') {
     const { name, arguments: args = {} } = params || {};
     try {
-      const result = await callTool(name, args);
+      const result = await callTool(name, args, logonName);
       return {
         jsonrpc: '2.0', id,
         result: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] }
@@ -326,9 +379,10 @@ router.post('/sse', async (req, res) => {
   }
   const body = req.body;
   if (!body || typeof body !== 'object') return res.status(400).json({ error: 'Invalid body' });
+  const logonName = getLogonName(req);
   const isBatch = Array.isArray(body);
   const requests = isBatch ? body : [body];
-  const responses = await Promise.all(requests.map(handleRpc));
+  const responses = await Promise.all(requests.map(r => handleRpc(r, logonName)));
   res.json(isBatch ? responses : responses[0]);
 });
 
@@ -370,11 +424,12 @@ router.post('/message', async (req, res) => {
   // Handle batch
   const isBatch = Array.isArray(body);
   const requests = isBatch ? body : [body];
+  const logonName = getLogonName(req);
 
   res.status(202).end(); // MCP spec: POST returns 202, response goes via SSE
 
   for (const rpc of requests) {
-    const response = await handleRpc(rpc);
+    const response = await handleRpc(rpc, logonName);
     if (sseRes && !sseRes.writableEnded) {
       sseRes.write(`event: message\ndata: ${JSON.stringify(response)}\n\n`);
     }
@@ -385,9 +440,10 @@ router.post('/message', async (req, res) => {
 router.post('/rpc', async (req, res) => {
   const body = req.body;
   if (!body || typeof body !== 'object') return res.status(400).json({ error: 'Invalid JSON-RPC body' });
+  const logonName = getLogonName(req);
   const isBatch = Array.isArray(body);
   const requests = isBatch ? body : [body];
-  const responses = await Promise.all(requests.map(handleRpc));
+  const responses = await Promise.all(requests.map(r => handleRpc(r, logonName)));
   res.json(isBatch ? responses : responses[0]);
 });
 
