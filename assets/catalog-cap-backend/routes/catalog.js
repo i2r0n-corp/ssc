@@ -1339,6 +1339,9 @@ router.post('/export-excel', async (req, res) => {
 
     const getEffort = s => effortMap[s.code] || '';
     const getSvcPhases = s => phasesMap[s.code] || [];
+
+    // Build service → module name map from DB when BS is selected
+    let svcModuleMap = {};
     if (bsCode) {
       try {
         const db = require('../store/db');
