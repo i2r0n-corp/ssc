@@ -1823,7 +1823,7 @@ function renderAdminPage() {
                 style="width:100%;padding:0.3rem 0.5rem;font-size:0.8rem;border:1px solid #8696A9;border-radius:4px"
                 onkeydown="if(event.key==='Enter')window.adminAddUser()"/></td>
               <td colspan="${TABS.length}"></td>
-              <td><button class="btn btn-primary btn-sm" onclick="window.adminAddUser()">+ Add</button></td>
+              <td><button class="btn btn-primary btn-sm" onclick="window.adminAddUser()">Add</button></td>
             </tr>
           </tbody>
         </table>
