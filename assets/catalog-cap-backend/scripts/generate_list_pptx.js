@@ -136,28 +136,21 @@ function cellStream(rowSpan) {
     TCPR_STREAM + `</a:tc>`;
 }
 
-function cellData(text, algn, borderRight) {
+const LNL_SOLID = `<a:lnL w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnL>`;
+const LNL_NONE  = `<a:lnL w="12700" cmpd="sng"><a:noFill/></a:lnL>`;
+
+function cellData(text, algn, borderRight, borderLeft) {
   const align = algn || 'l';
-  const tcpr = borderRight
-    ? TCPR_DATA.replace(
-        `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr"><a:noFill/><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`,
-        `<a:lnR w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`
-      )
-    : TCPR_DATA;
+  let tcpr = borderLeft ? TCPR_DATA.replace(LNL_NONE, LNL_SOLID) : TCPR_DATA;
   return `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>` +
     `<a:p><a:pPr algn="${align}" rtl="0"><a:buNone/></a:pPr>` +
     (text ? `<a:r>${RPR_DATA}<a:t>${esc(text)}</a:t></a:r>` : `<a:endParaRPr lang="en-GB"/>`) +
     `</a:p></a:txBody>${tcpr}</a:tc>`;
 }
 
-function headerCell(text, algn, borderRight) {
+function headerCell(text, algn, borderRight, borderLeft) {
   const align = algn || 'ctr';
-  const tcpr = borderRight
-    ? TCPR_HDR.replace(
-        `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr"><a:noFill/><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`,
-        `<a:lnR w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`
-      )
-    : TCPR_HDR;
+  let tcpr = borderLeft ? TCPR_HDR.replace(LNL_NONE, LNL_SOLID) : TCPR_HDR;
   return `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>` +
     `<a:p><a:pPr algn="${align}"><a:buNone/></a:pPr>` +
     (text ? `<a:r>${RPR_HDR}<a:t>${esc(text)}</a:t></a:r>` : `<a:endParaRPr lang="en-GB"/>`) +
@@ -172,11 +165,9 @@ const SOLID_LINE_CHILDREN =
   `<a:prstDash val="solid"/><a:round/>` +
   `<a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/>`;
 
-function cellYear(text, isHeader, isLast) {
-  const lnL = `<a:lnL w="0" cmpd="sng"><a:noFill/></a:lnL>`;
-  const lnR = isLast
-    ? `<a:lnR w="0" cmpd="sng"><a:noFill/></a:lnR>`
-    : `<a:lnR w="9525" cap="flat" cmpd="sng" algn="ctr">${SOLID_LINE_CHILDREN}</a:lnR>`;
+function cellYear(text, isHeader) {
+  const lnL = `<a:lnL w="9525" cap="flat" cmpd="sng" algn="ctr">${SOLID_LINE_CHILDREN}</a:lnL>`;
+  const lnR = `<a:lnR w="0" cmpd="sng"><a:noFill/></a:lnR>`;
   const fill = isHeader ? `<a:solidFill><a:srgbClr val="003366"/></a:solidFill>` : `<a:noFill/>`;
   const anchor = isHeader ? 'ctr' : 't';
   const rpr = isHeader ? RPR_HDR : RPR_DATA;
@@ -270,11 +261,11 @@ function buildHeaderRows(cols, objW, yearCount, yearFrom, yearBorders) {
   if (cols.phases)    cells += headerCell('Activate Phase');
   if (cols.component) cells += headerCell('Service Name');
   if (cols.tier)      cells += headerCell('Type');
-  cells += headerCell('Objectives', undefined, yearCount > 0 && yearBorders);
-  if (cols.pd) cells += headerCell('PD');
+  cells += headerCell('Objectives', undefined, false);
+  if (cols.pd) cells += headerCell('PD', 'ctr', false, yearCount > 0 && yearBorders);
   for (let i = 0; i < yearCount; i++) {
     cells += yearBorders
-      ? cellYear(String(yearFrom + i), true, i === yearCount - 1)
+      ? cellYear(String(yearFrom + i), true)
       : headerCell(String(yearFrom + i));
   }
   return `<a:tr h="${ROW_H}">${cells}</a:tr>`;
@@ -291,10 +282,10 @@ function buildDataRows(dataRows, cols, objW, yearCount, yearBorders) {
     if (cols.phases)    cells += cellData(dr.phases);
     if (cols.component) cells += cellData(dr.component);
     if (cols.tier)      cells += cellData(dr.tier);
-    cells += cellData(dr.objectives, undefined, yearCount > 0 && yearBorders);
-    if (cols.pd)        cells += cellData(dr.pd || '', 'ctr');
+    cells += cellData(dr.objectives, undefined, false);
+    if (cols.pd)        cells += cellData(dr.pd || '', 'ctr', false, yearCount > 0 && yearBorders);
     for (let i=0; i<yearCount; i++) {
-      cells += yearBorders ? cellYear('', false, i === yearCount - 1) : cellData('', 'ctr');
+      cells += yearBorders ? cellYear('', false) : cellData('', 'ctr');
     }
     return `<a:tr h="${dr.rowH}">${cells}</a:tr>`;
   }).join('');
