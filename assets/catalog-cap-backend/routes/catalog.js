@@ -1365,9 +1365,40 @@ router.post('/export-excel', async (req, res) => {
       } catch { /* fall through — module names will be empty */ }
     }
 
+    // Ensures xl/styles.xml has a bold xf entry; returns the xf index (0-based)
+    async function ensureBoldStyle(zip) {
+      const stylesFile = zip.file('xl/styles.xml');
+      if (!stylesFile) return 0;
+      let xml = await stylesFile.async('string');
+
+      // Count existing fonts to find new font index
+      const fontMatches = xml.match(/<font[\s>]/g) || [];
+      const boldFontIdx = fontMatches.length;
+
+      // Add bold font entry
+      xml = xml.replace('</fonts>', '<font><b/><sz val="11"/><name val="Calibri"/></font></fonts>');
+
+      // Count existing xf entries in cellXfs to find new xf index
+      const xfMatches = xml.match(/<xf /g) || [];
+      const boldXfIdx = xfMatches.length;
+
+      // Add xf referencing the bold font
+      xml = xml.replace('</cellXfs>', `<xf numFmtId="0" fontId="${boldFontIdx}" fillId="0" borderId="0" applyFont="1"/></cellXfs>`);
+
+      // Update fonts count
+      xml = xml.replace(/(<fonts count=")(\d+)(")/, (m, a, n, b) => `${a}${parseInt(n)+1}${b}`);
+      // Update cellXfs count
+      xml = xml.replace(/(<cellXfs count=")(\d+)(")/, (m, a, n, b) => `${a}${parseInt(n)+1}${b}`);
+
+      zip.file('xl/styles.xml', xml);
+      return boldXfIdx;
+    }
+
     // Inject a real Excel Table (TableStyleMedium9) into the xlsx buffer via JSZip
     // numericStartCol: first column index (0-based) that should get totalsRowFunction=sum
-    async function injectTable(buf, ref, tableName, columns, withTotals, numericStartCol) {
+    // numericEndCol: last column index (0-based, inclusive) that gets sum; columns after get none
+    // boldColIdx: column index (0-based) whose data cells should be bold (patched via XML)
+    async function injectTable(buf, ref, tableName, columns, withTotals, numericStartCol, numericEndCol, boldColIdx) {
       const zip = await JSZip.loadAsync(buf);
 
       // autoFilter ref excludes the totals row
@@ -1379,12 +1410,13 @@ router.post('/export-excel', async (req, res) => {
 
       const totalsRowCount = withTotals ? 1 : 0;
       const numStart = numericStartCol != null ? numericStartCol : columns.length;
+      const numEnd   = numericEndCol   != null ? numericEndCol   : columns.length - 1;
       const colXml = columns.map((c, i) => {
         const safeName = c.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         let extra = '';
         if (withTotals) {
           if (i === 0) extra = ' totalsRowLabel="Total"';
-          else if (i >= numStart) extra = ' totalsRowFunction="sum"';
+          else if (i >= numStart && i <= numEnd) extra = ' totalsRowFunction="sum"';
           else extra = ' totalsRowFunction="none"';
         }
         return `<tableColumn id="${i+1}" name="${safeName}"${extra}/>`;
@@ -1418,6 +1450,23 @@ router.post('/export-excel', async (req, res) => {
           wsXml = wsXml.replace('<worksheet ', '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
         }
         wsXml = wsXml.replace('</worksheet>', `<tableParts count="1"><tablePart r:id="rId1"/></tableParts></worksheet>`);
+
+        // Apply bold to target column cells via styles
+        if (boldColIdx != null) {
+          const boldStyleIdx = await ensureBoldStyle(zip);
+          const boldColLetter = XLSX.utils.encode_col(boldColIdx);
+          // Match <c r="X2" ...> through last data row (excludes header row 1 and totals row)
+          // Replace s attr or add it for cells in the bold column
+          wsXml = wsXml.replace(/<c r="([^"]+)"([^>]*?)(\s*\/>|>)/g, (match, addr, attrs, close) => {
+            const colLetter = addr.replace(/\d+/g, '');
+            const rowNum = parseInt(addr.match(/\d+/)[0], 10);
+            if (colLetter !== boldColLetter || rowNum < 2) return match;
+            // remove existing s="..." attr, add bold style
+            const cleanAttrs = attrs.replace(/\s+s="[^"]*"/, '');
+            return `<c r="${addr}"${cleanAttrs} s="${boldStyleIdx}"${close}`;
+          });
+        }
+
         zip.file('xl/worksheets/sheet1.xml', wsXml);
       }
 
@@ -1434,32 +1483,68 @@ router.post('/export-excel', async (req, res) => {
     }
 
     const wb = XLSX.utils.book_new();
-    let tableRef, tableColumns, withTotals, sheetName;
+    let tableRef, tableColumns, withTotals, sheetName, pdBoldColIdx = null;
 
     if (pdMode) {
       const yf = parseInt(yearFrom, 10), yt = parseInt(yearTo, 10);
       const years = (yf >= 2000 && yt >= yf) ? Array.from({length: Math.min(yt-yf+1,15)}, (_,i) => yf+i) : [];
-      tableColumns = ['CRM ID', 'Link', 'Name', 'Typical Effort', ...years.map(String)];
+      const hasYears = years.length > 0;
+      // cols: CRM ID, Link, Service Name, Typical Effort, [years...], [Total,] Business Need
+      tableColumns = ['CRM ID', 'Link', 'Service Name', 'Typical Effort', ...years.map(String), ...(hasYears ? ['Total'] : []), 'Business Need'];
       withTotals = true;
       sheetName = 'PD Export';
+
+      // col indices (0-based)
+      const yearStartIdx = 4;
+      const yearEndIdx   = yearStartIdx + years.length - 1;
+      const totalColIdx  = hasYears ? yearStartIdx + years.length : -1;
+      if (hasYears) pdBoldColIdx = totalColIdx;
 
       const aoa = [tableColumns];
       for (const s of services) {
         const pdVal = getEffort(s);
         aoa.push([
           s.serviceNumber || s.number || '',
-          s.url || '',
+          'to Service Catalogue',
           s.name || '',
           pdVal !== '' ? Number(pdVal) : null,
           ...years.map(() => null),
+          ...(hasYears ? [null] : []),  // Total placeholder — formula set below
+          strip(s.businessNeeds) || '',
         ]);
       }
 
       const ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws['!cols'] = [{wch:18},{wch:50},{wch:40},{wch:16}, ...years.map(()=>({wch:10}))];
+
+      // Set SUM formula for Total column cells
+      if (hasYears) {
+        for (let r = 0; r < services.length; r++) {
+          const dataRow = r + 1; // 0-based row index (row 0 = header)
+          const firstYearCell = XLSX.utils.encode_cell({c: yearStartIdx, r: dataRow});
+          const lastYearCell  = XLSX.utils.encode_cell({c: yearEndIdx,   r: dataRow});
+          const totalAddr = XLSX.utils.encode_cell({c: totalColIdx, r: dataRow});
+          ws[totalAddr] = { t: 'n', f: `SUM(${firstYearCell}:${lastYearCell})`, v: 0 };
+        }
+      }
+
+      // Apply hyperlinks to Link column (col index 1, B)
+      for (let r = 0; r < services.length; r++) {
+        const s = services[r];
+        if (s.url) {
+          const cellAddr = XLSX.utils.encode_cell({c: 1, r: r + 1});
+          if (ws[cellAddr]) ws[cellAddr].l = { Target: s.url };
+        }
+      }
+
+      ws['!cols'] = [
+        {wch:18}, {wch:22}, {wch:40}, {wch:16},
+        ...years.map(()=>({wch:10})),
+        ...(hasYears ? [{wch:10}] : []),
+        {wch:50},
+      ];
 
       const lastCol = XLSX.utils.encode_col(tableColumns.length - 1);
-      const lastRow = services.length + 1 + 1; // header + data + totals row (owned by table XML)
+      const lastRow = services.length + 1 + 1; // header + data + totals row
       tableRef = `A1:${lastCol}${lastRow}`;
       ws['!ref'] = tableRef;
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
@@ -1516,7 +1601,7 @@ router.post('/export-excel', async (req, res) => {
 
     // Write xlsx buffer, then inject real Excel table via JSZip
     let buf = XLSX.write(wb, {type:'buffer', bookType:'xlsx'});
-    buf = await injectTable(buf, tableRef, sheetName.replace(/\s/g,''), tableColumns, withTotals, pdMode ? 3 : null);
+    buf = await injectTable(buf, tableRef, sheetName.replace(/\s/g,''), tableColumns, withTotals, pdMode ? 3 : null, pdMode ? tableColumns.length - 2 : null, pdBoldColIdx);
 
     res.json({ downloadUrl: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${buf.toString('base64')}`, ok: true });
   } catch (e) {
