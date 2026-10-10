@@ -1432,42 +1432,56 @@ router.post('/export-excel', async (req, res) => {
 
       zip.file('xl/tables/table1.xml', tableXml);
 
-      // Worksheet relationship
-      const relsXml =
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-        `<Relationship Id="rId1" ` +
-        `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" ` +
-        `Target="../tables/table1.xml"/>` +
-        `</Relationships>`;
-      zip.file('xl/worksheets/_rels/sheet1.xml.rels', relsXml);
-
-      // Patch worksheet XML: add tablePart + r namespace if missing
-      const wsFile = zip.file('xl/worksheets/sheet1.xml');
-      if (wsFile) {
-        let wsXml = await wsFile.async('string');
-        if (!wsXml.includes('xmlns:r=')) {
-          wsXml = wsXml.replace('<worksheet ', '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
+      // Worksheet relationship — merge table rel into existing rels (xlsx may have written hyperlink rels)
+      const tableRelEntry = zip.file('xl/worksheets/_rels/sheet1.xml.rels');
+      if (tableRelEntry) {
+        let existingRels = await tableRelEntry.async('string');
+        // Find highest existing rId to avoid collision
+        const existingIds = [...existingRels.matchAll(/Id="rId(\d+)"/g)].map(m => parseInt(m[1], 10));
+        const maxId = existingIds.length ? Math.max(...existingIds) : 0;
+        const tableRId = `rId${maxId + 1}`;
+        existingRels = existingRels.replace('</Relationships>',
+          `<Relationship Id="${tableRId}" ` +
+          `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" ` +
+          `Target="../tables/table1.xml"/></Relationships>`);
+        zip.file('xl/worksheets/_rels/sheet1.xml.rels', existingRels);
+        // Patch tablePart to use the correct rId
+        const wsFile2 = zip.file('xl/worksheets/sheet1.xml');
+        if (wsFile2) {
+          let wsXml2 = await wsFile2.async('string');
+          if (!wsXml2.includes('xmlns:r=')) {
+            wsXml2 = wsXml2.replace('<worksheet ', '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ');
+          }
+          wsXml2 = wsXml2.replace('</worksheet>', `<tableParts count="1"><tablePart r:id="${tableRId}"/></tableParts></worksheet>`);
+          zip.file('xl/worksheets/sheet1.xml', wsXml2);
         }
-        wsXml = wsXml.replace('</worksheet>', `<tableParts count="1"><tablePart r:id="rId1"/></tableParts></worksheet>`);
+      } else {
+        const relsXml =
+          `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+          `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+          `<Relationship Id="rId1" ` +
+          `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" ` +
+          `Target="../tables/table1.xml"/>` +
+          `</Relationships>`;
+        zip.file('xl/worksheets/_rels/sheet1.xml.rels', relsXml);
+      }
 
-        // Apply bold to target column cells via styles
-        if (boldColIdx != null) {
+      // Apply bold to target column cells via styles (separate pass, ws may have been updated above)
+      if (boldColIdx != null) {
+        const wsFileBold = zip.file('xl/worksheets/sheet1.xml');
+        if (wsFileBold) {
+          let wsXml = await wsFileBold.async('string');
           const boldStyleIdx = await ensureBoldStyle(zip);
           const boldColLetter = XLSX.utils.encode_col(boldColIdx);
-          // Match <c r="X2" ...> through last data row (excludes header row 1 and totals row)
-          // Replace s attr or add it for cells in the bold column
           wsXml = wsXml.replace(/<c r="([^"]+)"([^>]*?)(\s*\/>|>)/g, (match, addr, attrs, close) => {
             const colLetter = addr.replace(/\d+/g, '');
             const rowNum = parseInt(addr.match(/\d+/)[0], 10);
             if (colLetter !== boldColLetter || rowNum < 2) return match;
-            // remove existing s="..." attr, add bold style
             const cleanAttrs = attrs.replace(/\s+s="[^"]*"/, '');
             return `<c r="${addr}"${cleanAttrs} s="${boldStyleIdx}"${close}`;
           });
+          zip.file('xl/worksheets/sheet1.xml', wsXml);
         }
-
-        zip.file('xl/worksheets/sheet1.xml', wsXml);
       }
 
       // Patch [Content_Types].xml
