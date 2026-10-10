@@ -1961,8 +1961,8 @@ function renderMcpModal() {
   const capabilities = [
     { name: 'Search Services',         desc: 'Find catalog services by keyword, engagement type, or business scenario' },
     { name: 'Get Service Details',     desc: 'Retrieve full details of any service by its code' },
-    { name: 'List Business Scenarios', desc: 'Get the full list of available business scenarios with codes and names' },
-    { name: 'Catalog Statistics',      desc: 'Fetch total service count and last catalog update timestamp' },
+    { name: 'List Business Scenarios', desc: 'Browse all available scenarios with codes and names' },
+    { name: 'Catalog Statistics',      desc: 'Check total service count and last catalog update' },
     { name: 'Generate Presentation',   desc: 'Build and download a PowerPoint list from any set of services' },
     { name: 'Custom PPTX Columns',     desc: 'Control which columns appear in the generated presentation', comingSoon: true },
   ];
@@ -1971,38 +1971,39 @@ function renderMcpModal() {
     <div class="modal-box" style="max-width:580px">
       <button class="modal-close" onclick="window.closeMcpModal()">✕</button>
       <h3 style="margin-top:0;font-size:1.05rem">SSC Catalog Agent for Joule Work Desktop</h3>
-
-      <p style="font-size:0.875rem;color:#3a3a3a;line-height:1.6;margin:0 0 0.75rem">
-        A ready-to-use <strong>JWD skill</strong> is available that teaches your Joule agent how to search
-        the catalog, retrieve service details, and generate PowerPoint presentations — all from a conversation.
-        The skill file (<code style="font-size:0.8rem;background:#f0f4f8;padding:1px 4px;border-radius:3px">jwd-skill.md</code>)
-        is included in this repository and can be attached directly to your JWD agent.
+      <p style="margin:0 0 1.1rem">
+        <a href="#" onclick="window.closeMcpModal();return false" style="font-size:0.78rem;color:#0070F2;text-decoration:none">Agent + MCP for your Joule Work Desktop</a>
       </p>
 
-      <p style="font-size:0.875rem;color:#3a3a3a;line-height:1.6;margin:0 0 0.75rem">
-        For the agent to work, it also needs to be connected to the <strong>MCP server</strong> of this application.
-        The MCP server exposes the following capabilities:
-      </p>
+      <p style="font-size:0.82rem;font-weight:600;color:#1D2D3E;margin:0 0 0.4rem">Install the skill:</p>
+      <ol style="margin:0 0 1rem;padding-left:1.25rem;display:flex;flex-direction:column;gap:0.3rem;font-size:0.875rem;color:#3a3a3a;line-height:1.55">
+        <li>Save the <code style="font-size:0.8rem;background:#f0f4f8;padding:1px 4px;border-radius:3px">jwd-skill.md</code> file anywhere on your computer</li>
+        <li>Open Joule Work Desktop</li>
+        <li>Click the Extensions icon (navigation rail, left side)</li>
+        <li>Go to the Skills tab → click <strong>+ New</strong></li>
+        <li>Select <strong>Create Skill → Import</strong> and pick the saved file</li>
+      </ol>
+      <p style="font-size:0.875rem;color:#3a3a3a;margin:0 0 1rem">The skill is now ready to use.</p>
 
-      <ul style="margin:0 0 1.25rem;padding-left:1.25rem;display:flex;flex-direction:column;gap:0.4rem">
+      <p style="font-size:0.875rem;color:#3a3a3a;line-height:1.55;margin:0 0 0.6rem">
+        Once skill set, create a new connection to the <strong><em>MCP server</em></strong> running as part of this app
+        to use most of its capabilities directly in Joule Work Desktop:
+      </p>
+      <ul style="margin:0 0 1.1rem;padding-left:1.25rem;display:flex;flex-direction:column;gap:0.3rem">
         ${capabilities.map(c => `
         <li style="font-size:0.875rem;color:${c.comingSoon?'#8696A9':'#1D2D3E'}">
-          <span style="font-weight:600">${c.name}</span>${c.comingSoon?' <span style="font-size:0.72rem;background:#e8f0f7;color:#1D6FA4;border-radius:3px;padding:1px 5px;vertical-align:middle">coming soon</span>':''}<br>
-          <span style="color:#556B82;font-size:0.82rem">${c.desc}</span>
+          <strong>${c.name}</strong>${c.comingSoon?' <span style="font-size:0.72rem;background:#e8f0f7;color:#1D6FA4;border-radius:3px;padding:1px 5px;vertical-align:middle">coming soon</span>':''} — <span style="color:#556B82">${c.desc}</span>
         </li>`).join('')}
       </ul>
 
       <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:0.65rem 1rem;font-size:0.875rem;color:#5d4037;margin-bottom:1.1rem;line-height:1.55">
-        <strong>Access required:</strong> This MCP server is not a public SAP internal tool — it runs as part of this app.
-        To get the MCP credentials needed to connect JWD, please submit a request below and the administrator will follow up with you.
+        * <strong>Access required:</strong> <em>This MCP server is for internal use only. To get MCP connection credentials, please submit a request below and the administrator will follow up with you.</em>
       </div>
 
       ${m.error ? `<div class="error-strip" style="margin-bottom:0.75rem">⚠ ${m.error}</div>` : ''}
-      ${m.sent
-        ? `<div style="background:#d4edda;color:#155724;border-radius:6px;padding:0.65rem 1rem;font-size:0.875rem;margin-bottom:0.75rem">
-             ✓ Your request has been submitted. The administrator will follow up with you.
-           </div>`
-        : ''}
+      ${m.sent ? `<div style="background:#d4edda;color:#155724;border-radius:6px;padding:0.65rem 1rem;font-size:0.875rem;margin-bottom:0.75rem">
+        ✓ Your request has been submitted. The administrator will follow up with you.
+      </div>` : ''}
       <div style="display:flex;justify-content:flex-end;gap:0.75rem">
         <button class="btn btn-secondary btn-sm" onclick="window.closeMcpModal()">Close</button>
         ${!m.sent ? `<button class="btn btn-primary btn-sm" ${m.sending?'disabled':''} onclick="window.requestMcpAccess()">
