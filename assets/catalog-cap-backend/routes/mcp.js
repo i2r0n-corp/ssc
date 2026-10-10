@@ -299,7 +299,7 @@ async function callGeneratePresentation(args, logonName) {
     if (result.downloadUrl) {
       if (db) db.logExport({
         logonName,
-        exportType: 'MCP-PPTX',
+        exportType: 'MCP-pptx',
         serviceCount: result.serviceCount || serviceCodes.length,
         pptxTitle: listOptions.title,
         pptxCols: cols || null,

@@ -233,7 +233,7 @@ router.post('/generatePptx', async (req, res) => {
     db.logExport({
       userId:           jwtPayload?.user_uuid || null,
       logonName:        jwtPayload?.user_name || jwtPayload?.email || null,
-      exportType:       templateName,
+      exportType:       templateName === 'list' ? 'pptx-list' : templateName,
       serviceCount:     services.length,
       filterBs:         opts.bsCode        || null,
       filterEt:         req.body?.filterEt  || null,

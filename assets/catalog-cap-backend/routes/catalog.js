@@ -1628,7 +1628,7 @@ router.post('/export-excel', async (req, res) => {
     db.logExport({
       userId:      jwtPayload?.user_uuid || null,
       logonName:   jwtPayload?.user_name || jwtPayload?.email || null,
-      exportType:  pdMode ? 'excel-pd' : 'excel',
+      exportType:  pdMode ? 'excel-days' : 'excel-std',
       serviceCount: services.length,
       filterBs:    bsCode || null,
       filterEt:    req.body?.filterEt || null,
