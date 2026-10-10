@@ -2035,6 +2035,10 @@ function render() {
   const modalBox = document.querySelector('.modal-box');
   const modalScrollTop = modalBox ? modalBox.scrollTop : 0;
 
+  // Preserve check-panel scroll positions (keyed by index)
+  const checkPanels = [...document.querySelectorAll('.check-panel')];
+  const checkPanelScrolls = checkPanels.map(el => el.scrollTop);
+
   app.innerHTML = `
     <div class="shell-top">
       <div class="shell-top-inner">
@@ -2084,6 +2088,11 @@ function render() {
     const newModalBox = document.querySelector('.modal-box');
     if (newModalBox) newModalBox.scrollTop = modalScrollTop;
   }
+
+  // Restore check-panel scroll positions
+  [...document.querySelectorAll('.check-panel')].forEach((el, i) => {
+    if (checkPanelScrolls[i] > 0) el.scrollTop = checkPanelScrolls[i];
+  });
 
   // Restore year input values without disturbing focus — the inputs use no value= attr
   const yf = document.getElementById('pptx-year-from');
