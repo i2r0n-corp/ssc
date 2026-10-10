@@ -7,6 +7,15 @@ const fs = require('fs');
 const path = require('path');
 const snapshot = require('../store/snapshot');
 
+function getJwtPayload(req) {
+  try {
+    const auth = req.headers['authorization'] || '';
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    if (!token) return null;
+    return JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8'));
+  } catch { return null; }
+}
+
 const EXCEL_DIR     = process.env.EXCEL_STORE_PATH   || path.join(__dirname, '..', 'data', 'excels');
 const MANIFEST_FILE = process.env.EXCEL_MANIFEST_PATH || path.join(__dirname, '..', 'data', 'excel-manifest.json');
 fs.mkdirSync(EXCEL_DIR, { recursive: true });
@@ -1613,6 +1622,18 @@ router.post('/export-excel', async (req, res) => {
     // Write xlsx buffer, then inject real Excel table via JSZip
     let buf = XLSX.write(wb, {type:'buffer', bookType:'xlsx'});
     buf = await injectTable(buf, tableRef, sheetName.replace(/\s/g,''), tableColumns, withTotals, pdMode ? 3 : null, pdMode ? tableColumns.length - 2 : null, pdBoldColIdx);
+
+    const db = require('../store/db');
+    const jwtPayload = getJwtPayload(req);
+    db.logExport({
+      userId:      jwtPayload?.user_uuid || null,
+      logonName:   jwtPayload?.user_name || jwtPayload?.email || null,
+      exportType:  pdMode ? 'excel-pd' : 'excel',
+      serviceCount: services.length,
+      filterBs:    bsCode || null,
+      filterEt:    req.body?.filterEt || null,
+      filterQuery: req.body?.filterQuery || null,
+    });
 
     res.json({ downloadUrl: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${buf.toString('base64')}`, ok: true });
   } catch (e) {
