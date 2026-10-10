@@ -1285,7 +1285,7 @@ function renderExcelSettingsModal() {
         Configure the export format before downloading.
       </div>
       <label style="display:flex;align-items:flex-start;gap:0.6rem;cursor:pointer;font-size:0.875rem;margin-bottom:1rem">
-        <input type="checkbox" ${s.pdMode?'checked':''} onchange="state.excelSettings.pdMode=this.checked;render()" style="margin-top:2px"/>
+        <input type="checkbox" ${s.pdMode?'checked':''} onclick="state.excelSettings.pdMode=!state.excelSettings.pdMode;render()" style="margin-top:2px"/>
         <span><strong>Export option for premium days calculation</strong><br/>
         <span style="font-size:0.78rem;color:#6a6a6a">Exports CRM ID, link, Name, PD and year columns formatted as an Excel table with totals row</span></span>
       </label>

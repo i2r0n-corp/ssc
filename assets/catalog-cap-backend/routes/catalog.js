@@ -1306,6 +1306,9 @@ router.post('/export-excel', async (req, res) => {
 
     const { services: allServices = [], pdMode = false, yearFrom, yearTo, bsCode, bsName } = req.body || {};
     if (!allServices.length) return res.status(400).json({ error: 'No services provided' });
+    const first = allServices[0] || {};
+    console.log('[excel-export] pdMode=%j yearFrom=%s yearTo=%s total=%d et_sample=%j',
+      pdMode, yearFrom, yearTo, allServices.length, first.engagementType);
     const services = pdMode
       ? allServices.filter(s => {
           const et = Array.isArray(s.engagementType) ? s.engagementType : [s.engagementType || s.engagement_type || ''];
@@ -1316,33 +1319,42 @@ router.post('/export-excel', async (req, res) => {
     const PHASES = ['Prepare','Discover','Explore','Realize','Deploy','Run'];
     const strip = v => (v||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
 
-    const getEffort = s => {
-      const f = (s.classificationFeatures || []).find(x => x.key === 'effortEstimateDays');
-      return f ? (f.value || '') : '';
-    };
+    // Load phases and effort from catalog_classification (same source as PPTX export)
+    const svcCodes = allServices.map(s => s.code).filter(Boolean);
+    let phasesMap = {}, effortMap = {};
+    try {
+      const db = require('../store/db');
+      db.getPool();
+      const [phRes, efRes] = await Promise.all([
+        db.query("SELECT service_code, feature_value FROM catalog_classification WHERE feature_key='sapActivateProjectPhase' AND service_code = ANY($1)", [svcCodes]),
+        db.query("SELECT service_code, feature_value FROM catalog_classification WHERE feature_key='effortEstimateDays' AND service_code = ANY($1)", [svcCodes]),
+      ]);
+      for (const row of phRes.rows) {
+        if (!phasesMap[row.service_code]) phasesMap[row.service_code] = [];
+        const vals = row.feature_value.split(',').map(v => v.trim()).filter(Boolean);
+        phasesMap[row.service_code].push(...vals);
+      }
+      for (const row of efRes.rows) effortMap[row.service_code] = row.feature_value || '';
+    } catch { /* fall through — phases/effort will be empty */ }
 
-    const getSvcPhases = s =>
-      (s.classificationFeatures || []).filter(f => f.key === 'sapActivateProjectPhase').map(f => f.value);
-
-    // Build service → module name map from DB when BS is selected
-    let svcModuleMap = {};
+    const getEffort = s => effortMap[s.code] || '';
+    const getSvcPhases = s => phasesMap[s.code] || [];
     if (bsCode) {
       try {
         const db = require('../store/db');
         db.getPool();
-        const svcCodes = services.map(s => s.code).filter(Boolean);
-        if (svcCodes.length) {
+        const modSvcCodes = services.map(s => s.code).filter(Boolean);
+        if (modSvcCodes.length) {
           const r = await db.query(
             `SELECT h.child_code AS svc_code, s.name AS mod_name
              FROM catalog_hierarchy h
              JOIN catalog_services s ON s.code = h.parent_code
              WHERE s.service_object = 'Business Scenario module'
                AND h.child_code = ANY($1)`,
-            [svcCodes]
+            [modSvcCodes]
           );
           for (const row of r.rows) {
             if (!svcModuleMap[row.svc_code]) {
-              // Strip "Module N: " prefix (same logic as PPTX stream)
               const raw = row.mod_name || '';
               const sepIdx = raw.indexOf(' // ');
               const afterSep = sepIdx !== -1 ? raw.slice(sepIdx + 4) : raw;
