@@ -167,7 +167,7 @@ const SOLID_LINE_CHILDREN =
 
 function cellYear(text, isHeader) {
   const lnL = `<a:lnL w="9525" cap="flat" cmpd="sng" algn="ctr">${SOLID_LINE_CHILDREN}</a:lnL>`;
-  const lnR = `<a:lnR w="0" cmpd="sng"><a:noFill/></a:lnR>`;
+  const lnR = `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr">${NO_FILL_LINE_CHILDREN}</a:lnR>`;
   const fill = isHeader ? `<a:solidFill><a:srgbClr val="003366"/></a:solidFill>` : `<a:noFill/>`;
   const anchor = isHeader ? 'ctr' : 't';
   const rpr = isHeader ? RPR_HDR : RPR_DATA;
