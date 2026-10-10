@@ -136,21 +136,21 @@ function cellStream(rowSpan) {
     TCPR_STREAM + `</a:tc>`;
 }
 
-const LNL_SOLID = `<a:lnL w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnL>`;
 const LNL_NONE  = `<a:lnL w="12700" cmpd="sng"><a:noFill/></a:lnL>`;
+const LNL_SOLID = `<a:lnL w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnL>`;
 
-function cellData(text, algn, borderRight, borderLeft) {
+function cellData(text, algn, borderLeft) {
   const align = algn || 'l';
-  let tcpr = borderLeft ? TCPR_DATA.replace(LNL_NONE, LNL_SOLID) : TCPR_DATA;
+  const tcpr = borderLeft ? TCPR_DATA.replace(LNL_NONE, LNL_SOLID) : TCPR_DATA;
   return `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>` +
     `<a:p><a:pPr algn="${align}" rtl="0"><a:buNone/></a:pPr>` +
     (text ? `<a:r>${RPR_DATA}<a:t>${esc(text)}</a:t></a:r>` : `<a:endParaRPr lang="en-GB"/>`) +
     `</a:p></a:txBody>${tcpr}</a:tc>`;
 }
 
-function headerCell(text, algn, borderRight, borderLeft) {
+function headerCell(text, algn, borderLeft) {
   const align = algn || 'ctr';
-  let tcpr = borderLeft ? TCPR_HDR.replace(LNL_NONE, LNL_SOLID) : TCPR_HDR;
+  const tcpr = borderLeft ? TCPR_HDR.replace(LNL_NONE, LNL_SOLID) : TCPR_HDR;
   return `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>` +
     `<a:p><a:pPr algn="${align}"><a:buNone/></a:pPr>` +
     (text ? `<a:r>${RPR_HDR}<a:t>${esc(text)}</a:t></a:r>` : `<a:endParaRPr lang="en-GB"/>`) +
@@ -261,8 +261,8 @@ function buildHeaderRows(cols, objW, yearCount, yearFrom, yearBorders) {
   if (cols.phases)    cells += headerCell('Activate Phase');
   if (cols.component) cells += headerCell('Service Name');
   if (cols.tier)      cells += headerCell('Type');
-  cells += headerCell('Objectives', undefined, false);
-  if (cols.pd) cells += headerCell('PD', 'ctr', false, yearCount > 0 && yearBorders);
+  cells += headerCell('Objectives');
+  if (cols.pd) cells += headerCell('PD', 'ctr');
   for (let i = 0; i < yearCount; i++) {
     cells += yearBorders
       ? cellYear(String(yearFrom + i), true)
@@ -282,8 +282,8 @@ function buildDataRows(dataRows, cols, objW, yearCount, yearBorders) {
     if (cols.phases)    cells += cellData(dr.phases);
     if (cols.component) cells += cellData(dr.component);
     if (cols.tier)      cells += cellData(dr.tier);
-    cells += cellData(dr.objectives, undefined, false);
-    if (cols.pd)        cells += cellData(dr.pd || '', 'ctr', false, yearCount > 0 && yearBorders);
+    cells += cellData(dr.objectives);
+    if (cols.pd)        cells += cellData(dr.pd || '', 'ctr');
     for (let i=0; i<yearCount; i++) {
       cells += yearBorders ? cellYear('', false) : cellData('', 'ctr');
     }
