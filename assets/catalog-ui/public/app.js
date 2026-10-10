@@ -1046,6 +1046,12 @@ window.openExcelSettings = function() {
 window.closeExcelSettings = function() {
   state.excelSettings.open = false; render();
 };
+window.toggleExcelPdMode = function() {
+  state.excelSettings.pdMode = !state.excelSettings.pdMode; render();
+};
+window.setExcelYear = function(field, val) {
+  state.excelSettings[field] = val.replace(/\D/g,'').slice(0,4); render();
+};
 window.closePptxListSettings = function() {
   state.pptxListSettings.open = false; render();
 };
@@ -1288,16 +1294,16 @@ function renderExcelSettingsModal() {
         Configure the export format before downloading.
       </div>
       <label style="display:flex;align-items:flex-start;gap:0.6rem;cursor:pointer;font-size:0.875rem;margin-bottom:1rem">
-        <input type="checkbox" ${s.pdMode?'checked':''} onclick="state.excelSettings.pdMode=!state.excelSettings.pdMode;setTimeout(render,0)" style="margin-top:2px"/>
+        <input type="checkbox" ${s.pdMode?'checked':''} onclick="toggleExcelPdMode()" style="margin-top:2px"/>
         <span><strong>Export option for premium days calculation</strong><br/>
         <span style="font-size:0.78rem;color:#6a6a6a">Exports CRM ID, link, Name, PD and year columns formatted as an Excel table with totals row</span></span>
       </label>
       <div style="${s.pdMode?'':'opacity:0.45;pointer-events:none'}">
         <div style="font-weight:600;font-size:0.82rem;margin-bottom:0.5rem">Year range</div>
         <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem">
-          <input type="text" maxlength="4" value="${s.yearFrom}" oninput="state.excelSettings.yearFrom=this.value.replace(/\\D/g,'').slice(0,4);setTimeout(render,0)" style="${inp}" placeholder="2026" ${s.pdMode?'':'disabled'}/>
+          <input type="text" maxlength="4" value="${s.yearFrom}" oninput="setExcelYear('yearFrom',this.value)" style="${inp}" placeholder="2026" ${s.pdMode?'':'disabled'}/>
           <span>—</span>
-          <input type="text" maxlength="4" value="${s.yearTo}" oninput="state.excelSettings.yearTo=this.value.replace(/\\D/g,'').slice(0,4);setTimeout(render,0)" style="${inp}" placeholder="2030" ${s.pdMode?'':'disabled'}/>
+          <input type="text" maxlength="4" value="${s.yearTo}" oninput="setExcelYear('yearTo',this.value)" style="${inp}" placeholder="2030" ${s.pdMode?'':'disabled'}/>
           ${!yearValid && s.pdMode ? `<span style="color:#c00;font-size:0.78rem">Invalid range</span>` : ''}
         </div>
       </div>
