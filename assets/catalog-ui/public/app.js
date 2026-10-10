@@ -1972,28 +1972,28 @@ function renderMcpModal() {
       <button class="modal-close" onclick="window.closeMcpModal()">✕</button>
       <h3 style="margin-top:0;font-size:1.05rem">SSC Catalog Agent for Joule Work Desktop</h3>
 
-      <p style="font-size:0.82rem;font-weight:600;color:#1D2D3E;margin:0 0 0.4rem">Install the skill:</p>
-      <ol style="margin:0 0 1rem;padding-left:1.25rem;display:flex;flex-direction:column;gap:0.3rem;font-size:0.875rem;color:#3a3a3a;line-height:1.55">
-        <li>Save the <code style="font-size:0.8rem;background:#f0f4f8;padding:1px 4px;border-radius:3px">jwd-skill.md</code> file anywhere on your computer</li>
+      <p style="font-size:0.75rem;font-weight:600;color:#1D2D3E;margin:0 0 0.4rem">Install the skill:</p>
+      <ol style="margin:0 0 1rem;padding-left:1.25rem;display:flex;flex-direction:column;gap:0.3rem;font-size:0.8rem;color:#3a3a3a;line-height:1.55">
+        <li>Download <a href="/jwd-skill.md" download style="color:#0070F2;text-decoration:none;font-weight:600">jwd-skill.md</a> and save it anywhere on your computer</li>
         <li>Open Joule Work Desktop</li>
         <li>Click the Extensions icon (navigation rail, left side)</li>
         <li>Go to the Skills tab → click <strong>+ New</strong></li>
         <li>Select <strong>Create Skill → Import</strong> and pick the saved file</li>
       </ol>
-      <p style="font-size:0.875rem;color:#3a3a3a;margin:0 0 1rem">The skill is now ready to use.</p>
+      <p style="font-size:0.8rem;color:#3a3a3a;margin:0 0 1rem">The skill is now ready to use.</p>
 
-      <p style="font-size:0.875rem;color:#3a3a3a;line-height:1.55;margin:0 0 0.6rem">
+      <p style="font-size:0.8rem;color:#3a3a3a;line-height:1.55;margin:0 0 0.6rem">
         Once skill set, create a new connection to the <strong><em>MCP server</em></strong> running as part of this app
         to use most of its capabilities directly in Joule Work Desktop:
       </p>
       <div style="margin:0 0 1.1rem;display:flex;flex-direction:column;gap:0.35rem">
         ${capabilities.map(c => `
-        <div style="font-size:0.875rem;color:#1D2D3E;padding:0.25rem 0;border-bottom:1px solid #f0f0f0">
+        <div style="font-size:0.8rem;color:#1D2D3E;padding:0.25rem 0;border-bottom:1px solid #f0f0f0">
           <strong>${c.name}</strong> — <span style="color:#556B82">${c.desc}</span>
         </div>`).join('')}
       </div>
 
-      <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:0.65rem 1rem;font-size:0.875rem;color:#5d4037;margin-bottom:1.1rem;line-height:1.55">
+      <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:0.65rem 1rem;font-size:0.8rem;color:#5d4037;margin-bottom:1.1rem;line-height:1.55">
         * <strong>Access required:</strong> <em>This MCP server is for internal use only. To get MCP connection credentials, please submit a request below and the administrator will follow up with you.</em>
       </div>
 
