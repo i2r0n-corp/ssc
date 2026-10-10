@@ -506,7 +506,7 @@ function renderCatalogResults() {
           📄 PPTX One-Pagers
         </button>
       </div>
-      <div style="display:none">
+      <div>
         ${state.selectedServices.size > 0
           ? `<button class="btn btn-secondary btn-sm" onclick="exportExcel()" title="Export selected to Excel">📊 Export Excel (${state.selectedServices.size})</button>`
           : `<button class="btn btn-secondary btn-sm" disabled style="opacity:0.45;cursor:not-allowed" title="Select services to export">📊 Export Excel (all)</button>`
