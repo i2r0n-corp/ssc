@@ -1303,93 +1303,115 @@ router.post('/export-excel', async (req, res) => {
   try {
     const XLSX = require('xlsx');
     const { v4: uuidv4 } = require('uuid');
-    const fs = require('fs');
-    const path = require('path');
     const os = require('os');
+    const path = require('path');
+    const fs = require('fs');
 
-    const { services = [], pdMode = false, yearFrom, yearTo, bsCode } = req.body || {};
+    const { services = [], pdMode = false, yearFrom, yearTo, bsCode, bsName } = req.body || {};
     if (!services.length) return res.status(400).json({ error: 'No services provided' });
 
     const PHASES = ['Prepare','Discover','Explore','Realize','Deploy','Run'];
     const strip = s => (s||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
-    const modName = s => {
+
+    // Extract effort from classificationFeatures array
+    const getEffort = s => {
+      const cf = s.classificationFeatures || [];
+      const f = cf.find(x => x.key === 'effortEstimateDays');
+      return f ? (f.value || '') : '';
+    };
+
+    // Module name: strip "Module N: " prefix (same as PPTX stream logic)
+    const getModName = s => {
       const n = s.parent_name || s.parentName || '';
-      return n.replace(/^Module\s+[^:]+:\s*/i, '');
+      const sepIdx = n.indexOf(' // ');
+      const afterSep = sepIdx !== -1 ? n.slice(sepIdx + 4) : n;
+      return afterSep.replace(/^Module\s+[^:]+:\s*/i, '');
+    };
+
+    // Phases from classificationFeatures
+    const getPhases = s => {
+      const cf = s.classificationFeatures || [];
+      return cf.filter(f => f.key === 'sapActivateProjectPhase').map(f => f.value);
     };
 
     const wb = XLSX.utils.book_new();
 
+    // Helper: add Excel Table to worksheet
+    function addTable(ws, headers, dataCount, sheetName, withTotals) {
+      const lastCol = XLSX.utils.encode_col(headers.length - 1);
+      const lastRow = dataCount + 1 + (withTotals ? 1 : 0);
+      ws['!ref'] = `A1:${lastCol}${lastRow}`;
+      ws['!tables'] = ws['!tables'] || [];
+      ws['!tables'].push({
+        name: sheetName.replace(/\s/g,''),
+        ref: `A1:${lastCol}${lastRow}`,
+        headerRow: true,
+        totalsRow: !!withTotals,
+        style: { name: 'TableStyleMedium9', showFirstColumn: false, showLastColumn: false, showRowStripes: true, showColumnStripes: false },
+        columns: headers.map((h, i) => ({
+          name: h,
+          totalsRowLabel: withTotals && i === 2 ? 'Total' : undefined,
+          totalsRowFunction: withTotals && i >= 3 ? 'sum' : (withTotals && i < 3 ? 'none' : undefined),
+        })),
+      });
+    }
+
     if (pdMode) {
-      // ── PD / premium days mode ──────────────────────────────────────────────
       const yf = parseInt(yearFrom, 10), yt = parseInt(yearTo, 10);
       const years = (yf >= 2000 && yt >= yf) ? Array.from({length: Math.min(yt-yf+1,15)}, (_,i) => yf+i) : [];
-
       const headers = ['CRM ID', 'Link', 'Name', 'PD', ...years.map(String)];
-      const dataRows = services.map(s => {
-        const row = [
+
+      const aoa = [headers];
+      for (const s of services) {
+        const pdVal = getEffort(s);
+        aoa.push([
           s.serviceNumber || s.number || '',
-          { l: { Target: s.url || '', Tooltip: 'Service Catalog' }, v: 'link' },
+          s.url ? { l: { Target: s.url, Tooltip: 'Service Catalog' }, v: 'link', t: 's' } : '',
           s.name || '',
-          s.effortEstimateDays || s.effort_days || '',
+          pdVal !== '' ? Number(pdVal) : null,
           ...years.map(() => null),
-        ];
-        return row;
-      });
+        ]);
+      }
 
-      // Totals row
-      const totalsRow = ['', '', 'Total', { t:'n', f:`SUM(D2:D${dataRows.length+1})` }, ...years.map((_,i) => ({ t:'n', f:`SUM(${XLSX.utils.encode_col(4+i)}2:${XLSX.utils.encode_col(4+i)}${dataRows.length+1})` }))];
-      const allRows = [headers, ...dataRows, totalsRow];
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = [{wch:18},{wch:8},{wch:40},{wch:8}, ...years.map(()=>({wch:10}))];
 
-      const ws = XLSX.utils.aoa_to_sheet(allRows);
-
-      // Column widths
-      ws['!cols'] = [
-        {wch:18}, {wch:8}, {wch:40}, {wch:8},
-        ...years.map(() => ({wch:10}))
-      ];
-
-      // Number format + alignment for PD and year columns
-      const range = XLSX.utils.decode_range(ws['!ref']);
-      for (let R = 1; R <= range.e.r; R++) {
-        // PD col (D = index 3)
-        const pdAddr = XLSX.utils.encode_cell({r:R, c:3});
-        if (!ws[pdAddr]) ws[pdAddr] = {t:'n', v:0};
-        ws[pdAddr].s = { numFmt:'0', alignment:{horizontal:'center',vertical:'center'} };
-        // year cols
-        for (let ci = 4; ci < 4+years.length; ci++) {
-          const addr = XLSX.utils.encode_cell({r:R, c:ci});
+      // Center-align PD + year cols, number format
+      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+      for (let R = 1; R < aoa.length; R++) {
+        for (let C = 3; C < headers.length; C++) {
+          const addr = XLSX.utils.encode_cell({r:R, c:C});
           if (!ws[addr]) ws[addr] = {t:'n', v:null};
           ws[addr].s = { numFmt:'0', alignment:{horizontal:'center',vertical:'center'} };
         }
       }
 
-      // Excel Table
-      ws['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(headers.length-1)}1` };
+      addTable(ws, headers, services.length, 'PDExport', true);
       XLSX.utils.book_append_sheet(wb, ws, 'PD Export');
 
     } else {
-      // ── Standard mode ───────────────────────────────────────────────────────
       const hasBs = !!bsCode;
       const headers = [
         'Service Code', 'CRM ID',
-        ...(hasBs ? ['Business Scenario', 'Module Name', 'Name'] : []),
-        ...(!hasBs ? ['Name'] : []),
+        ...(hasBs ? ['Business Scenario', 'Module Name', 'Name'] : ['Name']),
         'Efforts', 'Engagement Type', 'Short Description', 'Summary',
         'Teaser', 'Business Needs', 'Key Benefits', 'Delivery Approach', 'Description',
         ...PHASES
       ];
 
-      const dataRows = services.map(s => {
-        const bsNaming = s.business_scenario_naming || s.businessScenarioNaming || {};
-        const bsName   = hasBs ? (bsNaming[bsCode] || '') : null;
-        const et = Array.isArray(s.engagementType) ? s.engagementType.join('; ') : (s.engagementType||s.engagement_type||'');
-        const phases = Array.isArray(s.phases) ? s.phases : [];
-        return [
+      const aoa = [headers];
+      for (const s of services) {
+        const et = Array.isArray(s.engagementType) ? s.engagementType.join('; ') : (s.engagementType || s.engagement_type || '');
+        const phases = getPhases(s);
+        aoa.push([
           s.code || '',
           s.serviceNumber || s.number || '',
-          ...(hasBs ? [bsName, modName(s), s.name||''] : []),
-          ...(!hasBs ? [s.name||''] : []),
-          s.effortEstimateDays || s.effort_days || '',
+          ...(hasBs ? [
+            bsName || bsCode || '',
+            getModName(s),
+            s.name || '',
+          ] : [s.name || '']),
+          getEffort(s),
           et,
           strip(s.shortDescription),
           strip(s.summary),
@@ -1398,29 +1420,26 @@ router.post('/export-excel', async (req, res) => {
           strip(s.keyBenefits),
           strip(s.deliveryApproach),
           strip(s.description),
-          ...PHASES.map(p => phases.includes(p) ? 'v' : '')
-        ];
-      });
+          ...PHASES.map(p => phases.includes(p) ? 'v' : ''),
+        ]);
+      }
 
-      const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
       ws['!cols'] = [
         {wch:22},{wch:16},
-        ...(hasBs ? [{wch:30},{wch:30},{wch:40}] : [{wch:40}]),
-        {wch:10},{wch:22},{wch:50},{wch:40},{wch:40},{wch:40},{wch:40},{wch:40},{wch:60},
-        ...PHASES.map(() => ({wch:10}))
+        ...(hasBs ? [{wch:40},{wch:35},{wch:40}] : [{wch:40}]),
+        {wch:10},{wch:24},{wch:50},{wch:40},{wch:40},{wch:40},{wch:40},{wch:40},{wch:60},
+        ...PHASES.map(()=>({wch:10}))
       ];
-      ws['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(headers.length-1)}1` };
+
+      addTable(ws, headers, services.length, 'Services', false);
       XLSX.utils.book_append_sheet(wb, ws, 'Services');
     }
 
     const tmpFile = path.join(os.tmpdir(), `ssc_export_${uuidv4()}.xlsx`);
     XLSX.writeFile(wb, tmpFile);
-
-    const token = uuidv4();
-    // Reuse pptx download token store if available, else serve directly
     const fileData = fs.readFileSync(tmpFile);
     fs.unlinkSync(tmpFile);
-
     res.json({ downloadUrl: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${fileData.toString('base64')}`, ok: true });
   } catch (e) {
     console.error('[excel-export]', e);
