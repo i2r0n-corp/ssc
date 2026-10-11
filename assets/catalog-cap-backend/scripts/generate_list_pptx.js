@@ -165,9 +165,11 @@ const SOLID_LINE_CHILDREN =
   `<a:prstDash val="solid"/><a:round/>` +
   `<a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/>`;
 
-function cellYear(text, isHeader) {
+function cellYear(text, isHeader, isLast) {
   const lnL = `<a:lnL w="9525" cap="flat" cmpd="sng" algn="ctr">${SOLID_LINE_CHILDREN}</a:lnL>`;
-  const lnR = `<a:lnR w="9525" cap="flat" cmpd="sng" algn="ctr">${SOLID_LINE_CHILDREN}</a:lnR>`;
+  const lnR = isLast
+    ? `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr">${NO_FILL_LINE_CHILDREN}</a:lnR>`
+    : `<a:lnR w="9525" cap="flat" cmpd="sng" algn="ctr">${SOLID_LINE_CHILDREN}</a:lnR>`;
   const fill = isHeader ? `<a:solidFill><a:srgbClr val="003366"/></a:solidFill>` : `<a:noFill/>`;
   const anchor = isHeader ? 'ctr' : 't';
   const rpr = isHeader ? RPR_HDR : RPR_DATA;
@@ -262,11 +264,12 @@ function buildHeaderRows(cols, objW, yearCount, yearFrom, yearBorders) {
   if (cols.phases)    cells += headerCell('Activate Phase');
   if (cols.component) cells += headerCell('Service Name');
   if (cols.tier)      cells += headerCell('Type');
-  cells += headerCell('Objectives', undefined, yield_ && !cols.pd);
+  cells += headerCell('Objectives', undefined, yield_);
   if (cols.pd) cells += headerCell('PD', 'ctr', yield_);
   for (let i = 0; i < yearCount; i++) {
+    const isLast = i === yearCount - 1;
     cells += yearBorders
-      ? cellYear(String(yearFrom + i), true)
+      ? cellYear(String(yearFrom + i), true, isLast)
       : headerCell(String(yearFrom + i));
   }
   return `<a:tr h="${ROW_H}">${cells}</a:tr>`;
@@ -284,10 +287,11 @@ function buildDataRows(dataRows, cols, objW, yearCount, yearBorders) {
     if (cols.phases)    cells += cellData(dr.phases);
     if (cols.component) cells += cellData(dr.component);
     if (cols.tier)      cells += cellData(dr.tier);
-    cells += cellData(dr.objectives, undefined, yield_ && !cols.pd);
+    cells += cellData(dr.objectives, undefined, yield_);
     if (cols.pd)        cells += cellData(dr.pd || '', 'ctr', yield_);
     for (let i=0; i<yearCount; i++) {
-      cells += yearBorders ? cellYear('', false) : cellData('', 'ctr');
+      const isLast = i === yearCount - 1;
+      cells += yearBorders ? cellYear('', false, isLast) : cellData('', 'ctr');
     }
     return `<a:tr h="${dr.rowH}">${cells}</a:tr>`;
   }).join('');
