@@ -2023,9 +2023,6 @@ function renderMcpModal() {
   </div>`;
 }
 
-  </div>`;
-}
-
 window.openMcpModal  = function() { state.mcpModal = { open: true, sent: false, sending: false, error: null }; render(); };
 window.closeMcpModal = function() { state.mcpModal.open = false; render(); };
 window.requestMcpAccess = async function() {
