@@ -99,7 +99,7 @@ const RPR_HDR  = `<a:rPr lang="en-GB" sz="800" b="1" i="0" u="none" strike="noSt
 // ── Cell builders ─────────────────────────────────────────────────────────────
 
 const LNR_DEFAULT = `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr"><a:noFill/><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`;
-const LNR_YIELD   = ``;
+const LNR_SOLID   = `<a:lnR w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`;
 
 const TCPR_DATA =
   `<a:tcPr marL="${PAD_L}" marR="${PAD_R}" marT="${PAD_T}" marB="${PAD_B}" anchor="t">` +
@@ -139,12 +139,9 @@ function cellStream(rowSpan) {
     TCPR_STREAM + `</a:tc>`;
 }
 
-const LNL_NONE  = `<a:lnL w="12700" cmpd="sng"><a:noFill/></a:lnL>`;
-const LNL_SOLID = `<a:lnL w="9525" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnL>`;
-
 function cellData(text, algn, yieldRight) {
   const align = algn || 'l';
-  const tcpr = yieldRight ? TCPR_DATA.replace(LNR_DEFAULT, LNR_YIELD) : TCPR_DATA;
+  const tcpr = yieldRight ? TCPR_DATA.replace(LNR_DEFAULT, LNR_SOLID) : TCPR_DATA;
   return `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>` +
     `<a:p><a:pPr algn="${align}" rtl="0"><a:buNone/></a:pPr>` +
     (text ? `<a:r>${RPR_DATA}<a:t>${esc(text)}</a:t></a:r>` : `<a:endParaRPr lang="en-GB"/>`) +
@@ -153,7 +150,7 @@ function cellData(text, algn, yieldRight) {
 
 function headerCell(text, algn, yieldRight) {
   const align = algn || 'ctr';
-  const tcpr = yieldRight ? TCPR_HDR.replace(LNR_DEFAULT, LNR_YIELD) : TCPR_HDR;
+  const tcpr = yieldRight ? TCPR_HDR.replace(LNR_DEFAULT, LNR_SOLID) : TCPR_HDR;
   return `<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>` +
     `<a:p><a:pPr algn="${align}"><a:buNone/></a:pPr>` +
     (text ? `<a:r>${RPR_HDR}<a:t>${esc(text)}</a:t></a:r>` : `<a:endParaRPr lang="en-GB"/>`) +
@@ -170,7 +167,7 @@ const SOLID_LINE_CHILDREN =
 
 function cellYear(text, isHeader) {
   const lnL = `<a:lnL w="9525" cap="flat" cmpd="sng" algn="ctr">${SOLID_LINE_CHILDREN}</a:lnL>`;
-  const lnR = `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr">${NO_FILL_LINE_CHILDREN}</a:lnR>`;
+  const lnR = `<a:lnR w="9525" cap="flat" cmpd="sng" algn="ctr">${SOLID_LINE_CHILDREN}</a:lnR>`;
   const fill = isHeader ? `<a:solidFill><a:srgbClr val="003366"/></a:solidFill>` : `<a:noFill/>`;
   const anchor = isHeader ? 'ctr' : 't';
   const rpr = isHeader ? RPR_HDR : RPR_DATA;
