@@ -99,7 +99,7 @@ const RPR_HDR  = `<a:rPr lang="en-GB" sz="800" b="1" i="0" u="none" strike="noSt
 // ── Cell builders ─────────────────────────────────────────────────────────────
 
 const LNR_DEFAULT = `<a:lnR w="12700" cap="flat" cmpd="sng" algn="ctr"><a:noFill/><a:prstDash val="solid"/><a:round/><a:headEnd type="none" w="med" len="med"/><a:tailEnd type="none" w="med" len="med"/></a:lnR>`;
-const LNR_YIELD   = `<a:lnR w="0" cmpd="sng"><a:noFill/></a:lnR>`;
+const LNR_YIELD   = ``;
 
 const TCPR_DATA =
   `<a:tcPr marL="${PAD_L}" marR="${PAD_R}" marT="${PAD_T}" marB="${PAD_B}" anchor="t">` +
