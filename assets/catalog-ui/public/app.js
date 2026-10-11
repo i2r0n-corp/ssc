@@ -1970,9 +1970,20 @@ function renderMcpModal() {
   <div class="modal-overlay" onclick="if(event.target===this)window.closeMcpModal()">
     <div class="modal-box" style="max-width:580px">
       <button class="modal-close" onclick="window.closeMcpModal()">✕</button>
-      <h3 style="margin-top:0;font-size:1.05rem">SSC Catalog Agent for Joule Work Desktop</h3>
+      <h3 style="margin-top:0;font-size:1.05rem">SSC Intelligence Agent for Joule Work Desktop</h3>
 
-      <p style="font-size:0.75rem;font-weight:600;color:#1D2D3E;margin:0 0 0.4rem">Install the skill:</p>
+      <p style="font-size:0.8rem;color:#3a3a3a;line-height:1.55;margin:0 0 0.75rem">
+        To use most of the capabilities of this service with your Joule Work Desktop:
+      </p>
+
+      <div style="margin:0 0 1rem;display:flex;flex-direction:column;gap:0.3rem">
+        ${capabilities.map(c => `
+        <div style="font-size:0.8rem;color:#1D2D3E;padding:0.2rem 0">
+          <strong>${c.name}</strong> — <span style="color:#556B82">${c.desc}</span>
+        </div>`).join('')}
+      </div>
+
+      <p style="font-size:0.75rem;font-weight:600;color:#1D2D3E;margin:0 0 0.4rem">Please install the skill:</p>
       <ol style="margin:0 0 1rem;padding-left:1.25rem;display:flex;flex-direction:column;gap:0.3rem;font-size:0.8rem;color:#3a3a3a;line-height:1.55">
         <li>Download <a href="/jwd-skill.md" download style="color:#0070F2;text-decoration:none;font-weight:600">jwd-skill.md</a> and save it anywhere on your computer</li>
         <li>Open Joule Work Desktop</li>
@@ -1980,18 +1991,19 @@ function renderMcpModal() {
         <li>Go to the Skills tab → click <strong>+ New</strong></li>
         <li>Select <strong>Create Skill → Import</strong> and pick the saved file</li>
       </ol>
-      <p style="font-size:0.8rem;color:#3a3a3a;margin:0 0 1rem">The skill is now ready to use.</p>
 
-      <p style="font-size:0.8rem;color:#3a3a3a;line-height:1.55;margin:0 0 0.6rem">
-        Once skill set, create a new connection to the <strong><em>MCP server</em></strong> running as part of this app
-        to use most of its capabilities directly in Joule Work Desktop:
+      <p style="font-size:0.8rem;color:#3a3a3a;line-height:1.55;margin:0 0 0.5rem">
+        Once skill set, create a new connection to the <strong><em>*MCP server</em></strong> running as part of this app:
       </p>
-      <div style="margin:0 0 1.1rem;display:flex;flex-direction:column;gap:0.35rem">
-        ${capabilities.map(c => `
-        <div style="font-size:0.8rem;color:#1D2D3E;padding:0.25rem 0;border-bottom:1px solid #f0f0f0">
-          <strong>${c.name}</strong> — <span style="color:#556B82">${c.desc}</span>
-        </div>`).join('')}
-      </div>
+      <ol style="margin:0 0 1.1rem;padding-left:1.25rem;display:flex;flex-direction:column;gap:0.3rem;font-size:0.8rem;color:#3a3a3a;line-height:1.55">
+        <li>Click the Extensions icon (navigation rail, left side)</li>
+        <li>Go to the Connectors tab → click <strong>+ New</strong></li>
+        <li>Select <strong>Add Connector</strong></li>
+        <li>Enter the Name and Server URL provided by your administrator</li>
+        <li>Set authentication to <strong>OAuth 2.0</strong></li>
+        <li>Enter the Client ID and Client Secret provided by your administrator</li>
+        <li>Click <strong>Add</strong></li>
+      </ol>
 
       <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:0.65rem 1rem;font-size:0.8rem;color:#5d4037;margin-bottom:1.1rem;line-height:1.55">
         * <strong>Access required:</strong> <em>This MCP server is for internal use only. To get MCP connection credentials, please submit a request below and the administrator will follow up with you.</em>
@@ -2008,6 +2020,9 @@ function renderMcpModal() {
         </button>` : ''}
       </div>
     </div>
+  </div>`;
+}
+
   </div>`;
 }
 
@@ -2059,7 +2074,7 @@ function render() {
     <div class="shell-top">
       <div class="shell-top-inner">
         <span class="shell-bar-title">Success Plans Catalogue Intelligence</span>
-        <a href="#" onclick="window.openMcpModal();return false" style="margin-left:0.75rem;font-size:0.72rem;color:#556B82;text-decoration:none">Agent + MCP for your Joule Work Desktop</a>
+        <a href="#" onclick="window.openMcpModal();return false" style="margin-left:0.75rem;font-size:0.72rem;color:#2e7d32;text-decoration:none">+ Agent and MCP for your Joule Work Desktop</a>
         <a href="mailto:aituar.aubakirov@sap.com?subject=SSC Intelligence Feedback" style="margin-left:auto;font-size:0.75rem;color:#556B82;text-decoration:none">Leave a feedback</a>
       </div>
     </div>
