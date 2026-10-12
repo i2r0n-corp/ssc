@@ -8,6 +8,12 @@
 const CAP_BACKEND_URL = window.CAP_BACKEND_URL || 'http://localhost:4004';
 const AGENT_BASE_URL  = window.AGENT_BASE_URL  || 'http://localhost:5000';
 
+function fmtUser(emailOrLogon) {
+  if (!emailOrLogon) return '—';
+  const local = emailOrLogon.split('@')[0];
+  return local.split('.').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let state = {
   currentPage: 'catalog',
@@ -770,7 +776,8 @@ function renderChatPage() {
 
 window.navigate = function(page) {
   const p = state.myPermissions;
-  const allowed = { catalog: p.catalog, incidents: p.incidents, chat: p.chat, debug: p.debug, exportlog: p.exportlog, admin: p.admin };
+  if (page === 'exportlog') { page = 'admin'; state.admin.subTab = 'exportlog'; }
+  const allowed = { catalog: p.catalog, incidents: p.incidents, chat: p.chat, debug: p.debug, exportlog: p.exportlog, admin: p.admin || p.exportlog };
   if (!allowed[page]) {
     state.accessDeniedModal = true;
     render();
@@ -780,8 +787,7 @@ window.navigate = function(page) {
   render();
   if (page === 'catalog' && !state.catalog.bsMap) loadCatalog();
   if (page === 'debug') loadDebugLog();
-  if (page === 'exportlog') loadExportLog();
-  if (page === 'admin') { loadAdminUsers(); loadAdminVisitorLog(); loadAdminMcpRequests(); }
+  if (page === 'admin') { loadAdminUsers(); loadAdminVisitorLog(); loadAdminMcpRequests(); loadExportLog(); }
   // Log page visit
   apiFetch(`${CAP_BACKEND_URL}/api/catalog/visitor`, { method: 'POST', body: JSON.stringify({ page, sessionId: state.sessionId }) }).catch(() => {});
 };
@@ -1616,7 +1622,7 @@ function renderExportLogPage() {
       <tbody>
         ${sorted.map((r,i) => `<tr onclick="window.openExportLogDetail(${rows.indexOf(r)})" style="cursor:pointer">
           <td style="white-space:nowrap">${fmt(r.logged_at)}</td>
-          <td style="white-space:nowrap">${r.logon_name || r.user_id || '—'}</td>
+          <td style="white-space:nowrap">${fmtUser(r.logon_name || r.user_id)}</td>
           <td>${r.export_type}</td>
           <td style="text-align:center">${r.service_count ?? '—'}</td>
           <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.filter_bs||''}">${r.filter_bs || '—'}</td>
@@ -1638,7 +1644,7 @@ function renderExportLogDetailModal() {
     : '—';
   const rows2 = [
     ['Date / Time',   fmt(r.logged_at)],
-    ['User',          r.logon_name || r.user_id || '—'],
+    ['User',          fmtUser(r.logon_name || r.user_id)],
     ['Export Type',   r.export_type],
     ['# Services',    r.service_count ?? '—'],
     ['BS Filter',     r.filter_bs || '—'],
@@ -1831,6 +1837,7 @@ function renderAdminPage() {
     <div class="admin-sub-nav">
       <button class="admin-sub-tab ${subTab==='permissions'?'active':''}" onclick="window.adminSetSubTab('permissions')">User Permissions</button>
       <button class="admin-sub-tab ${subTab==='visitors'?'active':''}" onclick="window.adminSetSubTab('visitors')">Visitor Log</button>
+      <button class="admin-sub-tab ${subTab==='exportlog'?'active':''}" onclick="window.adminSetSubTab('exportlog')">Export Log</button>
     </div>`;
 
   // ── Tab 1: User Permissions ──────────────────────────────────────────────────
@@ -1848,13 +1855,13 @@ function renderAdminPage() {
       <div style="overflow-x:auto">
         <table class="service-table" style="font-size:0.8rem;min-width:600px">
           <thead><tr>
-            <th>Email</th>
+            <th>User</th>
             ${TABS.map(t => `<th style="text-align:center">${TAB_LABELS[t]}</th>`).join('')}
             <th></th>
           </tr></thead>
           <tbody>
             ${users.map(u => `<tr>
-              <td style="white-space:nowrap">${u.email}</td>
+              <td style="white-space:nowrap" title="${u.email}">${fmtUser(u.email)}</td>
               ${TABS.map(t => `<td style="text-align:center">${sel(u.email, t, u['tab_'+t])}</td>`).join('')}
               <td><button class="btn btn-secondary btn-sm" style="color:#dc3545" onclick="window.adminDeleteUser('${u.email}')">✕</button></td>
             </tr>`).join('')}
@@ -1883,10 +1890,10 @@ function renderAdminPage() {
       ${mcpRequestsError ? `<div class="error-strip">⚠ ${mcpRequestsError}</div>` : ''}
       ${!mcpOpenCollapsed ? (mcpRequestsLoading ? `<div style="color:#6a6a6a;padding:0.5rem;text-align:center">Loading…</div>` : `
       <table class="service-table" style="font-size:0.8rem">
-        <thead><tr><th>Email</th><th>Requested</th><th></th></tr></thead>
+        <thead><tr><th>User</th><th>Requested</th><th></th></tr></thead>
         <tbody>
           ${openReqs.map(r => `<tr>
-            <td>${r.email}</td>
+            <td title="${r.email}">${fmtUser(r.email)}</td>
             <td style="white-space:nowrap">${fmtDate(r.requested_at)}</td>
             <td><button class="btn btn-secondary btn-sm" style="font-size:0.75rem" onclick="window.adminCloseMcpRequest(${r.id})">Close</button></td>
           </tr>`).join('') || '<tr><td colspan="3" style="color:#6a6a6a;text-align:center">No open requests</td></tr>'}
@@ -1903,13 +1910,13 @@ function renderAdminPage() {
       </div>
       ${!mcpClosedCollapsed ? (mcpRequestsLoading ? `<div style="color:#6a6a6a;padding:0.5rem;text-align:center">Loading…</div>` : `
       <table class="service-table" style="font-size:0.8rem">
-        <thead><tr><th>Email</th><th>Requested</th><th>Closed</th><th>By</th></tr></thead>
+        <thead><tr><th>User</th><th>Requested</th><th>Closed</th><th>By</th></tr></thead>
         <tbody>
           ${closedReqs.map(r => `<tr>
-            <td>${r.email}</td>
+            <td title="${r.email}">${fmtUser(r.email)}</td>
             <td style="white-space:nowrap">${fmtDate(r.requested_at)}</td>
             <td style="white-space:nowrap">${r.closed_at ? fmtDate(r.closed_at) : '—'}</td>
-            <td style="font-size:0.75rem;color:#6a6a6a">${r.closed_by || '—'}</td>
+            <td style="font-size:0.75rem;color:#6a6a6a" title="${r.closed_by||''}">${fmtUser(r.closed_by)}</td>
           </tr>`).join('') || '<tr><td colspan="4" style="color:#6a6a6a;text-align:center">No closed requests</td></tr>'}
         </tbody>
       </table>`) : ''}
@@ -1932,14 +1939,14 @@ function renderAdminPage() {
           ${selectedVisitorUser ? `<button class="btn btn-secondary btn-sm" style="margin-left:0.75rem;font-size:0.72rem" onclick="window.adminSelectVisitorUser(null)">✕ Clear filter</button>` : ''}
         </div>
         <table class="service-table" style="font-size:0.8rem">
-          <thead><tr><th>Email</th><th>Last Seen</th><th style="text-align:center">Total Visits</th></tr></thead>
+          <thead><tr><th>User</th><th>Last Seen</th><th style="text-align:center">Total Visits</th></tr></thead>
           <tbody>
             ${visitorLastSeen.map(r => {
               const isSelected = selectedVisitorUser === r.logon_name;
               const isDimmed   = selectedVisitorUser && !isSelected;
               return `<tr style="cursor:pointer;${isSelected?'background:#d0e8f5;':''}${isDimmed?'color:#b0bec5;':''}"
                 onclick="window.adminSelectVisitorUser('${r.logon_name.replace(/'/g,"\\'")}')">
-                <td>${r.logon_name}</td>
+                <td title="${r.logon_name}">${fmtUser(r.logon_name)}</td>
                 <td style="white-space:nowrap">${fmtDate(r.last_seen)}</td>
                 <td style="text-align:center">${r.visit_count}</td>
               </tr>`;
@@ -1954,7 +1961,7 @@ function renderAdminPage() {
         <table class="service-table" style="font-size:0.8rem">
           <thead><tr>
             <th style="cursor:pointer;user-select:none" onclick="window.adminVisitSort('visited_at')">Date / Time ${visitSortCol==='visited_at'?(visitSortDir==='asc'?'▲':'▼'):''}</th>
-            <th>Email</th>
+            <th>User</th>
             <th style="cursor:pointer;user-select:none" onclick="window.adminVisitSort('page')">Page ${visitSortCol==='page'?(visitSortDir==='asc'?'▲':'▼'):''}</th>
             <th>Session</th>
           </tr></thead>
@@ -1967,7 +1974,7 @@ function renderAdminPage() {
                 : (clickable ? `window.adminOpenVisit(${i})` : '');
               return `<tr style="cursor:${clickable?'pointer':'default'}" onclick="${onclick}">
               <td style="white-space:nowrap">${fmtDate(r.visited_at)}</td>
-              <td>${r.logon_name}</td>
+              <td title="${r.logon_name}">${fmtUser(r.logon_name)}</td>
               <td>${r.page || '—'}${clickable ? ' <span style="font-size:0.65rem;color:#1D6FA4;vertical-align:middle">●</span>' : ''}</td>
               <td style="font-size:0.7rem;color:#6a6a6a">${r.session_id || '—'}</td>
             </tr>`;
@@ -2014,6 +2021,13 @@ function renderAdminPage() {
       <canvas id="${chartId3}" height="220"></canvas>
     </div>`;
 
+  // Store chart data for post-render init (script tags in innerHTML don't execute)
+  if (subTab === 'visitors') {
+    window._adminChartData = { dayLabels, dayData, pageLabels, pageData, userLabels, userData };
+  } else {
+    window._adminChartData = null;
+  }
+
   // Chart init script — runs after render via requestAnimationFrame
   const chartScript = subTab === 'visitors' ? `
     (function() {
@@ -2041,7 +2055,7 @@ function renderAdminPage() {
         mkChart('${chartId2}','bar',${JSON.stringify(pageLabels)},${JSON.stringify(pageData)},'Pages');
         mkChart('${chartId3}','bar',${JSON.stringify(userLabels)},${JSON.stringify(userData)},'Visits','#1D6FA4');
       });
-    })();` : '';
+    })();` : '';   // chartScript kept for reference but not injected as <script>
 
   // ── Popups ───────────────────────────────────────────────────────────────────
   const mcpLogDetailPopup = selectedMcpLog ? (() => {
@@ -2058,7 +2072,7 @@ function renderAdminPage() {
         <button class="modal-close" onclick="window.adminCloseMcpLog()">✕</button>
         <h3 style="margin-top:0;font-size:1rem">MCP Call Detail</h3>
         <div style="font-size:0.82rem;margin-bottom:0.25rem"><strong>Hour:</strong> ${hBucket} UTC</div>
-        <div style="font-size:0.82rem;margin-bottom:0.25rem"><strong>User:</strong> ${r.logon_name}</div>
+        <div style="font-size:0.82rem;margin-bottom:0.25rem"><strong>User:</strong> ${fmtUser(r.logon_name)}</div>
         <div style="font-size:0.82rem;margin-bottom:1rem"><strong>Total calls:</strong> ${r.call_count}</div>
         <table class="steps-table">
           <thead><tr><th>Time</th><th>Tool</th><th style="text-align:center">×</th><th>Args</th></tr></thead>
@@ -2088,7 +2102,7 @@ function renderAdminPage() {
         <button class="modal-close" onclick="window.adminCloseVisit()">✕</button>
         <h3 style="margin-top:0;font-size:1rem">MCP Tool Call Detail</h3>
         <div style="font-size:0.82rem;margin-bottom:0.5rem"><strong>Time:</strong> ${fmtDate(r.visited_at)}</div>
-        <div style="font-size:0.82rem;margin-bottom:0.5rem"><strong>User:</strong> ${r.logon_name}</div>
+        <div style="font-size:0.82rem;margin-bottom:0.5rem"><strong>User:</strong> ${fmtUser(r.logon_name)}</div>
         <div style="font-size:0.82rem;margin-bottom:0.75rem"><strong>Tool:</strong> ${d.tool || '—'}</div>
         ${d.args && Object.keys(d.args).length ? `
         <div style="font-size:0.82rem;font-weight:600;margin-bottom:0.4rem">Arguments:</div>
@@ -2100,6 +2114,8 @@ function renderAdminPage() {
 
   const tabContent = subTab === 'permissions'
     ? `<div class="admin-grid"><div>${tabPermLeft}</div><div>${tabPermRight}</div></div>`
+    : subTab === 'exportlog'
+    ? `<div>${renderExportLogPage()}</div>`
     : `<div class="admin-grid"><div>${tabVisitLeft}</div><div>${tabVisitRight}</div></div>`;
 
   return `
@@ -2113,8 +2129,7 @@ function renderAdminPage() {
   ${subNav}
   <div style="padding:1rem 1.5rem 0">
   ${tabContent}
-  </div>
-  <script>${chartScript}<\/script>`;
+  </div>`;
 }
 
 
@@ -2206,7 +2221,6 @@ function render() {
     { id: 'incidents', label: 'Incident Analysis',  perm: 'incidents' },
     { id: 'chat',      label: 'Chat',               perm: 'chat' },
     { id: 'debug',     label: 'Matching Debug',     perm: 'debug' },
-    { id: 'exportlog', label: 'Export Log',         perm: 'exportlog' },
     { id: 'admin',     label: 'Admin',              perm: 'admin' },
   ];
   const pages = allPages.filter(p => state.myPermissions[p.perm]);
@@ -2217,7 +2231,6 @@ function render() {
     case 'incidents': content = renderIncidentsPage(); break;
     case 'chat':      content = renderChatPage(); break;
     case 'debug':     content = renderDebugPage(); break;
-    case 'exportlog': content = renderExportLogPage(); break;
     case 'admin':     content = renderAdminPage(); break;
     default:          content = renderCatalogPage();
   }
@@ -2311,6 +2324,28 @@ function render() {
       el.style.opacity = '0';
       setTimeout(() => { state.pptx.downloadUrl = null; render(); }, 800);
     }, 5000);
+  }
+
+  // Init charts after DOM update (script tags in innerHTML don't execute)
+  if (window._adminChartData) {
+    requestAnimationFrame(() => {
+      const d = window._adminChartData;
+      if (!d || typeof Chart === 'undefined') return;
+      const COLORS = ['#0070F2','#1D6FA4','#5BA4CF','#85C1E9','#AED6F1','#D6EAF8','#F39C12','#E74C3C','#2ECC71','#27AE60'];
+      function mkChart(id, labels, data, label, color) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el._chartInst) el._chartInst.destroy();
+        el._chartInst = new Chart(el, {
+          type: 'bar',
+          data: { labels, datasets: [{ label, data, backgroundColor: color, borderWidth: 0 }] },
+          options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+        });
+      }
+      mkChart('chart-visits-per-day', d.dayLabels,  d.dayData,  'Visits', '#0070F2');
+      mkChart('chart-page-dist',      d.pageLabels, d.pageData, 'Pages',  COLORS);
+      mkChart('chart-top-users',      d.userLabels, d.userData, 'Visits', '#1D6FA4');
+    });
   }
 }
 
