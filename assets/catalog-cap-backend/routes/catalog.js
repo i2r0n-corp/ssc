@@ -1322,6 +1322,24 @@ router.get('/admin/mcp-log', requireAdmin, async (req, res) => {
   }
 });
 
+router.get('/admin/mcp-log/:id', requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (!id) return res.status(400).json({ error: 'invalid id' });
+  try {
+    const db = require('../store/db');
+    const result = await db.query(
+      `SELECT id, hour_bucket, logon_name, call_count, tool_counts, calls, updated_at
+       FROM catalog_mcp_log WHERE id=$1`, [id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'not found' });
+    res.json(result.rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+  }
+});
+
 // ── Excel export ──────────────────────────────────────────────────────────────
 router.post('/export-excel', async (req, res) => {
   try {

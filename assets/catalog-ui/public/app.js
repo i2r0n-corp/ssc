@@ -781,7 +781,7 @@ window.navigate = function(page) {
   if (page === 'catalog' && !state.catalog.bsMap) loadCatalog();
   if (page === 'debug') loadDebugLog();
   if (page === 'exportlog') loadExportLog();
-  if (page === 'admin') { loadAdminUsers(); loadAdminVisitorLog(); loadAdminMcpRequests(); loadAdminMcpLog(); }
+  if (page === 'admin') { loadAdminUsers(); loadAdminVisitorLog(); loadAdminMcpRequests(); }
   // Log page visit
   apiFetch(`${CAP_BACKEND_URL}/api/catalog/visitor`, { method: 'POST', body: JSON.stringify({ page, sessionId: state.sessionId }) }).catch(() => {});
 };
@@ -1682,6 +1682,7 @@ async function loadAdminUsers() {
   } catch (e) { state.admin.usersError = e.message; }
   state.admin.usersLoading = false; render();
 }
+window.loadAdminUsers = loadAdminUsers;
 
 async function loadAdminVisitorLog() {
   state.admin.visitorLoading = true; state.admin.visitorError = null; render();
@@ -1692,6 +1693,7 @@ async function loadAdminVisitorLog() {
   } catch (e) { state.admin.visitorError = e.message; }
   state.admin.visitorLoading = false; render();
 }
+window.loadAdminVisitorLog = loadAdminVisitorLog;
 
 async function loadAdminMcpLog() {
   state.admin.mcpLogLoading = true; state.admin.mcpLogError = null; render();
@@ -1701,16 +1703,16 @@ async function loadAdminMcpLog() {
   } catch (e) { state.admin.mcpLogError = e.message; }
   state.admin.mcpLogLoading = false; render();
 }
+window.loadAdminMcpLog = loadAdminMcpLog;
 
-async function loadAdminMcpRequests() {  state.admin.mcpRequestsLoading = true; state.admin.mcpRequestsError = null; render();
+async function loadAdminMcpRequests() {
   try {
     const data = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/mcp-requests`);
     state.admin.mcpRequests = data.rows || [];
   } catch (e) { state.admin.mcpRequestsError = e.message; }
   state.admin.mcpRequestsLoading = false; render();
 }
-
-window.adminCloseMcpRequest = async function(id) {
+window.loadAdminMcpRequests = loadAdminMcpRequests;
   try {
     await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/mcp-requests/close`, { method: 'POST', body: JSON.stringify({ id }) });
     await loadAdminMcpRequests();
@@ -1736,6 +1738,17 @@ window.adminVisitSort = function(col) {
 };
 window.adminOpenVisit = function(idx) { state.admin.selectedVisit = { idx }; render(); };
 window.adminCloseVisit = function() { state.admin.selectedVisit = null; render(); };
+window.adminOpenMcpDetail = async function(mcpLogId) {
+  state.admin.selectedMcpLog = { id: mcpLogId, loading: true, data: null, error: null };
+  render();
+  try {
+    const data = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/mcp-log/${mcpLogId}`);
+    state.admin.selectedMcpLog = { id: mcpLogId, loading: false, data, error: null };
+  } catch(e) {
+    state.admin.selectedMcpLog = { id: mcpLogId, loading: false, data: null, error: e.message };
+  }
+  render();
+};
 
 window.adminSetPerm = async function(email, tab, value) {
   const user = state.admin.users.find(u => u.email === email);
@@ -1936,49 +1949,29 @@ function renderAdminPage() {
             <th>Session</th>
           </tr></thead>
           <tbody>
-            ${filteredVisits.map((r, i) => `<tr style="cursor:${r.detail?'pointer':'default'}" onclick="${r.detail?`window.adminOpenVisit(${i})`:''}">
+            ${filteredVisits.map((r, i) => {
+              const isMcp = r.page === 'MCP' && r.detail && r.detail.mcp_log_id;
+              const clickable = r.detail && (isMcp || r.detail.tool);
+              const onclick = isMcp
+                ? `window.adminOpenMcpDetail(${r.detail.mcp_log_id})`
+                : (clickable ? `window.adminOpenVisit(${i})` : '');
+              return `<tr style="cursor:${clickable?'pointer':'default'}" onclick="${onclick}">
               <td style="white-space:nowrap">${fmtDate(r.visited_at)}</td>
               <td>${r.logon_name}</td>
-              <td>${r.page || '—'}${r.detail ? ' <span style="font-size:0.65rem;color:#1D6FA4;vertical-align:middle">●</span>' : ''}</td>
+              <td>${r.page || '—'}${clickable ? ' <span style="font-size:0.65rem;color:#1D6FA4;vertical-align:middle">●</span>' : ''}</td>
               <td style="font-size:0.7rem;color:#6a6a6a">${r.session_id || '—'}</td>
-            </tr>`).join('') || '<tr><td colspan="4" style="color:#6a6a6a;text-align:center">No visits yet</td></tr>'}
+            </tr>`;
+            }).join('') || '<tr><td colspan="4" style="color:#6a6a6a;text-align:center">No visits yet</td></tr>'}
           </tbody>
         </table>
       </div>`) : ''}
-    </div>
-
-    <!-- MCP Usage Log -->
-    <div class="card" style="margin-top:1rem">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${mcpLogCollapsed?'0':'1rem'}">
-        <h3 style="margin:0;font-size:1rem">MCP Usage Log</h3>
-        <div style="display:flex;gap:0.5rem;align-items:center">
-          <button class="btn btn-secondary btn-sm" onclick="loadAdminMcpLog()">↻</button>
-          <button class="btn btn-secondary btn-sm" onclick="window.adminToggleMcpLog()" title="${mcpLogCollapsed?'Expand':'Collapse'}">${mcpLogCollapsed?'▶':'▼'}</button>
-        </div>
-      </div>
-      ${mcpLogError ? `<div class="error-strip">⚠ ${mcpLogError}</div>` : ''}
-      ${!mcpLogCollapsed ? (mcpLogLoading ? `<div style="color:#6a6a6a;padding:1rem;text-align:center">Loading…</div>` : `
-      <table class="service-table" style="font-size:0.8rem">
-        <thead><tr><th>Hour (UTC)</th><th>User</th><th style="text-align:center">Calls</th><th>Top Tools</th><th></th></tr></thead>
-        <tbody>
-          ${mcpLog.map((r, i) => {
-            const tc = r.tool_counts || {};
-            const topTools = Object.entries(tc).sort((a,b) => b[1]-a[1]).slice(0,3).map(([t,n]) => `${t.replace(/([A-Z])/g,' $1').trim()} ×${n}`).join(', ');
-            const hBucket = new Date(r.hour_bucket).toISOString().replace('T',' ').slice(0,16);
-            return `<tr style="cursor:pointer" onclick="window.adminSelectMcpLog(${r.id})">
-              <td style="white-space:nowrap">${hBucket}</td>
-              <td>${r.logon_name}</td>
-              <td style="text-align:center;font-weight:600">${r.call_count}</td>
-              <td style="color:#556B82;font-size:0.75rem">${topTools || '—'}</td>
-              <td style="color:#1D6FA4;font-size:0.75rem">●</td>
-            </tr>`;
-          }).join('') || '<tr><td colspan="5" style="color:#6a6a6a;text-align:center">No MCP calls recorded yet</td></tr>'}
-        </tbody>
-      </table>`) : ''}
     </div>`;
 
   const mcpLogDetailPopup = selectedMcpLog ? (() => {
-    const r = mcpLog.find(x => x.id === selectedMcpLog);
+    const s = selectedMcpLog;
+    if (s.loading) return `<div class="modal-overlay"><div class="modal-box" style="max-width:600px;text-align:center;padding:2rem"><div style="color:#6a6a6a">Loading…</div></div></div>`;
+    if (s.error) return `<div class="modal-overlay" onclick="if(event.target===this)window.adminCloseMcpLog()"><div class="modal-box" style="max-width:600px"><button class="modal-close" onclick="window.adminCloseMcpLog()">✕</button><div class="error-strip">⚠ ${s.error}</div></div></div>`;
+    const r = s.data;
     if (!r) return '';
     const hBucket = new Date(r.hour_bucket).toISOString().replace('T',' ').slice(0,16);
     const calls = r.calls || [];

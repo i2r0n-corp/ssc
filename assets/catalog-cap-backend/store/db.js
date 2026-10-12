@@ -361,16 +361,32 @@ async function logMcpCall({ logonName, tool, args }) {
         `SELECT id, call_count, tool_counts, calls FROM catalog_mcp_log WHERE logon_name=$1 AND hour_bucket=$2 FOR UPDATE`,
         [user, hourBucket]
       );
+      let mcpLogId;
       if (existing.rows.length === 0) {
         const toolCounts = { [tool]: 1 };
         const calls = [{ time: now.toISOString(), tool, args: args || {}, count: 1 }];
-        await client.query(
+        const ins = await client.query(
           `INSERT INTO catalog_mcp_log (hour_bucket, logon_name, call_count, tool_counts, calls, updated_at)
-           VALUES ($1,$2,1,$3,$4,NOW())`,
+           VALUES ($1,$2,1,$3,$4,NOW()) RETURNING id`,
           [hourBucket, user, JSON.stringify(toolCounts), JSON.stringify(calls)]
+        );
+        mcpLogId = ins.rows[0].id;
+        // First call this hour — write a visitor_log row
+        await client.query(
+          `INSERT INTO catalog_visitor_log (logon_name, page, session_id, detail)
+           VALUES ($1,'MCP',NULL,$2)`,
+          [user, JSON.stringify({ mcp_log_id: mcpLogId, hour_bucket: hourBucket.toISOString() })]
+        );
+        await client.query(
+          `INSERT INTO catalog_visitor_last_seen (logon_name, last_seen, visit_count)
+           VALUES ($1, NOW(), 1)
+           ON CONFLICT (logon_name) DO UPDATE
+             SET last_seen = NOW(), visit_count = catalog_visitor_last_seen.visit_count + 1`,
+          [user]
         );
       } else {
         const row = existing.rows[0];
+        mcpLogId = row.id;
         const toolCounts = row.tool_counts || {};
         toolCounts[tool] = (toolCounts[tool] || 0) + 1;
         const calls = row.calls || [];
