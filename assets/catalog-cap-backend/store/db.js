@@ -246,6 +246,18 @@ CREATE TABLE IF NOT EXISTS catalog_mcp_requests (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_requests_email_open
   ON catalog_mcp_requests(email) WHERE status = 'open';
+
+CREATE TABLE IF NOT EXISTS catalog_mcp_log (
+  id           BIGSERIAL PRIMARY KEY,
+  hour_bucket  TIMESTAMPTZ NOT NULL,
+  logon_name   TEXT NOT NULL,
+  call_count   INTEGER NOT NULL DEFAULT 0,
+  tool_counts  JSONB NOT NULL DEFAULT '{}',
+  calls        JSONB NOT NULL DEFAULT '[]',
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_log_user_hour ON catalog_mcp_log(logon_name, hour_bucket);
+CREATE INDEX IF NOT EXISTS idx_mcp_log_hour ON catalog_mcp_log(hour_bucket DESC);
 `;
 
 async function initSchema() {
@@ -268,6 +280,9 @@ async function initSchema() {
     await client.query(`ALTER TABLE catalog_export_log ADD COLUMN IF NOT EXISTS pptx_truncate_obj BOOLEAN`);
     await client.query(`ALTER TABLE catalog_export_log ADD COLUMN IF NOT EXISTS pptx_switch_types BOOLEAN`);
     await client.query(`ALTER TABLE catalog_visitor_log ADD COLUMN IF NOT EXISTS detail JSONB`);
+    await client.query(`CREATE TABLE IF NOT EXISTS catalog_mcp_log (id BIGSERIAL PRIMARY KEY, hour_bucket TIMESTAMPTZ NOT NULL, logon_name TEXT NOT NULL, call_count INTEGER NOT NULL DEFAULT 0, tool_counts JSONB NOT NULL DEFAULT '{}', calls JSONB NOT NULL DEFAULT '[]', updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_log_user_hour ON catalog_mcp_log(logon_name, hour_bucket)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_mcp_log_hour ON catalog_mcp_log(hour_bucket DESC)`);
     console.log('[db] Schema initialised');
   } finally {
     client.release();
@@ -335,4 +350,45 @@ async function logVisit({ logonName, page, sessionId, detail }) {
   }
 }
 
-module.exports = { getPool, initSchema, query, transaction, logExport, logVisit };
+async function logMcpCall({ logonName, tool, args }) {
+  try {
+    const user = logonName || 'anonymous';
+    const now = new Date();
+    const hourBucket = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours()));
+    const argsKey = JSON.stringify(args || {});
+    await transaction(async (client) => {
+      const existing = await client.query(
+        `SELECT id, call_count, tool_counts, calls FROM catalog_mcp_log WHERE logon_name=$1 AND hour_bucket=$2 FOR UPDATE`,
+        [user, hourBucket]
+      );
+      if (existing.rows.length === 0) {
+        const toolCounts = { [tool]: 1 };
+        const calls = [{ time: now.toISOString(), tool, args: args || {}, count: 1 }];
+        await client.query(
+          `INSERT INTO catalog_mcp_log (hour_bucket, logon_name, call_count, tool_counts, calls, updated_at)
+           VALUES ($1,$2,1,$3,$4,NOW())`,
+          [hourBucket, user, JSON.stringify(toolCounts), JSON.stringify(calls)]
+        );
+      } else {
+        const row = existing.rows[0];
+        const toolCounts = row.tool_counts || {};
+        toolCounts[tool] = (toolCounts[tool] || 0) + 1;
+        const calls = row.calls || [];
+        const existingCall = calls.find(c => c.tool === tool && JSON.stringify(c.args) === argsKey);
+        if (existingCall) {
+          existingCall.count = (existingCall.count || 1) + 1;
+        } else {
+          calls.push({ time: now.toISOString(), tool, args: args || {}, count: 1 });
+        }
+        await client.query(
+          `UPDATE catalog_mcp_log SET call_count=$1, tool_counts=$2, calls=$3, updated_at=NOW() WHERE id=$4`,
+          [row.call_count + 1, JSON.stringify(toolCounts), JSON.stringify(calls), row.id]
+        );
+      }
+    });
+  } catch (e) {
+    console.error('[mcp-log] Failed to write mcp log:', e.message);
+  }
+}
+
+module.exports = { getPool, initSchema, query, transaction, logExport, logVisit, logMcpCall };

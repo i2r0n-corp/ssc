@@ -1307,6 +1307,21 @@ router.post('/admin/mcp-requests/close', requireAdmin, async (req, res) => {
   }
 });
 
+router.get('/admin/mcp-log', requireAdmin, async (req, res) => {
+  try {
+    const db = require('../store/db');
+    const result = await db.query(
+      `SELECT id, hour_bucket, logon_name, call_count, tool_counts, calls, updated_at
+       FROM catalog_mcp_log
+       ORDER BY hour_bucket DESC, updated_at DESC
+       LIMIT 200`
+    );
+    res.json({ rows: result.rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Excel export ──────────────────────────────────────────────────────────────
 router.post('/export-excel', async (req, res) => {
   try {

@@ -42,7 +42,7 @@ let state = {
   exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null, sortCol: 'logged_at', sortDir: 'desc' },
   currentUser: null,
   myPermissions: { catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false },
-  admin: { users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null },
+  admin: { users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, mcpClosedCollapsed: false, usersCollapsed: false, visitorCollapsed: false, mcpLog: [], mcpLogLoading: false, mcpLogError: null, mcpLogCollapsed: false, selectedMcpLog: null, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null },
   mcpModal: { open: false, sent: false, sending: false, error: null },
   accessDeniedModal: false,
   backendDown: false,
@@ -781,7 +781,7 @@ window.navigate = function(page) {
   if (page === 'catalog' && !state.catalog.bsMap) loadCatalog();
   if (page === 'debug') loadDebugLog();
   if (page === 'exportlog') loadExportLog();
-  if (page === 'admin') { loadAdminUsers(); loadAdminVisitorLog(); loadAdminMcpRequests(); }
+  if (page === 'admin') { loadAdminUsers(); loadAdminVisitorLog(); loadAdminMcpRequests(); loadAdminMcpLog(); }
   // Log page visit
   apiFetch(`${CAP_BACKEND_URL}/api/catalog/visitor`, { method: 'POST', body: JSON.stringify({ page, sessionId: state.sessionId }) }).catch(() => {});
 };
@@ -1693,8 +1693,16 @@ async function loadAdminVisitorLog() {
   state.admin.visitorLoading = false; render();
 }
 
-async function loadAdminMcpRequests() {
-  state.admin.mcpRequestsLoading = true; state.admin.mcpRequestsError = null; render();
+async function loadAdminMcpLog() {
+  state.admin.mcpLogLoading = true; state.admin.mcpLogError = null; render();
+  try {
+    const data = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/mcp-log`);
+    state.admin.mcpLog = data.rows || [];
+  } catch (e) { state.admin.mcpLogError = e.message; }
+  state.admin.mcpLogLoading = false; render();
+}
+
+async function loadAdminMcpRequests() {  state.admin.mcpRequestsLoading = true; state.admin.mcpRequestsError = null; render();
   try {
     const data = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/mcp-requests`);
     state.admin.mcpRequests = data.rows || [];
@@ -1709,7 +1717,13 @@ window.adminCloseMcpRequest = async function(id) {
   } catch (e) { state.admin.mcpRequestsError = e.message; render(); }
 };
 
-window.adminToggleMcpOpen = function() { state.admin.mcpOpenCollapsed = !state.admin.mcpOpenCollapsed; render(); };
+window.adminToggleMcpOpen    = function() { state.admin.mcpOpenCollapsed    = !state.admin.mcpOpenCollapsed;    render(); };
+window.adminToggleMcpClosed  = function() { state.admin.mcpClosedCollapsed  = !state.admin.mcpClosedCollapsed;  render(); };
+window.adminToggleUsers      = function() { state.admin.usersCollapsed      = !state.admin.usersCollapsed;      render(); };
+window.adminToggleVisitor    = function() { state.admin.visitorCollapsed    = !state.admin.visitorCollapsed;    render(); };
+window.adminToggleMcpLog     = function() { state.admin.mcpLogCollapsed     = !state.admin.mcpLogCollapsed;     render(); };
+window.adminSelectMcpLog     = function(id) { state.admin.selectedMcpLog = state.admin.selectedMcpLog === id ? null : id; render(); };
+window.adminCloseMcpLog      = function() { state.admin.selectedMcpLog = null; render(); };
 window.adminSelectVisitorUser = function(email) {
   state.admin.selectedVisitorUser = state.admin.selectedVisitorUser === email ? null : email;
   render();
@@ -1772,8 +1786,9 @@ window.adminDeleteUser = async function(email) {
 
 function renderAdminPage() {
   const { users, usersLoading, usersError, newEmail, visitorLog, visitorLastSeen, visitorLoading, visitorError,
-          mcpRequests, mcpRequestsLoading, mcpRequestsError, mcpOpenCollapsed, selectedVisitorUser,
-          visitSortCol, visitSortDir, selectedVisit } = state.admin;
+          mcpRequests, mcpRequestsLoading, mcpRequestsError, mcpOpenCollapsed, mcpClosedCollapsed,
+          usersCollapsed, visitorCollapsed, mcpLog, mcpLogLoading, mcpLogError, mcpLogCollapsed, selectedMcpLog,
+          selectedVisitorUser, visitSortCol, visitSortDir, selectedVisit } = state.admin;
   const TABS = ['incidents','chat','debug','exportlog','admin'];
   const TAB_LABELS = { incidents:'Incidents', chat:'Chat', debug:'Debug', exportlog:'Export Log', admin:'Admin' };
   const fmtDate = iso => new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
@@ -1798,12 +1813,15 @@ function renderAdminPage() {
   const colLeft = `
     <!-- User Permissions -->
     <div class="card" style="margin-bottom:1rem">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${usersCollapsed?'0':'1rem'}">
         <h3 style="margin:0;font-size:1rem">User Permissions</h3>
-        <button class="btn btn-secondary btn-sm" onclick="loadAdminUsers()">↻ Refresh</button>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <button class="btn btn-secondary btn-sm" onclick="loadAdminUsers()">↻</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.adminToggleUsers()" title="${usersCollapsed?'Expand':'Collapse'}">${usersCollapsed?'▶':'▼'}</button>
+        </div>
       </div>
       ${usersError ? `<div class="error-strip">⚠ ${usersError}</div>` : ''}
-      ${usersLoading ? `<div style="color:#6a6a6a;padding:1rem;text-align:center">Loading…</div>` : `
+      ${!usersCollapsed ? (usersLoading ? `<div style="color:#6a6a6a;padding:1rem;text-align:center">Loading…</div>` : `
       <div style="overflow-x:auto">
         <table class="service-table" style="font-size:0.8rem;min-width:600px">
           <thead><tr>
@@ -1827,10 +1845,8 @@ function renderAdminPage() {
             </tr>
           </tbody>
         </table>
-      </div>`}
+      </div>`) : ''}
     </div>
-
-    <!-- Open MCP Requests -->
     <div class="card" style="margin-bottom:1rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${mcpOpenCollapsed?'0':'1rem'}">
         <h3 style="margin:0;font-size:1rem">Open MCP Credentials Requests ${openReqs.length>0?`<span style="background:#dc3545;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;font-weight:700;margin-left:6px">${openReqs.length}</span>`:''}</h3>
@@ -1855,8 +1871,14 @@ function renderAdminPage() {
 
     <!-- Closed MCP Requests -->
     <div class="card">
-      <h3 style="margin:0 0 1rem;font-size:1rem">Closed MCP Credentials Requests</h3>
-      ${mcpRequestsLoading ? `<div style="color:#6a6a6a;padding:0.5rem;text-align:center">Loading…</div>` : `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${mcpClosedCollapsed?'0':'1rem'}">
+        <h3 style="margin:0;font-size:1rem">Closed MCP Credentials Requests</h3>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <button class="btn btn-secondary btn-sm" onclick="loadAdminMcpRequests()">↻</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.adminToggleMcpClosed()" title="${mcpClosedCollapsed?'Expand':'Collapse'}">${mcpClosedCollapsed?'▶':'▼'}</button>
+        </div>
+      </div>
+      ${!mcpClosedCollapsed ? (mcpRequestsLoading ? `<div style="color:#6a6a6a;padding:0.5rem;text-align:center">Loading…</div>` : `
       <table class="service-table" style="font-size:0.8rem">
         <thead><tr><th>Email</th><th>Requested</th><th>Closed</th><th>By</th></tr></thead>
         <tbody>
@@ -1867,19 +1889,22 @@ function renderAdminPage() {
             <td style="font-size:0.75rem;color:#6a6a6a">${r.closed_by || '—'}</td>
           </tr>`).join('') || '<tr><td colspan="4" style="color:#6a6a6a;text-align:center">No closed requests</td></tr>'}
         </tbody>
-      </table>`}
+      </table>`) : ''}
     </div>`;
 
   const colRight = `
     <!-- Visitor Log -->
     <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${visitorCollapsed?'0':'1rem'}">
         <h3 style="margin:0;font-size:1rem">Visitor Log</h3>
-        <button class="btn btn-secondary btn-sm" onclick="loadAdminVisitorLog()">↻ Refresh</button>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <button class="btn btn-secondary btn-sm" onclick="loadAdminVisitorLog()">↻</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.adminToggleVisitor()" title="${visitorCollapsed?'Expand':'Collapse'}">${visitorCollapsed?'▶':'▼'}</button>
+        </div>
       </div>
       ${visitorError ? `<div class="error-strip">⚠ ${visitorError}</div>` : ''}
-      ${visitorLoading ? `<div style="color:#6a6a6a;padding:1rem;text-align:center">Loading…</div>` : `
-      <div style="margin-bottom:1.5rem">
+      ${!visitorCollapsed ? (visitorLoading ? `<div style="color:#6a6a6a;padding:1rem;text-align:center">Loading…</div>` : `
+      <div style="overflow-x:auto;margin-bottom:1.5rem">
         <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem">Last Seen per User
           ${selectedVisitorUser ? `<button class="btn btn-secondary btn-sm" style="margin-left:0.75rem;font-size:0.72rem" onclick="window.adminSelectVisitorUser(null)">✕ Clear filter</button>` : ''}
         </div>
@@ -1919,8 +1944,69 @@ function renderAdminPage() {
             </tr>`).join('') || '<tr><td colspan="4" style="color:#6a6a6a;text-align:center">No visits yet</td></tr>'}
           </tbody>
         </table>
-      </div>`}
+      </div>`) : ''}
+    </div>
+
+    <!-- MCP Usage Log -->
+    <div class="card" style="margin-top:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${mcpLogCollapsed?'0':'1rem'}">
+        <h3 style="margin:0;font-size:1rem">MCP Usage Log</h3>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <button class="btn btn-secondary btn-sm" onclick="loadAdminMcpLog()">↻</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.adminToggleMcpLog()" title="${mcpLogCollapsed?'Expand':'Collapse'}">${mcpLogCollapsed?'▶':'▼'}</button>
+        </div>
+      </div>
+      ${mcpLogError ? `<div class="error-strip">⚠ ${mcpLogError}</div>` : ''}
+      ${!mcpLogCollapsed ? (mcpLogLoading ? `<div style="color:#6a6a6a;padding:1rem;text-align:center">Loading…</div>` : `
+      <table class="service-table" style="font-size:0.8rem">
+        <thead><tr><th>Hour (UTC)</th><th>User</th><th style="text-align:center">Calls</th><th>Top Tools</th><th></th></tr></thead>
+        <tbody>
+          ${mcpLog.map((r, i) => {
+            const tc = r.tool_counts || {};
+            const topTools = Object.entries(tc).sort((a,b) => b[1]-a[1]).slice(0,3).map(([t,n]) => `${t.replace(/([A-Z])/g,' $1').trim()} ×${n}`).join(', ');
+            const hBucket = new Date(r.hour_bucket).toISOString().replace('T',' ').slice(0,16);
+            return `<tr style="cursor:pointer" onclick="window.adminSelectMcpLog(${r.id})">
+              <td style="white-space:nowrap">${hBucket}</td>
+              <td>${r.logon_name}</td>
+              <td style="text-align:center;font-weight:600">${r.call_count}</td>
+              <td style="color:#556B82;font-size:0.75rem">${topTools || '—'}</td>
+              <td style="color:#1D6FA4;font-size:0.75rem">●</td>
+            </tr>`;
+          }).join('') || '<tr><td colspan="5" style="color:#6a6a6a;text-align:center">No MCP calls recorded yet</td></tr>'}
+        </tbody>
+      </table>`) : ''}
     </div>`;
+
+  const mcpLogDetailPopup = selectedMcpLog ? (() => {
+    const r = mcpLog.find(x => x.id === selectedMcpLog);
+    if (!r) return '';
+    const hBucket = new Date(r.hour_bucket).toISOString().replace('T',' ').slice(0,16);
+    const calls = r.calls || [];
+    return `
+    <div class="modal-overlay" onclick="if(event.target===this)window.adminCloseMcpLog()">
+      <div class="modal-box" style="max-width:600px">
+        <button class="modal-close" onclick="window.adminCloseMcpLog()">✕</button>
+        <h3 style="margin-top:0;font-size:1rem">MCP Call Detail</h3>
+        <div style="font-size:0.82rem;margin-bottom:0.25rem"><strong>Hour:</strong> ${hBucket} UTC</div>
+        <div style="font-size:0.82rem;margin-bottom:0.25rem"><strong>User:</strong> ${r.logon_name}</div>
+        <div style="font-size:0.82rem;margin-bottom:1rem"><strong>Total calls:</strong> ${r.call_count}</div>
+        <table class="steps-table">
+          <thead><tr><th>Time</th><th>Tool</th><th style="text-align:center">×</th><th>Args</th></tr></thead>
+          <tbody>
+            ${calls.map(c => `<tr>
+              <td style="white-space:nowrap;font-size:0.72rem;color:#6a6a6a">${new Date(c.time).toISOString().replace('T',' ').slice(11,19)}</td>
+              <td style="white-space:nowrap">${c.tool}</td>
+              <td style="text-align:center;font-weight:600">${c.count || 1}</td>
+              <td><pre style="margin:0;font-size:0.72rem;background:#f4f4f4;border-radius:3px;padding:2px 6px;white-space:pre-wrap;word-break:break-all;max-width:280px">${JSON.stringify(c.args||{}).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre></td>
+            </tr>`).join('') || '<tr><td colspan="4" style="color:#6a6a6a">No calls</td></tr>'}
+          </tbody>
+        </table>
+        <div style="display:flex;justify-content:flex-end;margin-top:1rem">
+          <button class="btn btn-secondary btn-sm" onclick="window.adminCloseMcpLog()">Close</button>
+        </div>
+      </div>
+    </div>`;
+  })() : '';
 
   const visitDetailPopup = selectedVisit ? (() => {
     const r = filteredVisits[selectedVisit.idx];
@@ -1945,8 +2031,10 @@ function renderAdminPage() {
   return `
   <style>
     .admin-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start; }
-    @media (max-width:765px) { .admin-grid { grid-template-columns:1fr; } }
+    .admin-grid > div { min-width: 0; overflow: hidden; }
+    @media (max-width:900px) { .admin-grid { grid-template-columns:1fr; } }
   </style>
+  ${mcpLogDetailPopup}
   ${visitDetailPopup}
   <div class="admin-grid">
     <div>${colLeft}</div>
