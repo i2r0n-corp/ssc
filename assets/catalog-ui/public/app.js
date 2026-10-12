@@ -1713,6 +1713,8 @@ async function loadAdminMcpRequests() {
   state.admin.mcpRequestsLoading = false; render();
 }
 window.loadAdminMcpRequests = loadAdminMcpRequests;
+
+window.adminCloseMcpRequest = async function(id) {
   try {
     await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/mcp-requests/close`, { method: 'POST', body: JSON.stringify({ id }) });
     await loadAdminMcpRequests();
