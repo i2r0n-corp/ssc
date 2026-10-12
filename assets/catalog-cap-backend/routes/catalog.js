@@ -1337,8 +1337,6 @@ router.get('/admin/mcp-log/:id', requireAdmin, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-  }
-});
 
 // ── Excel export ──────────────────────────────────────────────────────────────
 router.post('/export-excel', async (req, res) => {
