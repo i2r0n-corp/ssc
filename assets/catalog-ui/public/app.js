@@ -48,7 +48,7 @@ let state = {
   exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null, sortCol: 'logged_at', sortDir: 'desc' },
   currentUser: null,
   myPermissions: { catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false },
-  admin: { subTab: 'permissions', users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, mcpClosedCollapsed: false, usersCollapsed: false, visitorCollapsed: false, mcpLog: [], mcpLogLoading: false, mcpLogError: null, mcpLogCollapsed: false, selectedMcpLog: null, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null },
+  admin: { subTab: 'permissions', users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, mcpClosedCollapsed: false, usersCollapsed: false, visitorCollapsed: false, mcpLog: [], mcpLogLoading: false, mcpLogError: null, mcpLogCollapsed: false, selectedMcpLog: null, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null, chart1Collapsed: false, chart2Collapsed: false, chart3Collapsed: false },
   mcpModal: { open: false, sent: false, sending: false, error: null },
   accessDeniedModal: false,
   backendDown: false,
@@ -1733,6 +1733,9 @@ window.adminToggleUsers      = function() { state.admin.usersCollapsed      = !s
 window.adminToggleVisitor    = function() { state.admin.visitorCollapsed    = !state.admin.visitorCollapsed;    render(); };
 window.adminToggleMcpLog     = function() { state.admin.mcpLogCollapsed     = !state.admin.mcpLogCollapsed;     render(); };
 window.adminSetSubTab        = function(t) { state.admin.subTab = t; render(); };
+window.adminToggleChart1     = function() { state.admin.chart1Collapsed = !state.admin.chart1Collapsed; render(); };
+window.adminToggleChart2     = function() { state.admin.chart2Collapsed = !state.admin.chart2Collapsed; render(); };
+window.adminToggleChart3     = function() { state.admin.chart3Collapsed = !state.admin.chart3Collapsed; render(); };
 window.adminSelectMcpLog     = function(id) { state.admin.selectedMcpLog = state.admin.selectedMcpLog === id ? null : id; render(); };
 window.adminCloseMcpLog      = function() { state.admin.selectedMcpLog = null; render(); };
 window.adminSelectVisitorUser = function(email) {
@@ -1810,9 +1813,10 @@ function renderAdminPage() {
   const { subTab, users, usersLoading, usersError, newEmail, visitorLog, visitorLastSeen, visitorLoading, visitorError,
           mcpRequests, mcpRequestsLoading, mcpRequestsError, mcpOpenCollapsed, mcpClosedCollapsed,
           usersCollapsed, visitorCollapsed, mcpLog, mcpLogLoading, mcpLogError, mcpLogCollapsed, selectedMcpLog,
-          selectedVisitorUser, visitSortCol, visitSortDir, selectedVisit } = state.admin;
-  const TABS = ['incidents','chat','debug','exportlog','admin'];
-  const TAB_LABELS = { incidents:'Incidents', chat:'Chat', debug:'Debug', exportlog:'Export Log', admin:'Admin' };
+          selectedVisitorUser, visitSortCol, visitSortDir, selectedVisit,
+          chart1Collapsed, chart2Collapsed, chart3Collapsed } = state.admin;
+  const TABS = ['incidents','chat','debug','admin'];
+  const TAB_LABELS = { incidents:'Incidents', chat:'Chat', debug:'Debug', admin:'Admin' };
   const fmtDate = iso => new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
 
   const sel = (email, tab, val) =>
@@ -1984,14 +1988,15 @@ function renderAdminPage() {
       </div>`) : ''}
     </div>`;
 
-  // Charts — built from visitorLog + visitorLastSeen
+  // Charts — built from visitorLog + visitorLastSeen, admin excluded
+  const ADMIN_EMAIL = 'aituar.aubakirov@sap.com';
   const chartId1 = 'chart-visits-per-day';
   const chartId2 = 'chart-page-dist';
   const chartId3 = 'chart-top-users';
 
-  // Compute chart data
+  const chartVisits = visitorLog.filter(r => r.logon_name !== ADMIN_EMAIL);
   const visitsByDay = {};
-  visitorLog.forEach(r => {
+  chartVisits.forEach(r => {
     const day = r.visited_at ? r.visited_at.slice(0,10) : null;
     if (day) visitsByDay[day] = (visitsByDay[day] || 0) + 1;
   });
@@ -1999,31 +2004,45 @@ function renderAdminPage() {
   const dayData   = dayLabels.map(d => visitsByDay[d]);
 
   const pageCounts = {};
-  visitorLog.forEach(r => { const p = r.page || 'Unknown'; pageCounts[p] = (pageCounts[p] || 0) + 1; });
+  chartVisits.forEach(r => { const p = r.page || 'Unknown'; pageCounts[p] = (pageCounts[p] || 0) + 1; });
   const pageLabels = Object.keys(pageCounts).sort((a,b) => pageCounts[b]-pageCounts[a]);
   const pageData   = pageLabels.map(p => pageCounts[p]);
 
-  const topUsers = [...visitorLastSeen].sort((a,b) => b.visit_count - a.visit_count).slice(0,10);
-  const userLabels = topUsers.map(u => u.logon_name.split('@')[0]);
+  const topUsers = visitorLastSeen.filter(r => r.logon_name !== ADMIN_EMAIL)
+    .sort((a,b) => b.visit_count - a.visit_count).slice(0,10);
+  const userLabels = topUsers.map(u => fmtUser(u.logon_name));
   const userData   = topUsers.map(u => u.visit_count);
 
   const tabVisitRight = `
     <div class="card" style="margin-bottom:1rem">
-      <h3 style="margin:0 0 1rem;font-size:1rem">Visits per Day (last 30 days)</h3>
-      <canvas id="${chartId1}" height="180"></canvas>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${chart1Collapsed?'0':'1rem'}">
+        <h3 style="margin:0;font-size:1rem">Visits per Day (last 30 days)</h3>
+        <button class="btn btn-secondary btn-sm" onclick="window.adminToggleChart1()">${chart1Collapsed?'▶':'▼'}</button>
+      </div>
+      ${!chart1Collapsed ? `<canvas id="${chartId1}" height="180"></canvas>` : ''}
     </div>
     <div class="card" style="margin-bottom:1rem">
-      <h3 style="margin:0 0 1rem;font-size:1rem">Page Distribution</h3>
-      <canvas id="${chartId2}" height="200"></canvas>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${chart2Collapsed?'0':'1rem'}">
+        <h3 style="margin:0;font-size:1rem">Page Distribution</h3>
+        <button class="btn btn-secondary btn-sm" onclick="window.adminToggleChart2()">${chart2Collapsed?'▶':'▼'}</button>
+      </div>
+      ${!chart2Collapsed ? `<canvas id="${chartId2}" height="200"></canvas>` : ''}
     </div>
     <div class="card">
-      <h3 style="margin:0 0 1rem;font-size:1rem">Most Active Users (top 10)</h3>
-      <canvas id="${chartId3}" height="220"></canvas>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${chart3Collapsed?'0':'1rem'}">
+        <h3 style="margin:0;font-size:1rem">Most Active Users (top 10)</h3>
+        <button class="btn btn-secondary btn-sm" onclick="window.adminToggleChart3()">${chart3Collapsed?'▶':'▼'}</button>
+      </div>
+      ${!chart3Collapsed ? `<canvas id="${chartId3}" height="220"></canvas>` : ''}
     </div>`;
 
   // Store chart data for post-render init (script tags in innerHTML don't execute)
   if (subTab === 'visitors') {
-    window._adminChartData = { dayLabels, dayData, pageLabels, pageData, userLabels, userData };
+    window._adminChartData = {
+      dayLabels,  dayData,  chart1Collapsed,
+      pageLabels, pageData, chart2Collapsed,
+      userLabels, userData, chart3Collapsed,
+    };
   } else {
     window._adminChartData = null;
   }
@@ -2342,9 +2361,9 @@ function render() {
           options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
         });
       }
-      mkChart('chart-visits-per-day', d.dayLabels,  d.dayData,  'Visits', '#0070F2');
-      mkChart('chart-page-dist',      d.pageLabels, d.pageData, 'Pages',  COLORS);
-      mkChart('chart-top-users',      d.userLabels, d.userData, 'Visits', '#1D6FA4');
+      if (!d.chart1Collapsed) mkChart('chart-visits-per-day', d.dayLabels,  d.dayData,  'Visits', '#0070F2');
+      if (!d.chart2Collapsed) mkChart('chart-page-dist',      d.pageLabels, d.pageData, 'Pages',  COLORS);
+      if (!d.chart3Collapsed) mkChart('chart-top-users',      d.userLabels, d.userData, 'Visits', '#1D6FA4');
     });
   }
 }
