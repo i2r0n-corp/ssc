@@ -42,7 +42,7 @@ let state = {
   exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null, sortCol: 'logged_at', sortDir: 'desc' },
   currentUser: null,
   myPermissions: { catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false },
-  admin: { users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, mcpClosedCollapsed: false, usersCollapsed: false, visitorCollapsed: false, mcpLog: [], mcpLogLoading: false, mcpLogError: null, mcpLogCollapsed: false, selectedMcpLog: null, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null },
+  admin: { subTab: 'permissions', users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, mcpClosedCollapsed: false, usersCollapsed: false, visitorCollapsed: false, mcpLog: [], mcpLogLoading: false, mcpLogError: null, mcpLogCollapsed: false, selectedMcpLog: null, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null },
   mcpModal: { open: false, sent: false, sending: false, error: null },
   accessDeniedModal: false,
   backendDown: false,
@@ -1726,6 +1726,7 @@ window.adminToggleMcpClosed  = function() { state.admin.mcpClosedCollapsed  = !s
 window.adminToggleUsers      = function() { state.admin.usersCollapsed      = !state.admin.usersCollapsed;      render(); };
 window.adminToggleVisitor    = function() { state.admin.visitorCollapsed    = !state.admin.visitorCollapsed;    render(); };
 window.adminToggleMcpLog     = function() { state.admin.mcpLogCollapsed     = !state.admin.mcpLogCollapsed;     render(); };
+window.adminSetSubTab        = function(t) { state.admin.subTab = t; render(); };
 window.adminSelectMcpLog     = function(id) { state.admin.selectedMcpLog = state.admin.selectedMcpLog === id ? null : id; render(); };
 window.adminCloseMcpLog      = function() { state.admin.selectedMcpLog = null; render(); };
 window.adminSelectVisitorUser = function(email) {
@@ -1800,7 +1801,7 @@ window.adminDeleteUser = async function(email) {
 };
 
 function renderAdminPage() {
-  const { users, usersLoading, usersError, newEmail, visitorLog, visitorLastSeen, visitorLoading, visitorError,
+  const { subTab, users, usersLoading, usersError, newEmail, visitorLog, visitorLastSeen, visitorLoading, visitorError,
           mcpRequests, mcpRequestsLoading, mcpRequestsError, mcpOpenCollapsed, mcpClosedCollapsed,
           usersCollapsed, visitorCollapsed, mcpLog, mcpLogLoading, mcpLogError, mcpLogCollapsed, selectedMcpLog,
           selectedVisitorUser, visitSortCol, visitSortDir, selectedVisit } = state.admin;
@@ -1825,8 +1826,15 @@ function renderAdminPage() {
     return visitSortDir === 'asc' ? (av < bv ? -1 : av > bv ? 1 : 0) : (av > bv ? -1 : av < bv ? 1 : 0);
   });
 
-  const colLeft = `
-    <!-- User Permissions -->
+  // ── Sub-nav bar ──────────────────────────────────────────────────────────────
+  const subNav = `
+    <div class="admin-sub-nav">
+      <button class="admin-sub-tab ${subTab==='permissions'?'active':''}" onclick="window.adminSetSubTab('permissions')">User Permissions</button>
+      <button class="admin-sub-tab ${subTab==='visitors'?'active':''}" onclick="window.adminSetSubTab('visitors')">Visitor Log</button>
+    </div>`;
+
+  // ── Tab 1: User Permissions ──────────────────────────────────────────────────
+  const tabPermLeft = `
     <div class="card" style="margin-bottom:1rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${usersCollapsed?'0':'1rem'}">
         <h3 style="margin:0;font-size:1rem">User Permissions</h3>
@@ -1861,7 +1869,9 @@ function renderAdminPage() {
           </tbody>
         </table>
       </div>`) : ''}
-    </div>
+    </div>`;
+
+  const tabPermRight = `
     <div class="card" style="margin-bottom:1rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${mcpOpenCollapsed?'0':'1rem'}">
         <h3 style="margin:0;font-size:1rem">Open MCP Credentials Requests ${openReqs.length>0?`<span style="background:#dc3545;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;font-weight:700;margin-left:6px">${openReqs.length}</span>`:''}</h3>
@@ -1883,8 +1893,6 @@ function renderAdminPage() {
         </tbody>
       </table>`) : ''}
     </div>
-
-    <!-- Closed MCP Requests -->
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${mcpClosedCollapsed?'0':'1rem'}">
         <h3 style="margin:0;font-size:1rem">Closed MCP Credentials Requests</h3>
@@ -1907,8 +1915,8 @@ function renderAdminPage() {
       </table>`) : ''}
     </div>`;
 
-  const colRight = `
-    <!-- Visitor Log -->
+  // ── Tab 2: Visitor Log ───────────────────────────────────────────────────────
+  const tabVisitLeft = `
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${visitorCollapsed?'0':'1rem'}">
         <h3 style="margin:0;font-size:1rem">Visitor Log</h3>
@@ -1969,6 +1977,73 @@ function renderAdminPage() {
       </div>`) : ''}
     </div>`;
 
+  // Charts — built from visitorLog + visitorLastSeen
+  const chartId1 = 'chart-visits-per-day';
+  const chartId2 = 'chart-page-dist';
+  const chartId3 = 'chart-top-users';
+
+  // Compute chart data
+  const visitsByDay = {};
+  visitorLog.forEach(r => {
+    const day = r.visited_at ? r.visited_at.slice(0,10) : null;
+    if (day) visitsByDay[day] = (visitsByDay[day] || 0) + 1;
+  });
+  const dayLabels = Object.keys(visitsByDay).sort().slice(-30);
+  const dayData   = dayLabels.map(d => visitsByDay[d]);
+
+  const pageCounts = {};
+  visitorLog.forEach(r => { const p = r.page || 'Unknown'; pageCounts[p] = (pageCounts[p] || 0) + 1; });
+  const pageLabels = Object.keys(pageCounts).sort((a,b) => pageCounts[b]-pageCounts[a]);
+  const pageData   = pageLabels.map(p => pageCounts[p]);
+
+  const topUsers = [...visitorLastSeen].sort((a,b) => b.visit_count - a.visit_count).slice(0,10);
+  const userLabels = topUsers.map(u => u.logon_name.split('@')[0]);
+  const userData   = topUsers.map(u => u.visit_count);
+
+  const tabVisitRight = `
+    <div class="card" style="margin-bottom:1rem">
+      <h3 style="margin:0 0 1rem;font-size:1rem">Visits per Day (last 30 days)</h3>
+      <canvas id="${chartId1}" height="180"></canvas>
+    </div>
+    <div class="card" style="margin-bottom:1rem">
+      <h3 style="margin:0 0 1rem;font-size:1rem">Page Distribution</h3>
+      <canvas id="${chartId2}" height="200"></canvas>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 1rem;font-size:1rem">Most Active Users (top 10)</h3>
+      <canvas id="${chartId3}" height="220"></canvas>
+    </div>`;
+
+  // Chart init script — runs after render via requestAnimationFrame
+  const chartScript = subTab === 'visitors' ? `
+    (function() {
+      if (typeof Chart === 'undefined') return;
+      const COLORS = ['#0070F2','#1D6FA4','#5BA4CF','#85C1E9','#AED6F1','#D6EAF8','#2ECC71','#27AE60','#F39C12','#E74C3C'];
+      function mkChart(id, type, labels, data, label, color) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el._chartInst) { el._chartInst.destroy(); }
+        el._chartInst = new Chart(el, {
+          type,
+          data: {
+            labels,
+            datasets: [{ label, data, backgroundColor: type==='bar'?(color||'#0070F2'):COLORS, borderColor: type==='bar'?(color||'#0070F2'):'#fff', borderWidth: type==='bar'?0:2 }]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: type!=='bar' } },
+            scales: type==='bar' ? { y: { beginAtZero:true, ticks:{ precision:0 } } } : undefined
+          }
+        });
+      }
+      requestAnimationFrame(function() {
+        mkChart('${chartId1}','bar',${JSON.stringify(dayLabels)},${JSON.stringify(dayData)},'Visits','#0070F2');
+        mkChart('${chartId2}','bar',${JSON.stringify(pageLabels)},${JSON.stringify(pageData)},'Pages');
+        mkChart('${chartId3}','bar',${JSON.stringify(userLabels)},${JSON.stringify(userData)},'Visits','#1D6FA4');
+      });
+    })();` : '';
+
+  // ── Popups ───────────────────────────────────────────────────────────────────
   const mcpLogDetailPopup = selectedMcpLog ? (() => {
     const s = selectedMcpLog;
     if (s.loading) return `<div class="modal-overlay"><div class="modal-box" style="max-width:600px;text-align:center;padding:2rem"><div style="color:#6a6a6a">Loading…</div></div></div>`;
@@ -2023,6 +2098,10 @@ function renderAdminPage() {
     </div>`;
   })() : '';
 
+  const tabContent = subTab === 'permissions'
+    ? `<div class="admin-grid"><div>${tabPermLeft}</div><div>${tabPermRight}</div></div>`
+    : `<div class="admin-grid"><div>${tabVisitLeft}</div><div>${tabVisitRight}</div></div>`;
+
   return `
   <style>
     .admin-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start; }
@@ -2031,10 +2110,11 @@ function renderAdminPage() {
   </style>
   ${mcpLogDetailPopup}
   ${visitDetailPopup}
-  <div class="admin-grid">
-    <div>${colLeft}</div>
-    <div>${colRight}</div>
-  </div>`;
+  ${subNav}
+  <div style="padding:1rem 1.5rem 0">
+  ${tabContent}
+  </div>
+  <script>${chartScript}<\/script>`;
 }
 
 
@@ -2167,7 +2247,7 @@ function render() {
       </div>
       </div>
     </div>
-    <div class="page-content">${content}</div>
+    <div class="page-content" style="${state.currentPage==='admin'?'padding:0':''}"><div>${content}</div></div>
     ${renderServiceDetailModal()}
     ${renderPptxListSettingsModal()}
     ${renderExcelSettingsModal()}
