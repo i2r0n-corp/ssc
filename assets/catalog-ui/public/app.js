@@ -1994,7 +1994,13 @@ function renderAdminPage() {
   const chartId2 = 'chart-page-dist';
   const chartId3 = 'chart-top-users';
 
-  const chartVisits = visitorLog.filter(r => r.logon_name !== ADMIN_EMAIL);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  // Chart 1 & 2 respect selectedVisitorUser filter
+  const chartVisits = visitorLog.filter(r =>
+    r.logon_name !== ADMIN_EMAIL &&
+    (!selectedVisitorUser || r.logon_name === selectedVisitorUser)
+  );
   const visitsByDay = {};
   chartVisits.forEach(r => {
     const day = r.visited_at ? r.visited_at.slice(0,10) : null;
@@ -2008,29 +2014,38 @@ function renderAdminPage() {
   const pageLabels = Object.keys(pageCounts).sort((a,b) => pageCounts[b]-pageCounts[a]);
   const pageData   = pageLabels.map(p => pageCounts[p]);
 
-  const topUsers = visitorLastSeen.filter(r => r.logon_name !== ADMIN_EMAIL)
-    .sort((a,b) => b.visit_count - a.visit_count).slice(0,10);
-  const userLabels = topUsers.map(u => fmtUser(u.logon_name));
-  const userData   = topUsers.map(u => u.visit_count);
+  // Chart 3: last 30 days counts, independent of user filter
+  const userCounts30 = {};
+  visitorLog.forEach(r => {
+    if (r.logon_name === ADMIN_EMAIL) return;
+    const day = r.visited_at ? r.visited_at.slice(0,10) : null;
+    if (day && day >= thirtyDaysAgo) userCounts30[r.logon_name] = (userCounts30[r.logon_name] || 0) + 1;
+  });
+  const topUsers = Object.entries(userCounts30).sort((a,b) => b[1]-a[1]).slice(0,10);
+  const userLabels = topUsers.map(([u]) => fmtUser(u));
+  const userData   = topUsers.map(([,c]) => c);
+
+  const chart1Title = selectedVisitorUser ? `Visits per Day — ${fmtUser(selectedVisitorUser)}` : 'Visits per Day (last 30 days)';
+  const chart2Title = selectedVisitorUser ? `Page Distribution — ${fmtUser(selectedVisitorUser)}` : 'Page Distribution';
 
   const tabVisitRight = `
     <div class="card" style="margin-bottom:1rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${chart1Collapsed?'0':'1rem'}">
-        <h3 style="margin:0;font-size:1rem">Visits per Day (last 30 days)</h3>
+        <h3 style="margin:0;font-size:1rem">${chart1Title}</h3>
         <button class="btn btn-secondary btn-sm" onclick="window.adminToggleChart1()">${chart1Collapsed?'▶':'▼'}</button>
       </div>
       ${!chart1Collapsed ? `<canvas id="${chartId1}" height="180"></canvas>` : ''}
     </div>
     <div class="card" style="margin-bottom:1rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${chart2Collapsed?'0':'1rem'}">
-        <h3 style="margin:0;font-size:1rem">Page Distribution</h3>
+        <h3 style="margin:0;font-size:1rem">${chart2Title}</h3>
         <button class="btn btn-secondary btn-sm" onclick="window.adminToggleChart2()">${chart2Collapsed?'▶':'▼'}</button>
       </div>
       ${!chart2Collapsed ? `<canvas id="${chartId2}" height="200"></canvas>` : ''}
     </div>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${chart3Collapsed?'0':'1rem'}">
-        <h3 style="margin:0;font-size:1rem">Most Active Users (top 10)</h3>
+        <h3 style="margin:0;font-size:1rem">Most Active Users (top 10, last 30 days)</h3>
         <button class="btn btn-secondary btn-sm" onclick="window.adminToggleChart3()">${chart3Collapsed?'▶':'▼'}</button>
       </div>
       ${!chart3Collapsed ? `<canvas id="${chartId3}" height="220"></canvas>` : ''}
