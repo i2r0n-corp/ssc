@@ -395,8 +395,19 @@ function renderCatalogFilters() {
       <!-- Two-column top area -->
       <div class="filter-columns">
 
-        <!-- Left column: BS + hr + Keywords + ET -->
+        <!-- Left column: Keep checkboxes + BS + Keywords + ET -->
         <div class="filter-col-left">
+          <!-- Keep checkboxes — above BS, side by side -->
+          <div style="display:flex;gap:1rem;margin-bottom:0.75rem">
+            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:#556;cursor:pointer;flex:1">
+              <input type="checkbox" ${state.keepSelected?'checked':''} onchange="window.toggleKeepSelected(this.checked)" style="cursor:pointer" />
+              Keep selected at filter change
+            </label>
+            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:${!state.keepSelected?'#8696A9':'#556'};cursor:pointer;flex:1">
+              <input type="checkbox" ${state.moduleGranularity?'checked':''} ${!state.keepSelected?'disabled':''} onchange="window.toggleModuleGranularity(this.checked)" style="cursor:${!state.keepSelected?'not-allowed':'pointer'}" />
+              Keep module granularity
+            </label>
+          </div>
           <!-- BS field: native select + external link button -->
           <div style="display:flex;align-items:flex-end;gap:0.4rem">
             <div class="fl-field" style="flex:1;min-width:0">
@@ -432,17 +443,6 @@ function renderCatalogFilters() {
               <label>Engagement Type</label>
             </div>
           </div>
-          <!-- Keep checkboxes — left column, below keywords+ET, side by side -->
-          <div style="margin-top:0.75rem;display:flex;gap:1rem">
-            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:#556;cursor:pointer;flex:1">
-              <input type="checkbox" ${state.keepSelected?'checked':''} onchange="window.toggleKeepSelected(this.checked)" style="cursor:pointer" />
-              Keep selected at filter change
-            </label>
-            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:${!state.keepSelected?'#8696A9':'#556'};cursor:pointer;flex:1">
-              <input type="checkbox" ${state.moduleGranularity?'checked':''} ${!state.keepSelected?'disabled':''} onchange="window.toggleModuleGranularity(this.checked)" style="cursor:${!state.keepSelected?'not-allowed':'pointer'}" />
-              Keep module granularity
-            </label>
-          </div>
         </div>
 
         <!-- Right column: Module only (when BS selected) -->
@@ -452,7 +452,7 @@ function renderCatalogFilters() {
             <div style="font-size:0.75rem;color:#6a6a6a;font-weight:600;flex:1">Module</div>
             ${selectedMods.length > 0 ? `<button class="mode-switch-clear" title="Clear modules" onclick="updateCheckboxFilter._clearKey('modules')">✕</button>` : ''}
           </div>
-          <div class="check-panel" style="max-height:8.5rem;margin-top:0.25rem">
+          <div class="check-panel" style="max-height:10.2rem;margin-top:0.25rem">
             ${uniqueMods.map(([code, name]) => {
               const label = name.includes(' // ') ? name.split(' // ').slice(1).join(' // ') : name;
               return `<label>
@@ -2074,8 +2074,8 @@ function renderAdminPage() {
         <table class="service-table" style="font-size:0.8rem;width:100%;table-layout:fixed">
           <thead><tr>
             <th style="width:auto">User</th>
-            ${TABS.map(t => `<th style="text-align:center;width:80px">${TAB_LABELS[t]}</th>`).join('')}
-            <th style="width:40px"></th>
+            ${TABS.map(t => `<th style="text-align:center;width:55px;font-size:0.72rem">${TAB_LABELS[t]}</th>`).join('')}
+            <th style="width:36px"></th>
           </tr></thead>
           <tbody>
             ${users.map(u => `<tr>
