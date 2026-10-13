@@ -401,15 +401,15 @@ function renderCatalogFilters() {
           <div style="display:flex;gap:1rem;margin-bottom:0.75rem">
             <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:#556;cursor:pointer;flex:1">
               <input type="checkbox" ${state.keepSelected?'checked':''} onchange="window.toggleKeepSelected(this.checked)" style="cursor:pointer" />
-              Persist selection
+              Preserve selection when filtering
               <span class="info-tip" data-tip="When active, your selected services are kept even when you change filters. You can still view and export them regardless of what the current filter shows.">
                 <img src="/info.svg" style="width:12px;height:12px;opacity:0.35;vertical-align:middle;transition:opacity 0.15s" />
               </span>
             </label>
             <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:${!state.keepSelected?'#8696A9':'#556'};cursor:pointer;flex:1">
               <input type="checkbox" ${state.moduleGranularity?'checked':''} ${!state.keepSelected?'disabled':''} onchange="window.toggleModuleGranularity(this.checked)" style="cursor:${!state.keepSelected?'not-allowed':'pointer'}" />
-              Per module
-              <span class="info-tip" data-tip="Selection tracks individual modules within a Business Scenario, not just the service. Requires &quot;Persist selection&quot; to be active.">
+              Module level selection granularity
+              <span class="info-tip" data-tip="Tracks selection per module, not just per service. If the same service belongs to multiple modules, each module combination appears as a separate row in your selection — useful when you need to export or review context at the module level.">
                 <img src="/info.svg" style="width:12px;height:12px;opacity:0.35;vertical-align:middle;transition:opacity 0.15s" />
               </span>
             </label>
