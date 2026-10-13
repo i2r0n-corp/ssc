@@ -478,8 +478,8 @@ function renderCatalogFilters() {
       <!-- Section 3 header: line + collapse arrow flush right -->
       <div style="display:flex;align-items:center;padding:0 1rem;width:100%">
         <div style="flex:1;height:1px;background:#e0e0e0"></div>
-        <button onclick="window.toggleSec3Collapsed()" style="background:none;border:none;cursor:pointer;padding:2px 0 2px 6px;font-size:0.75rem;color:#8696A9;display:inline-flex;align-items:center;line-height:1">
-          ${state.sec3Collapsed ? '▶' : '▼'}
+        <button onclick="window.toggleSec3Collapsed()" style="background:none;border:none;cursor:pointer;padding:2px 0 2px 6px;display:inline-flex;align-items:center;line-height:1">
+          <img src="/arrow.svg" style="width:14px;height:14px;opacity:0.5;transform:${state.sec3Collapsed?'rotate(-90deg)':'rotate(0deg)'};transition:transform 0.2s" />
         </button>
       </div>
 
@@ -2070,7 +2070,7 @@ function renderAdminPage() {
         <h3 style="margin:0;font-size:1rem">User Permissions</h3>
         <div style="display:flex;gap:0.5rem;align-items:center">
           <button class="btn btn-secondary btn-sm" onclick="loadAdminUsers()">↻</button>
-          <button class="btn btn-secondary btn-sm" onclick="window.adminToggleUsers()" title="${usersCollapsed?'Expand':'Collapse'}">${usersCollapsed?'▶':'▼'}</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.adminToggleUsers()" title="${usersCollapsed?'Expand':'Collapse'}"><img src="/arrow.svg" style="width:12px;height:12px;transform:${usersCollapsed?'rotate(-90deg)':'rotate(0deg)'}" /></button>
         </div>
       </div>
       ${usersError ? `<div class="error-strip">⚠ ${usersError}</div>` : ''}
@@ -2107,7 +2107,7 @@ function renderAdminPage() {
         <h3 style="margin:0;font-size:1rem">Open MCP Credentials Requests ${openReqs.length>0?`<span style="background:#dc3545;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.72rem;font-weight:700;margin-left:6px">${openReqs.length}</span>`:''}</h3>
         <div style="display:flex;gap:0.5rem;align-items:center">
           <button class="btn btn-secondary btn-sm" onclick="loadAdminMcpRequests()">↻</button>
-          <button class="btn btn-secondary btn-sm" onclick="window.adminToggleMcpOpen()" title="${mcpOpenCollapsed?'Expand':'Collapse'}">${mcpOpenCollapsed?'▶':'▼'}</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.adminToggleMcpOpen()" title="${mcpOpenCollapsed?'Expand':'Collapse'}"><img src="/arrow.svg" style="width:12px;height:12px;transform:${mcpOpenCollapsed?'rotate(-90deg)':'rotate(0deg)'}" /></button>
         </div>
       </div>
       ${mcpRequestsError ? `<div class="error-strip">⚠ ${mcpRequestsError}</div>` : ''}
@@ -2128,7 +2128,7 @@ function renderAdminPage() {
         <h3 style="margin:0;font-size:1rem">Closed MCP Credentials Requests</h3>
         <div style="display:flex;gap:0.5rem;align-items:center">
           <button class="btn btn-secondary btn-sm" onclick="loadAdminMcpRequests()">↻</button>
-          <button class="btn btn-secondary btn-sm" onclick="window.adminToggleMcpClosed()" title="${mcpClosedCollapsed?'Expand':'Collapse'}">${mcpClosedCollapsed?'▶':'▼'}</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.adminToggleMcpClosed()" title="${mcpClosedCollapsed?'Expand':'Collapse'}"><img src="/arrow.svg" style="width:12px;height:12px;transform:${mcpClosedCollapsed?'rotate(-90deg)':'rotate(0deg)'}" /></button>
         </div>
       </div>
       ${!mcpClosedCollapsed ? (mcpRequestsLoading ? `<div style="color:#6a6a6a;padding:0.5rem;text-align:center">Loading…</div>` : `
@@ -2152,7 +2152,7 @@ function renderAdminPage() {
         <h3 style="margin:0;font-size:1rem">Visitor Log</h3>
         <div style="display:flex;gap:0.5rem;align-items:center">
           <button class="btn btn-secondary btn-sm" onclick="loadAdminVisitorLog()">↻</button>
-          <button class="btn btn-secondary btn-sm" onclick="window.adminToggleVisitor()" title="${visitorCollapsed?'Expand':'Collapse'}">${visitorCollapsed?'▶':'▼'}</button>
+          <button class="btn btn-secondary btn-sm" onclick="window.adminToggleVisitor()" title="${visitorCollapsed?'Expand':'Collapse'}"><img src="/arrow.svg" style="width:12px;height:12px;transform:${visitorCollapsed?'rotate(-90deg)':'rotate(0deg)'}" /></button>
         </div>
       </div>
       ${visitorError ? `<div class="error-strip">⚠ ${visitorError}</div>` : ''}
@@ -2251,21 +2251,21 @@ function renderAdminPage() {
     <div class="card" style="margin-bottom:1rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${chart1Collapsed?'0':'1rem'}">
         <h3 style="margin:0;font-size:1rem">${chart1Title}</h3>
-        <button class="btn btn-secondary btn-sm" onclick="window.adminToggleChart1()">${chart1Collapsed?'▶':'▼'}</button>
+        <button class="btn btn-secondary btn-sm" onclick="window.adminToggleChart1()"><img src="/arrow.svg" style="width:12px;height:12px;transform:${chart1Collapsed?'rotate(-90deg)':'rotate(0deg)'}" /></button>
       </div>
       ${!chart1Collapsed ? `<canvas id="${chartId1}" height="180"></canvas>` : ''}
     </div>
     <div class="card" style="margin-bottom:1rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${chart2Collapsed?'0':'1rem'}">
         <h3 style="margin:0;font-size:1rem">${chart2Title}</h3>
-        <button class="btn btn-secondary btn-sm" onclick="window.adminToggleChart2()">${chart2Collapsed?'▶':'▼'}</button>
+        <button class="btn btn-secondary btn-sm" onclick="window.adminToggleChart2()"><img src="/arrow.svg" style="width:12px;height:12px;transform:${chart2Collapsed?'rotate(-90deg)':'rotate(0deg)'}" /></button>
       </div>
       ${!chart2Collapsed ? `<canvas id="${chartId2}" height="200"></canvas>` : ''}
     </div>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${chart3Collapsed?'0':'1rem'}">
         <h3 style="margin:0;font-size:1rem">Most Active Users (top 10, last 30 days)</h3>
-        <button class="btn btn-secondary btn-sm" onclick="window.adminToggleChart3()">${chart3Collapsed?'▶':'▼'}</button>
+        <button class="btn btn-secondary btn-sm" onclick="window.adminToggleChart3()"><img src="/arrow.svg" style="width:12px;height:12px;transform:${chart3Collapsed?'rotate(-90deg)':'rotate(0deg)'}" /></button>
       </div>
       ${!chart3Collapsed ? `<canvas id="${chartId3}" height="220"></canvas>` : ''}
     </div>`;
