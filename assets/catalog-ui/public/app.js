@@ -443,7 +443,7 @@ function renderCatalogFilters() {
             ${selectedMods.length > 0 ? `<button class="mode-switch-clear" title="Clear modules" onclick="updateCheckboxFilter._clearKey('modules')">✕</button>` : ''}
           </div>
           <!-- Module checkboxes -->
-          <div class="check-panel" style="flex:1;max-height:6.6rem">
+          <div class="check-panel" style="flex:1;max-height:8.5rem">
             ${uniqueMods.map(([code, name]) => {
               const label = name.includes(' // ') ? name.split(' // ').slice(1).join(' // ') : name;
               return `<label>
@@ -2334,7 +2334,7 @@ function renderAdminPage() {
   })() : '';
 
   const tabContent = subTab === 'permissions'
-    ? `<div class="admin-grid"><div>${tabPermLeft}</div><div>${tabPermRight}</div></div>`
+    ? `<div class="admin-grid"><div style="grid-column:1/-1">${tabPermLeft}</div><div>${tabPermRight}</div></div>`
     : subTab === 'exportlog'
     ? `<div>${renderExportLogPage()}</div>`
     : `<div class="admin-grid"><div>${tabVisitLeft}</div><div>${tabVisitRight}</div></div>`;
@@ -2342,7 +2342,7 @@ function renderAdminPage() {
   return `
   <style>
     .admin-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start; }
-    .admin-grid > div { min-width: 0; overflow: hidden; }
+    .admin-grid > div { min-width: 0; overflow: visible; }
     @media (max-width:900px) { .admin-grid { grid-template-columns:1fr; } }
   </style>
   ${mcpLogDetailPopup}
