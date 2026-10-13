@@ -432,29 +432,8 @@ function renderCatalogFilters() {
               <label>Engagement Type</label>
             </div>
           </div>
-        </div>
-
-        <!-- Right column: Module (when BS selected) + keep checkboxes always -->
-        <div class="filter-col-right">
-          ${showModuleFilter ? `
-          <!-- Module label + clear -->
-          <div style="display:flex;align-items:center;gap:6px">
-            <div style="font-size:0.75rem;color:#6a6a6a;font-weight:600;flex:1">Module</div>
-            ${selectedMods.length > 0 ? `<button class="mode-switch-clear" title="Clear modules" onclick="updateCheckboxFilter._clearKey('modules')">✕</button>` : ''}
-          </div>
-          <!-- Module checkboxes -->
-          <div class="check-panel" style="flex:1;max-height:8.5rem">
-            ${uniqueMods.map(([code, name]) => {
-              const label = name.includes(' // ') ? name.split(' // ').slice(1).join(' // ') : name;
-              return `<label>
-                <input type="checkbox" value="${code}" ${selectedMods.includes(code)?'checked':''}
-                  onchange="updateCheckboxFilter('modules', '${code}', this.checked)" />
-                ${label}
-              </label>`;
-            }).join('')}
-          </div>` : ''}
-          <!-- Keep checkboxes — always visible, pinned to bottom -->
-          <div style="margin-top:auto;padding-top:0.5rem;display:flex;flex-direction:column;gap:0.35rem">
+          <!-- Keep checkboxes — left column, below keywords+ET -->
+          <div style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.35rem">
             <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:#556;cursor:pointer">
               <input type="checkbox" ${state.keepSelected?'checked':''} onchange="window.toggleKeepSelected(this.checked)" style="cursor:pointer" />
               Keep selected at filter change
@@ -465,6 +444,25 @@ function renderCatalogFilters() {
             </label>
           </div>
         </div>
+
+        <!-- Right column: Module only (when BS selected) -->
+        ${showModuleFilter ? `
+        <div class="filter-col-right">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="font-size:0.75rem;color:#6a6a6a;font-weight:600;flex:1">Module</div>
+            ${selectedMods.length > 0 ? `<button class="mode-switch-clear" title="Clear modules" onclick="updateCheckboxFilter._clearKey('modules')">✕</button>` : ''}
+          </div>
+          <div class="check-panel" style="max-height:8.5rem;margin-top:0.25rem">
+            ${uniqueMods.map(([code, name]) => {
+              const label = name.includes(' // ') ? name.split(' // ').slice(1).join(' // ') : name;
+              return `<label>
+                <input type="checkbox" value="${code}" ${selectedMods.includes(code)?'checked':''}
+                  onchange="updateCheckboxFilter('modules', '${code}', this.checked)" />
+                ${label}
+              </label>`;
+            }).join('')}
+          </div>
+        </div>` : ''}
       </div>
 
       <!-- Divider + More filters toggle (mobile only) -->
@@ -474,7 +472,7 @@ function renderCatalogFilters() {
 
       <!-- Section 3 header: line + collapse arrow flush right -->
       <div style="display:flex;align-items:center;padding:0 1rem;width:100%">
-        <div style="flex:1;height:1px;background:#e0e0e0"></div>
+        <div style="flex:1;height:1px;background:#e8e8e8"></div>
         <button onclick="window.toggleSec3Collapsed()" style="background:none;border:none;cursor:pointer;padding:2px 0 2px 6px;display:inline-flex;align-items:center;line-height:1">
           <img src="/arrow.svg" style="width:14px;height:14px;opacity:0.5;transform:${state.sec3Collapsed?'rotate(-90deg)':'rotate(0deg)'};transition:transform 0.2s" />
         </button>
