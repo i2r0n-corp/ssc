@@ -416,10 +416,10 @@ function renderCatalogFilters() {
         ${state.filtersExpanded ? '▲ Less filters' : '▼ More filters'}
       </button>
 
-      <!-- Section 3 header: collapse toggle + label -->
-      <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 1rem 0;border-top:1px solid #e0e0e0">
-        <button onclick="window.toggleSec3Collapsed()" style="background:none;border:none;cursor:pointer;padding:2px 4px;font-size:0.75rem;color:#556B82;font-weight:600;display:inline-flex;align-items:center;gap:4px">
-          ${state.sec3Collapsed ? '▶' : '▼'} ${state.sec3Collapsed ? 'Show advanced filters' : 'Hide advanced filters'}
+      <!-- Section 3 header: collapse button right-aligned only -->
+      <div style="display:flex;justify-content:flex-end;padding:0.2rem 1rem 0">
+        <button onclick="window.toggleSec3Collapsed()" style="background:none;border:none;cursor:pointer;padding:2px 6px;font-size:0.75rem;color:#556B82;display:inline-flex;align-items:center">
+          ${state.sec3Collapsed ? '▶' : '▼'}
         </button>
       </div>
 
@@ -499,6 +499,64 @@ function renderCatalogFilters() {
         </div>` : ''}
 
       </div>
+
+      <!-- Selection controls bar — inside the filter card, no dividers -->
+      ${(() => {
+        const gran = state.moduleGranularity && state.keepSelected;
+        const selCount = state.selectedServices.size;
+        const uniqueSelectedCodes = gran
+          ? new Set([...state.selectedServiceObjects.keys()].map(k => k.split('||')[0])).size
+          : selCount;
+        const { etCounts = { max: 0, advanced: 0, foundational: 0 } } = state.catalog.filterCounts || {};
+        const total = state.filteredServices.length;
+        const isService = state.filters.etLabelType === 'service';
+        const hasSearched = state.catalog.hasSearched;
+        const f = state.filters;
+        const hasActiveFilters = !!(f.query || f.engagementType || f.businessScenario || f.modules.length || f.phases.length || f.advancedLoS.length || f.foundationalCats.length || f.maxFocusTopics.length);
+
+        const countHtml = (() => {
+          if (!hasSearched) return `<span style="font-size:0.8rem;color:#8696A9">Use filters to explore the catalog</span>`;
+          const pills = [];
+          if (etCounts.max > 0)         pills.push(`<span class="badge badge-max">${isService ? 'Premium' : 'Max'} — ${etCounts.max}</span>`);
+          if (isService) {
+            const svcEnt = etCounts.advanced + etCounts.foundational;
+            if (svcEnt > 0) pills.push(`<span class="badge badge-adv">Service Entitlement — ${svcEnt}</span>`);
+          } else {
+            if (etCounts.advanced > 0)    pills.push(`<span class="badge badge-adv">Advanced — ${etCounts.advanced}</span>`);
+            if (etCounts.foundational > 0) pills.push(`<span class="badge badge-ent">Foundational — ${etCounts.foundational}</span>`);
+          }
+          const selInfo = selCount === 0 ? '' :
+            gran
+              ? ` &nbsp;<span style="color:#003366;font-weight:600">${selCount} selection${selCount!==1?'s':''} across ${uniqueSelectedCodes} service${uniqueSelectedCodes!==1?'s':''}</span>`
+              : ` &nbsp;<span style="color:#003366;font-weight:600">${selCount} selected</span>`;
+          return `${pills.join('')}<span style="font-size:0.8rem;color:#6a6a6a">overall: <strong>${total}</strong></span>${selInfo}`;
+        })();
+
+        return `
+        <div style="padding:0.6rem 1rem;display:flex;flex-direction:column;gap:0.4rem">
+          <!-- row 1: count left | checkboxes right -->
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap">
+            <span style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;flex:1">${countHtml}</span>
+            <span style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+              <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:${!state.keepSelected?'#8696A9':'#556'};cursor:pointer;white-space:nowrap">
+                <input type="checkbox" ${state.moduleGranularity?'checked':''} ${!state.keepSelected?'disabled':''} onchange="window.toggleModuleGranularity(this.checked)" style="cursor:${!state.keepSelected?'not-allowed':'pointer'}" />
+                Keep module granularity
+              </label>
+              <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:#556;cursor:pointer;white-space:nowrap">
+                <input type="checkbox" ${state.keepSelected?'checked':''} onchange="window.toggleKeepSelected(this.checked)" style="cursor:pointer" />
+                Keep selected when filter changes
+              </label>
+            </span>
+          </div>
+          <!-- row 2: buttons right-aligned -->
+          <div style="display:flex;justify-content:flex-end;gap:0.4rem">
+            <button class="btn btn-secondary btn-sm" ${(!state.keepSelected||selCount===0)?'disabled':''} onclick="window.toggleShowOnlySelected()" style="white-space:nowrap${state.showOnlySelected&&state.keepSelected&&selCount>0?';background:#0070F2;color:#fff;border-color:#0070F2':''}">Show selected</button>
+            <button class="btn btn-secondary btn-sm" ${selCount===0?'disabled':''} onclick="window.clearSelected()" style="white-space:nowrap">Clear selected</button>
+            <button class="btn btn-secondary btn-sm" ${!hasActiveFilters?'disabled':''} onclick="window.clearFilters()" style="white-space:nowrap">Reset</button>
+          </div>
+        </div>`;
+      })()}
+
     </div>`;
 }
 
@@ -548,85 +606,24 @@ function renderCatalogResults() {
     ? new Set([...state.selectedServiceObjects.keys()].map(k => k.split('||')[0])).size
     : selCount;
 
-  // Count info for row 1 left
-  const { etCounts = { max: 0, advanced: 0, foundational: 0 } } = state.catalog.filterCounts || {};
-  const total = state.filteredServices.length;
-  const isService = state.filters.etLabelType === 'service';
-
-  // Detect any active filter for Reset button
-  const f = state.filters;
-  const hasActiveFilters = !!(f.query || f.engagementType || f.businessScenario || f.modules.length || f.phases.length || f.advancedLoS.length || f.foundationalCats.length || f.maxFocusTopics.length);
-
-  // Selection buttons disabled states
-  const showSelectedDisabled = !state.keepSelected || selCount === 0;
-  const clearSelectedDisabled = selCount === 0;
-  const resetDisabled = !hasActiveFilters;
-
-  const countHtml = (() => {
-    if (!hasSearched && !loading) return `<span style="font-size:0.8rem;color:#8696A9">Use filters to explore the catalog</span>`;
-    if (loading) return `<span style="font-size:0.8rem;color:#8696A9">Loading…</span>`;
-    const pills = [];
-    if (etCounts.max > 0)         pills.push(`<span class="badge badge-max">${isService ? 'Premium' : 'Max'} — ${etCounts.max}</span>`);
-    if (isService) {
-      const svcEnt = etCounts.advanced + etCounts.foundational;
-      if (svcEnt > 0) pills.push(`<span class="badge badge-adv">Service Entitlement — ${svcEnt}</span>`);
-    } else {
-      if (etCounts.advanced > 0)    pills.push(`<span class="badge badge-adv">Advanced — ${etCounts.advanced}</span>`);
-      if (etCounts.foundational > 0) pills.push(`<span class="badge badge-ent">Foundational — ${etCounts.foundational}</span>`);
-    }
-    const selInfo = selCount === 0 ? '' :
-      gran
-        ? ` &nbsp;<span style="color:#003366;font-weight:600">${selCount} selection${selCount!==1?'s':''} across ${uniqueSelectedCodes} service${uniqueSelectedCodes!==1?'s':''}</span>`
-        : ` &nbsp;<span style="color:#003366;font-weight:600">${selCount} selected</span>`;
-    return `${pills.join('')}<span style="font-size:0.8rem;color:#6a6a6a">overall: <strong>${total}</strong></span>${selInfo}`;
-  })();
-
-  const controlsBar = `
-    <div style="background:white;border:1px solid #e0e0e0;border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.75rem">
-      <!-- Row 1: count left | checkboxes right -->
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;min-height:1.6rem">
-        <span style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;flex:1">
-          ${countHtml}
-          ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="margin-left:0.75rem;color:#155724;font-weight:600">Successfully downloaded</span>` : ''}
-        </span>
-        <span style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
-          <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:${!state.keepSelected?'#8696A9':'#556'};cursor:pointer;white-space:nowrap" title="Keep module context per selection">
-            <input type="checkbox" ${state.moduleGranularity?'checked':''} ${!state.keepSelected?'disabled':''} onchange="window.toggleModuleGranularity(this.checked)" style="cursor:${!state.keepSelected?'not-allowed':'pointer'}" />
-            Keep module granularity
-          </label>
-          <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:#556;cursor:pointer;white-space:nowrap" title="Preserve selected services when filters change">
-            <input type="checkbox" ${state.keepSelected?'checked':''} onchange="window.toggleKeepSelected(this.checked)" style="cursor:pointer" />
-            Keep selected when filter changes
-          </label>
-        </span>
-      </div>
-      <!-- Row 2: export left | action buttons right -->
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid #f0f0f0">
-        <span style="display:flex;align-items:center;gap:0.5rem">
-          <span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Export to:</span>
-          <button class="btn btn-primary btn-sm" onclick="openExcelSettings()" title="Export to Excel" style="display:inline-flex;align-items:center;gap:5px">
-            <img src="excel.svg" style="height:18px;width:auto" alt="" />${selCount > 0 ? `(${selCount})` : '(all)'}
-          </button>
-          <button class="btn btn-primary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)" style="display:inline-flex;align-items:center;gap:5px">
-            <img src="pptx.svg" style="height:18px;width:auto" alt="" />${selCount > 0 ? `(${selCount})` : '(all)'}
-          </button>
-        </span>
-        <span style="display:flex;align-items:center;gap:0.4rem">
-          <button class="btn btn-secondary btn-sm" ${showSelectedDisabled?'disabled':''} onclick="window.toggleShowOnlySelected()" style="white-space:nowrap${state.showOnlySelected&&!showSelectedDisabled?';background:#0070F2;color:#fff;border-color:#0070F2':''}">Show selected</button>
-          <button class="btn btn-secondary btn-sm" ${clearSelectedDisabled?'disabled':''} onclick="window.clearSelected()" style="white-space:nowrap">Clear selected</button>
-          <button class="btn btn-secondary btn-sm" ${resetDisabled?'disabled':''} onclick="window.clearFilters()" style="white-space:nowrap">Reset</button>
-        </span>
-      </div>
-    </div>`;
-
   return `
-    ${controlsBar}
     ${loading ? '<div class="loading"><div class="loading-spinner"></div> Loading...</div>' : ''}
     ${!hasSearched && !loading ? '' : !loading && state.filteredServices.length === 0 ? `
       <div class="empty-state">
         <div style="font-size:2rem">😕</div>
         <p>No services found. Try adjusting your filters.</p>
       </div>` : !loading ? `
+    <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center;flex-wrap:wrap">
+      <span style="flex:1"></span>
+      ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="color:#155724;font-weight:600;font-size:0.8rem">Successfully downloaded</span>` : ''}
+      <span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Export to:</span>
+      <button class="btn btn-primary btn-sm" onclick="openExcelSettings()" title="Export to Excel" style="display:inline-flex;align-items:center;gap:5px">
+        <img src="excel.svg" style="height:18px;width:auto" alt="" />${selCount > 0 ? `(${selCount})` : '(all)'}
+      </button>
+      <button class="btn btn-primary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)" style="display:inline-flex;align-items:center;gap:5px">
+        <img src="pptx.svg" style="height:18px;width:auto" alt="" />${selCount > 0 ? `(${selCount})` : '(all)'}
+      </button>
+    </div>
     ${state.pptx.error ? `<div class="error-strip" style="margin-bottom:0.5rem">⚠ ${state.pptx.error}</div>` : ''}
     <table class="service-table">
       <thead>
