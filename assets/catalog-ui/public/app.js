@@ -324,25 +324,13 @@ function renderSelectionControls() {
     return `${pills.join('')}<span style="font-size:0.8rem;color:#6a6a6a">overall: <strong>${total}</strong></span>${selInfo}`;
   })();
 
-  return `<div id="sel-controls-strip" style="padding:0.5rem 1rem 0.75rem;display:flex;flex-direction:column;gap:0.4rem;width:100%">
-    <div style="display:flex;align-items:center;width:100%;gap:0.5rem;flex-wrap:wrap">
-      <span style="flex:1;display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;min-width:0">${countHtml}</span>
-      <span style="display:flex;align-items:center;gap:0.75rem;flex-shrink:0;flex-wrap:wrap">
-        <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:${!state.keepSelected?'#8696A9':'#556'};cursor:pointer;white-space:nowrap">
-          <input type="checkbox" ${state.moduleGranularity?'checked':''} ${!state.keepSelected?'disabled':''} onchange="window.toggleModuleGranularity(this.checked)" style="cursor:${!state.keepSelected?'not-allowed':'pointer'}" />
-          Keep module granularity
-        </label>
-        <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:#556;cursor:pointer;white-space:nowrap">
-          <input type="checkbox" ${state.keepSelected?'checked':''} onchange="window.toggleKeepSelected(this.checked)" style="cursor:pointer" />
-          Keep selected when filter changes
-        </label>
-      </span>
-    </div>
-    <div style="display:flex;justify-content:flex-end;gap:0.4rem">
+  return `<div id="sel-controls-strip" style="padding:0.5rem 1rem 0.75rem;display:flex;align-items:center;gap:0.5rem;width:100%;flex-wrap:wrap">
+    <span style="flex:1;display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;min-width:0">${countHtml}</span>
+    <span style="display:flex;align-items:center;gap:0.4rem;flex-shrink:0;flex-wrap:wrap">
       <button class="btn btn-secondary btn-sm" ${(!state.keepSelected||selCount===0)?'disabled':''} onclick="window.toggleShowOnlySelected()" style="white-space:nowrap${state.showOnlySelected&&state.keepSelected&&selCount>0?';background:#0070F2;color:#fff;border-color:#0070F2':''}">Show selected</button>
       <button class="btn btn-secondary btn-sm" ${selCount===0?'disabled':''} onclick="window.clearSelected()" style="white-space:nowrap">Clear selected</button>
       <button class="btn btn-secondary btn-sm" ${!hasActiveFilters?'disabled':''} onclick="window.clearFilters()" style="white-space:nowrap">Reset</button>
-    </div>
+    </span>
   </div>`;
 }
 
@@ -429,9 +417,7 @@ function renderCatalogFilters() {
             })()}
           </div>
 
-          <hr style="border:none;border-top:1px solid #e0e0e0;margin:0.75rem 0" />
-
-          <div style="display:flex;gap:1rem">
+          <div style="display:flex;gap:1rem;margin-top:0.75rem">
             <div class="fl-field" style="flex:1;min-width:0">
               <input type="search" id="filter-query" placeholder=" " value="${state.filters.query}"
                 oninput="updateFilter('query', this.value)" />
@@ -448,9 +434,9 @@ function renderCatalogFilters() {
           </div>
         </div>
 
-        <!-- Right column: Module (only when BS selected) -->
-        ${showModuleFilter ? `
+        <!-- Right column: Module (when BS selected) + keep checkboxes always -->
         <div class="filter-col-right">
+          ${showModuleFilter ? `
           <!-- Module label + clear -->
           <div style="display:flex;align-items:center;gap:6px">
             <div style="font-size:0.75rem;color:#6a6a6a;font-weight:600;flex:1">Module</div>
@@ -466,8 +452,19 @@ function renderCatalogFilters() {
                 ${label}
               </label>`;
             }).join('')}
+          </div>` : ''}
+          <!-- Keep checkboxes — always visible, pinned to bottom -->
+          <div style="margin-top:auto;padding-top:0.5rem;display:flex;flex-direction:column;gap:0.35rem">
+            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:#556;cursor:pointer">
+              <input type="checkbox" ${state.keepSelected?'checked':''} onchange="window.toggleKeepSelected(this.checked)" style="cursor:pointer" />
+              Keep selected at filter change
+            </label>
+            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:${!state.keepSelected?'#8696A9':'#556'};cursor:pointer">
+              <input type="checkbox" ${state.moduleGranularity?'checked':''} ${!state.keepSelected?'disabled':''} onchange="window.toggleModuleGranularity(this.checked)" style="cursor:${!state.keepSelected?'not-allowed':'pointer'}" />
+              Keep module granularity
+            </label>
           </div>
-        </div>` : ''}
+        </div>
       </div>
 
       <!-- Divider + More filters toggle (mobile only) -->
