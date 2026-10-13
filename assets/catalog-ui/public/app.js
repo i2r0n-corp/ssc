@@ -581,20 +581,22 @@ function renderCatalogPage() {
 // Build rows array for granular mode: one row per (svc, moduleCode) combination within filtered BS
 function buildGranularRows(svcs, bsCode) {
   const rows = [];
+  const selectedMods = state.filters.modules || [];
   for (const svc of svcs) {
     const mods = svc.bs_module_codes || [];
     if (bsCode && mods.length > 0) {
-      for (const mc of mods) {
-        const key = `${svc.code}||${bsCode}||${mc}`;
-        rows.push({ ...svc, _selKey: key, _bsCode: bsCode, _moduleCode: mc });
+      const visibleMods = selectedMods.length > 0 ? mods.filter(mc => selectedMods.includes(mc)) : mods;
+      if (visibleMods.length > 0) {
+        for (const mc of visibleMods) {
+          rows.push({ ...svc, _selKey: `${svc.code}||${bsCode}||${mc}`, _bsCode: bsCode, _moduleCode: mc });
+        }
+      } else {
+        rows.push({ ...svc, _selKey: `${svc.code}||${bsCode}||`, _bsCode: bsCode, _moduleCode: null });
       }
     } else if (bsCode) {
-      // BS active but service has no module data — put it in General
-      const key = `${svc.code}||${bsCode}||`;
-      rows.push({ ...svc, _selKey: key, _bsCode: bsCode, _moduleCode: null });
+      rows.push({ ...svc, _selKey: `${svc.code}||${bsCode}||`, _bsCode: bsCode, _moduleCode: null });
     } else {
-      const key = `${svc.code}||null||null`;
-      rows.push({ ...svc, _selKey: key, _bsCode: null, _moduleCode: null });
+      rows.push({ ...svc, _selKey: `${svc.code}||null||null`, _bsCode: null, _moduleCode: null });
     }
   }
   return rows;
