@@ -654,7 +654,7 @@ function renderCatalogResults() {
               <span style="cursor:pointer" onclick="toggleSort('name')">Service Name ${state.sort.col==='name' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}</span>
             </div>
           </th>
-          ${gran ? `<th style="width:30%;white-space:nowrap;font-size:0.78rem">Business Scenario / Module</th>` : ''}
+          ${gran ? `<th style="width:35%;white-space:nowrap;font-size:0.78rem">Business Scenario / Module</th>` : ''}
           <th style="cursor:default;user-select:none;width:${gran ? '20%' : '30%'}">
             <div style="display:flex;align-items:center;gap:0.5rem">
               <div class="mode-switch" onclick="event.stopPropagation()">
@@ -664,7 +664,7 @@ function renderCatalogResults() {
               <span style="cursor:pointer" onclick="toggleSort('et')">Type ${state.sort.col==='et' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}</span>
             </div>
           </th>
-          ${showEffort ? `<th style="width:${gran ? '15%' : '8rem'};white-space:nowrap">Typical Effort</th>` : ''}
+          ${showEffort ? `<th style="width:${gran ? '10%' : '8rem'};white-space:nowrap">Typical Effort</th>` : ''}
         </tr>
       </thead>
       <tbody>
