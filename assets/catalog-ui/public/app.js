@@ -432,13 +432,13 @@ function renderCatalogFilters() {
               <label>Engagement Type</label>
             </div>
           </div>
-          <!-- Keep checkboxes — left column, below keywords+ET -->
-          <div style="margin-top:0.75rem;display:flex;flex-direction:column;gap:0.35rem">
-            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:#556;cursor:pointer">
+          <!-- Keep checkboxes — left column, below keywords+ET, side by side -->
+          <div style="margin-top:0.75rem;display:flex;gap:1rem">
+            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:#556;cursor:pointer;flex:1">
               <input type="checkbox" ${state.keepSelected?'checked':''} onchange="window.toggleKeepSelected(this.checked)" style="cursor:pointer" />
               Keep selected at filter change
             </label>
-            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:${!state.keepSelected?'#8696A9':'#556'};cursor:pointer">
+            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:${!state.keepSelected?'#8696A9':'#556'};cursor:pointer;flex:1">
               <input type="checkbox" ${state.moduleGranularity?'checked':''} ${!state.keepSelected?'disabled':''} onchange="window.toggleModuleGranularity(this.checked)" style="cursor:${!state.keepSelected?'not-allowed':'pointer'}" />
               Keep module granularity
             </label>
@@ -2071,15 +2071,15 @@ function renderAdminPage() {
       ${usersError ? `<div class="error-strip">⚠ ${usersError}</div>` : ''}
       ${!usersCollapsed ? (usersLoading ? `<div style="color:#6a6a6a;padding:1rem;text-align:center">Loading…</div>` : `
       <div style="overflow-x:auto">
-        <table class="service-table" style="font-size:0.8rem;min-width:600px">
+        <table class="service-table" style="font-size:0.8rem;width:100%;table-layout:fixed">
           <thead><tr>
-            <th>User</th>
-            ${TABS.map(t => `<th style="text-align:center">${TAB_LABELS[t]}</th>`).join('')}
-            <th></th>
+            <th style="width:auto">User</th>
+            ${TABS.map(t => `<th style="text-align:center;width:80px">${TAB_LABELS[t]}</th>`).join('')}
+            <th style="width:40px"></th>
           </tr></thead>
           <tbody>
             ${users.map(u => `<tr>
-              <td style="white-space:nowrap" title="${u.email}">${fmtUser(u.email)}</td>
+              <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${u.email}">${fmtUser(u.email)}</td>
               ${TABS.map(t => `<td style="text-align:center">${sel(u.email, t, u['tab_'+t])}</td>`).join('')}
               <td><button class="btn btn-secondary btn-sm" style="color:#dc3545" onclick="window.adminDeleteUser('${u.email}')">✕</button></td>
             </tr>`).join('')}
@@ -2332,7 +2332,7 @@ function renderAdminPage() {
   })() : '';
 
   const tabContent = subTab === 'permissions'
-    ? `<div><div>${tabPermLeft}</div><div>${tabPermRight}</div></div>`
+    ? `<div class="admin-grid"><div>${tabPermLeft}</div><div>${tabPermRight}</div></div>`
     : subTab === 'exportlog'
     ? `<div>${renderExportLogPage()}</div>`
     : `<div class="admin-grid"><div>${tabVisitLeft}</div><div>${tabVisitRight}</div></div>`;
