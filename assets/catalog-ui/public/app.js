@@ -645,7 +645,7 @@ function renderCatalogResults() {
             })() ? 'checked' : ''}
             onchange="toggleSelectAll(this.checked)" /></th>
           <th style="cursor:default;user-select:none${gran ? ';width:30%' : ''}">
-            <div style="display:flex;${gran ? 'flex-direction:column;' : ''}align-items:${gran ? 'flex-start' : 'center'};gap:0.3rem">
+            <div style="display:flex;align-items:center;gap:0.5rem">
               ${bsSelected ? `
               <div class="mode-switch" style="margin-bottom:0" onclick="event.stopPropagation()">
                 <button class="${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType','catalog')">Catalogue</button>
