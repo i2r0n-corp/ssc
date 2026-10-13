@@ -24,6 +24,7 @@ let state = {
   filtersExpanded: false,
   debug: { bsCode: '', module: '', serviceName: '', status: '', rows: [], totals: null, loading: false, error: null, selectedRow: null },
   selectedServices: new Set(),
+  selectedServiceObjects: new Map(),
   keepSelected: true,
   showOnlySelected: false,
   serviceDetail: null,
@@ -191,7 +192,9 @@ async function applyFilters() {
     // When keepSelected is OFF, drop selections no longer in results
     if (!state.keepSelected && state.selectedServices.size > 0) {
       const resultCodes = new Set(state.filteredServices.map(s => s.code));
-      state.selectedServices.forEach(code => { if (!resultCodes.has(code)) state.selectedServices.delete(code); });
+      state.selectedServices.forEach(code => {
+        if (!resultCodes.has(code)) { state.selectedServices.delete(code); state.selectedServiceObjects.delete(code); }
+      });
     }
   } catch (e) {
     state.filteredServices = [];
@@ -526,7 +529,7 @@ function renderCatalogResults() {
         Keep selected
       </label>
       ${state.selectedServices.size > 0 ? `<button class="btn btn-secondary btn-sm" onclick="window.clearSelected()" style="white-space:nowrap">Clear selected</button>` : ''}
-      ${state.keepSelected && state.selectedServices.size > 0 ? `<button class="btn btn-secondary btn-sm ${state.showOnlySelected?'active':''}" onclick="window.toggleShowOnlySelected()" style="white-space:nowrap${state.showOnlySelected?';background:#0070F2;color:#fff;border-color:#0070F2':''}">Show only selected</button>` : ''}
+      ${state.keepSelected && state.selectedServices.size > 0 ? `<button class="btn btn-secondary btn-sm" onclick="window.toggleShowOnlySelected()" style="white-space:nowrap${state.showOnlySelected?';background:#0070F2;color:#fff;border-color:#0070F2':''}">Show selected</button>` : ''}
       <span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Export to:</span>
       <button class="btn btn-primary btn-sm" onclick="openExcelSettings()" title="Export to Excel" style="display:inline-flex;align-items:center;gap:5px">
         <img src="excel.svg" style="height:18px;width:auto" alt="" />${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
@@ -572,7 +575,7 @@ function renderCatalogResults() {
       <tbody>
         ${(() => {
           let svcs = (state.showOnlySelected && state.keepSelected && state.selectedServices.size > 0)
-            ? state.filteredServices.filter(s => state.selectedServices.has(s.code))
+            ? [...state.selectedServiceObjects.values()]
             : state.filteredServices.slice(0, 2000);
           if (state.sort.col) {
             const ET_SORT_ORDER = ['Max Success Plan','Advanced Success Plan','Enterprise Support','Embedded Launch Activities','Cloud Prepackaged Services'];
@@ -886,19 +889,30 @@ window.clearFilters = function() {
   state.filteredServices = [];
   state.catalog.hasSearched = false;
   state.selectedServices.clear();
+  state.selectedServiceObjects.clear();
   state.showOnlySelected = false;
   render();
 };
 
 window.clearSelected = function() {
   state.selectedServices.clear();
+  state.selectedServiceObjects.clear();
   state.showOnlySelected = false;
   patchResults();
 };
 
 window.toggleKeepSelected = function(val) {
   state.keepSelected = val;
-  if (!val) state.showOnlySelected = false;
+  if (!val) {
+    state.showOnlySelected = false;
+    // Immediately intersect selection with current filtered results
+    if (state.selectedServices.size > 0) {
+      const resultCodes = new Set(state.filteredServices.map(s => s.code));
+      state.selectedServices.forEach(code => {
+        if (!resultCodes.has(code)) { state.selectedServices.delete(code); state.selectedServiceObjects.delete(code); }
+      });
+    }
+  }
   patchResults();
 };
 
@@ -908,8 +922,14 @@ window.toggleShowOnlySelected = function() {
 };
 
 window.toggleSelect = function(code) {
-  if (state.selectedServices.has(code)) state.selectedServices.delete(code);
-  else state.selectedServices.add(code);
+  if (state.selectedServices.has(code)) {
+    state.selectedServices.delete(code);
+    state.selectedServiceObjects.delete(code);
+  } else {
+    state.selectedServices.add(code);
+    const svc = state.filteredServices.find(s => s.code === code);
+    if (svc) state.selectedServiceObjects.set(code, svc);
+  }
   patchResults();
 };
 
@@ -990,8 +1010,8 @@ window.addIncidentResultsToCart = function() {
 };
 
 window.toggleSelectAll = function(checked) {
-  if (checked) state.filteredServices.forEach(s => state.selectedServices.add(s.code));
-  else state.selectedServices.clear();
+  if (checked) state.filteredServices.forEach(s => { state.selectedServices.add(s.code); state.selectedServiceObjects.set(s.code, s); });
+  else { state.selectedServices.clear(); state.selectedServiceObjects.clear(); }
   patchResults();
 };
 
