@@ -2334,7 +2334,7 @@ function renderAdminPage() {
   })() : '';
 
   const tabContent = subTab === 'permissions'
-    ? `<div class="admin-grid"><div style="grid-column:1/-1">${tabPermLeft}</div><div>${tabPermRight}</div></div>`
+    ? `<div><div>${tabPermLeft}</div><div>${tabPermRight}</div></div>`
     : subTab === 'exportlog'
     ? `<div>${renderExportLogPage()}</div>`
     : `<div class="admin-grid"><div>${tabVisitLeft}</div><div>${tabVisitRight}</div></div>`;
