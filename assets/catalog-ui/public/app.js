@@ -632,10 +632,10 @@ function renderCatalogResults() {
       </button>
     </div>
     ${state.pptx.error ? `<div class="error-strip" style="margin-bottom:0.5rem">⚠ ${state.pptx.error}</div>` : ''}
-    <table class="service-table">
+    <table class="service-table" style="${gran ? 'table-layout:fixed;width:100%' : ''}">
       <thead>
         <tr>
-          <th style="width:2.5rem"><input type="checkbox" title="Select all / deselect all"
+          <th style="${gran ? 'width:5%' : 'width:2.5rem'}"><input type="checkbox" title="Select all / deselect all"
             ${state.filteredServices.length > 0 && (() => {
               if (gran) {
                 const rows = buildGranularRows(state.filteredServices, bsCode);
@@ -644,7 +644,7 @@ function renderCatalogResults() {
               return state.filteredServices.every(s => state.selectedServices.has(s.code));
             })() ? 'checked' : ''}
             onchange="toggleSelectAll(this.checked)" /></th>
-          <th style="cursor:default;user-select:none">
+          <th style="cursor:default;user-select:none${gran ? ';width:30%' : ''}">
             <div style="display:flex;align-items:center;gap:0.5rem">
               ${bsSelected ? `
               <div class="mode-switch" style="margin-bottom:0" onclick="event.stopPropagation()">
@@ -654,8 +654,8 @@ function renderCatalogResults() {
               <span style="cursor:pointer" onclick="toggleSort('name')">Service Name ${state.sort.col==='name' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}</span>
             </div>
           </th>
-          ${gran ? `<th style="width:22%;white-space:nowrap;font-size:0.78rem">Business Scenario / Module</th>` : ''}
-          <th style="cursor:default;user-select:none;width:30%">
+          ${gran ? `<th style="width:30%;white-space:nowrap;font-size:0.78rem">Business Scenario / Module</th>` : ''}
+          <th style="cursor:default;user-select:none;width:${gran ? '20%' : '30%'}">
             <div style="display:flex;align-items:center;gap:0.5rem">
               <div class="mode-switch" onclick="event.stopPropagation()">
                 <button class="${state.filters.etLabelType !== 'service' ? 'active' : ''}" onclick="updateFilter('etLabelType','engagement')">Engagement</button>
@@ -664,7 +664,7 @@ function renderCatalogResults() {
               <span style="cursor:pointer" onclick="toggleSort('et')">Type ${state.sort.col==='et' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}</span>
             </div>
           </th>
-          ${showEffort ? `<th style="width:8rem;white-space:nowrap">Typical Effort</th>` : ''}
+          ${showEffort ? `<th style="width:${gran ? '15%' : '8rem'};white-space:nowrap">Typical Effort</th>` : ''}
         </tr>
       </thead>
       <tbody>
@@ -710,9 +710,10 @@ function renderCatalogResults() {
           })();
           const bsModLabel = gran ? (() => {
             const bsName = row._bsCode ? ((state.catalog.bsMap || {})[row._bsCode] || row._bsCode) : null;
-            const modName = row._moduleCode ? ((state.catalog.moduleMap || {})[row._moduleCode] || row._moduleCode) : null;
+            const modNameRaw = row._moduleCode ? ((state.catalog.moduleMap || {})[row._moduleCode] || row._moduleCode) : null;
+            const modName = modNameRaw && modNameRaw.includes(' // ') ? modNameRaw.split(' // ').slice(1).join(' // ') : modNameRaw;
             if (!bsName) return '<span style="color:#8696A9;font-size:0.78rem">General</span>';
-            return `<span style="font-size:0.78rem;color:#1D2D3E">${bsName}${modName ? `<br><span style="color:#556B82">${modName}</span>` : ''}</span>`;
+            return `<span style="font-size:0.78rem;color:#1D2D3E;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block" title="${bsName}">${bsName}</span>${modName ? `<span style="color:#556B82;font-size:0.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block" title="${modName}">${modName}</span>` : ''}`;
           })() : '';
           const safeKey = selKey.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
           return `
@@ -723,7 +724,7 @@ function renderCatalogResults() {
                 style="color:#0070F2;text-decoration:none">${displayName}</a>
               ${subName ? `<div style="font-size:0.75rem;color:#6a6a6a">${subName}</div>` : ''}
             </td>
-            ${gran ? `<td>${bsModLabel}</td>` : ''}
+            ${gran ? `<td style="overflow:hidden;max-width:0">${bsModLabel}</td>` : ''}
             <td>${engagementBadge(svc.engagementType)}</td>
             ${showEffort ? `<td style="font-size:0.8rem;color:#556B82">${effortDays || '—'}</td>` : ''}
           </tr>`;
