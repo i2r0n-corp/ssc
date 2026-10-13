@@ -24,6 +24,8 @@ let state = {
   filtersExpanded: false,
   debug: { bsCode: '', module: '', serviceName: '', status: '', rows: [], totals: null, loading: false, error: null, selectedRow: null },
   selectedServices: new Set(),
+  keepSelected: true,
+  showOnlySelected: false,
   serviceDetail: null,
   incident: { file: null, results: [], loading: false, error: null, selectedCodes: new Set() },
   pptx: { template: 'short-description', generating: false, error: null, downloadUrl: null },
@@ -186,6 +188,11 @@ async function applyFilters() {
 
     const data = await apiFetch(url);
     state.filteredServices = data.services || [];
+    // When keepSelected is OFF, drop selections no longer in results
+    if (!state.keepSelected && state.selectedServices.size > 0) {
+      const resultCodes = new Set(state.filteredServices.map(s => s.code));
+      state.selectedServices.forEach(code => { if (!resultCodes.has(code)) state.selectedServices.delete(code); });
+    }
   } catch (e) {
     state.filteredServices = [];
   }
@@ -514,6 +521,12 @@ function renderCatalogResults() {
         ${state.selectedServices.size > 0 ? `<span style="font-size:0.8rem;color:#6a6a6a"> — <strong>${state.selectedServices.size} selected</strong></span>` : ''}
         ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="margin-left:0.75rem;color:#155724;font-weight:600">Successfully downloaded</span>` : ''}
       </span>
+      <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:#556;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" ${state.keepSelected?'checked':''} onchange="window.toggleKeepSelected(this.checked)" style="cursor:pointer" />
+        Keep selected
+      </label>
+      ${state.selectedServices.size > 0 ? `<button class="btn btn-secondary btn-sm" onclick="window.clearSelected()" style="white-space:nowrap">Clear selected</button>` : ''}
+      ${state.keepSelected && state.selectedServices.size > 0 ? `<button class="btn btn-secondary btn-sm ${state.showOnlySelected?'active':''}" onclick="window.toggleShowOnlySelected()" style="white-space:nowrap${state.showOnlySelected?';background:#0070F2;color:#fff;border-color:#0070F2':''}">Show only selected</button>` : ''}
       <span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Export to:</span>
       <button class="btn btn-primary btn-sm" onclick="openExcelSettings()" title="Export to Excel" style="display:inline-flex;align-items:center;gap:5px">
         <img src="excel.svg" style="height:18px;width:auto" alt="" />${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
@@ -558,7 +571,9 @@ function renderCatalogResults() {
       </thead>
       <tbody>
         ${(() => {
-          let svcs = state.filteredServices.slice(0, 2000);
+          let svcs = (state.showOnlySelected && state.keepSelected && state.selectedServices.size > 0)
+            ? state.filteredServices.filter(s => state.selectedServices.has(s.code))
+            : state.filteredServices.slice(0, 2000);
           if (state.sort.col) {
             const ET_SORT_ORDER = ['Max Success Plan','Advanced Success Plan','Enterprise Support','Embedded Launch Activities','Cloud Prepackaged Services'];
             svcs = [...svcs].sort((a, b) => {
@@ -870,7 +885,26 @@ window.clearFilters = function() {
   state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', maxFocusTopics: [], maxFocusTopicsMode: 'merge', deckName: '', namingType: '', etLabelType: 'engagement' };
   state.filteredServices = [];
   state.catalog.hasSearched = false;
+  state.selectedServices.clear();
+  state.showOnlySelected = false;
   render();
+};
+
+window.clearSelected = function() {
+  state.selectedServices.clear();
+  state.showOnlySelected = false;
+  patchResults();
+};
+
+window.toggleKeepSelected = function(val) {
+  state.keepSelected = val;
+  if (!val) state.showOnlySelected = false;
+  patchResults();
+};
+
+window.toggleShowOnlySelected = function() {
+  state.showOnlySelected = !state.showOnlySelected;
+  patchResults();
 };
 
 window.toggleSelect = function(code) {
@@ -2061,35 +2095,6 @@ function renderAdminPage() {
   } else {
     window._adminChartData = null;
   }
-
-  // Chart init script — runs after render via requestAnimationFrame
-  const chartScript = subTab === 'visitors' ? `
-    (function() {
-      if (typeof Chart === 'undefined') return;
-      const COLORS = ['#0070F2','#1D6FA4','#5BA4CF','#85C1E9','#AED6F1','#D6EAF8','#2ECC71','#27AE60','#F39C12','#E74C3C'];
-      function mkChart(id, type, labels, data, label, color) {
-        const el = document.getElementById(id);
-        if (!el) return;
-        if (el._chartInst) { el._chartInst.destroy(); }
-        el._chartInst = new Chart(el, {
-          type,
-          data: {
-            labels,
-            datasets: [{ label, data, backgroundColor: type==='bar'?(color||'#0070F2'):COLORS, borderColor: type==='bar'?(color||'#0070F2'):'#fff', borderWidth: type==='bar'?0:2 }]
-          },
-          options: {
-            responsive: true,
-            plugins: { legend: { display: type!=='bar' } },
-            scales: type==='bar' ? { y: { beginAtZero:true, ticks:{ precision:0 } } } : undefined
-          }
-        });
-      }
-      requestAnimationFrame(function() {
-        mkChart('${chartId1}','bar',${JSON.stringify(dayLabels)},${JSON.stringify(dayData)},'Visits','#0070F2');
-        mkChart('${chartId2}','bar',${JSON.stringify(pageLabels)},${JSON.stringify(pageData)},'Pages');
-        mkChart('${chartId3}','bar',${JSON.stringify(userLabels)},${JSON.stringify(userData)},'Visits','#1D6FA4');
-      });
-    })();` : '';   // chartScript kept for reference but not injected as <script>
 
   // ── Popups ───────────────────────────────────────────────────────────────────
   const mcpLogDetailPopup = selectedMcpLog ? (() => {
