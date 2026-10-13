@@ -324,8 +324,8 @@ function renderSelectionControls() {
     return `${pills.join('')}<span style="font-size:0.8rem;color:#6a6a6a">overall: <strong>${total}</strong></span>${selInfo}`;
   })();
 
-  return `<div id="sel-controls-strip" style="padding:0.5rem 1rem 0.75rem;display:flex;flex-direction:column;gap:0.4rem">
-    <div style="display:flex;align-items:center;width:100%;gap:0.5rem">
+  return `<div id="sel-controls-strip" style="padding:0.5rem 1rem 0.75rem;display:flex;flex-direction:column;gap:0.4rem;width:100%">
+    <div style="display:flex;align-items:center;width:100%;gap:0.5rem;flex-wrap:wrap">
       <span style="flex:1;display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;min-width:0">${countHtml}</span>
       <span style="display:flex;align-items:center;gap:0.75rem;flex-shrink:0;flex-wrap:wrap">
         <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:${!state.keepSelected?'#8696A9':'#556'};cursor:pointer;white-space:nowrap">
@@ -476,7 +476,7 @@ function renderCatalogFilters() {
       </button>
 
       <!-- Section 3 header: line + collapse arrow flush right -->
-      <div style="display:flex;align-items:center;padding:0 1rem 0 1rem">
+      <div style="display:flex;align-items:center;padding:0 1rem;width:100%">
         <div style="flex:1;height:1px;background:#e0e0e0"></div>
         <button onclick="window.toggleSec3Collapsed()" style="background:none;border:none;cursor:pointer;padding:2px 0 2px 6px;font-size:0.75rem;color:#8696A9;display:inline-flex;align-items:center;line-height:1">
           ${state.sec3Collapsed ? '▶' : '▼'}
