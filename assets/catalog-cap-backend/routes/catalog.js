@@ -85,7 +85,11 @@ router.get('/searchServices', (req, res) => {
         params.push(businessScenario); pIdx++;
         bsJoin = `LEFT JOIN catalog_bs_naming bn ON bn.service_code = s.code AND bn.bs_code = $${pIdx - 1}`;
       }
-      let sql = `SELECT s.*, ${businessScenario ? 'bn.deck_name, bn.bs_code AS bn_bs_code' : 'NULL::text AS deck_name, NULL::text AS bn_bs_code'} FROM catalog_services s ${bsJoin} WHERE s.service_object NOT IN ('Business Scenario', 'Business Scenario module') AND s.name IS NOT NULL`;
+      // Subquery for module codes within the filtered BS (for granularity feature)
+      const bsModSubq = businessScenario
+        ? `, ARRAY(SELECT hm.parent_code FROM catalog_hierarchy hm JOIN catalog_hierarchy h1b ON h1b.child_code = hm.parent_code WHERE h1b.parent_code = $1 AND hm.child_code = s.code) AS bs_module_codes`
+        : `, NULL::text[] AS bs_module_codes`;
+      let sql = `SELECT s.*, ${businessScenario ? 'bn.deck_name, bn.bs_code AS bn_bs_code' : 'NULL::text AS deck_name, NULL::text AS bn_bs_code'}${bsModSubq} FROM catalog_services s ${bsJoin} WHERE s.service_object NOT IN ('Business Scenario', 'Business Scenario module') AND s.name IS NOT NULL`;
 
       if (query) {
         params.push(`%${query.toLowerCase()}%`);
@@ -184,6 +188,9 @@ router.get('/searchServices', (req, res) => {
         if (row.deck_name && row.bn_bs_code) {
           if (!svc.business_scenario_naming) svc.business_scenario_naming = {};
           svc.business_scenario_naming[row.bn_bs_code] = row.deck_name;
+        }
+        if (row.bs_module_codes && row.bs_module_codes.length > 0) {
+          svc.bs_module_codes = row.bs_module_codes;
         }
         return svc;
       });
@@ -334,7 +341,11 @@ router.get('/filterServices', async (req, res) => {
         params.push(businessScenario); pIdx++;
         bsJoin = `LEFT JOIN catalog_bs_naming bn ON bn.service_code = s.code AND bn.bs_code = $${pIdx - 1}`;
       }
-      let sql = `SELECT s.*, ${businessScenario ? 'bn.deck_name, bn.bs_code AS bn_bs_code' : 'NULL::text AS deck_name, NULL::text AS bn_bs_code'} FROM catalog_services s ${bsJoin} WHERE s.service_object NOT IN ('Business Scenario', 'Business Scenario module') AND s.name IS NOT NULL`;
+      // Subquery for module codes within the filtered BS (for granularity feature)
+      const bsModSubq = businessScenario
+        ? `, ARRAY(SELECT hm.parent_code FROM catalog_hierarchy hm JOIN catalog_hierarchy h1b ON h1b.child_code = hm.parent_code WHERE h1b.parent_code = $1 AND hm.child_code = s.code) AS bs_module_codes`
+        : `, NULL::text[] AS bs_module_codes`;
+      let sql = `SELECT s.*, ${businessScenario ? 'bn.deck_name, bn.bs_code AS bn_bs_code' : 'NULL::text AS deck_name, NULL::text AS bn_bs_code'}${bsModSubq} FROM catalog_services s ${bsJoin} WHERE s.service_object NOT IN ('Business Scenario', 'Business Scenario module') AND s.name IS NOT NULL`;
 
       if (engagementType) {
         params.push(engagementType);
@@ -427,6 +438,9 @@ router.get('/filterServices', async (req, res) => {
         if (row.deck_name && row.bn_bs_code) {
           if (!svc.business_scenario_naming) svc.business_scenario_naming = {};
           svc.business_scenario_naming[row.bn_bs_code] = row.deck_name;
+        }
+        if (row.bs_module_codes && row.bs_module_codes.length > 0) {
+          svc.bs_module_codes = row.bs_module_codes;
         }
         return svc;
       });

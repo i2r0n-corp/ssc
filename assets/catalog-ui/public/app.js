@@ -27,6 +27,7 @@ let state = {
   selectedServiceObjects: new Map(),
   keepSelected: true,
   showOnlySelected: false,
+  moduleGranularity: false,
   serviceDetail: null,
   incident: { file: null, results: [], loading: false, error: null, selectedCodes: new Set() },
   pptx: { template: 'short-description', generating: false, error: null, downloadUrl: null },
@@ -191,10 +192,29 @@ async function applyFilters() {
     state.filteredServices = data.services || [];
     // When keepSelected is OFF, drop selections no longer in results
     if (!state.keepSelected && state.selectedServices.size > 0) {
-      const resultCodes = new Set(state.filteredServices.map(s => s.code));
-      state.selectedServices.forEach(code => {
-        if (!resultCodes.has(code)) { state.selectedServices.delete(code); state.selectedServiceObjects.delete(code); }
-      });
+      if (state.moduleGranularity) {
+        // In granularity mode, keys are code||bsCode||moduleCode — keep only those matching current results
+        const validKeys = new Set();
+        const newBsCode = state.filters.businessScenario || null;
+        for (const svc of state.filteredServices) {
+          const mods = svc.bs_module_codes || [];
+          if (newBsCode && mods.length > 0) {
+            mods.forEach(mc => validKeys.add(`${svc.code}||${newBsCode}||${mc}`));
+          } else if (newBsCode) {
+            validKeys.add(`${svc.code}||${newBsCode}||`);
+          } else {
+            validKeys.add(`${svc.code}||null||null`);
+          }
+        }
+        state.selectedServices.forEach(key => {
+          if (!validKeys.has(key)) { state.selectedServices.delete(key); state.selectedServiceObjects.delete(key); }
+        });
+      } else {
+        const resultCodes = new Set(state.filteredServices.map(s => s.code));
+        state.selectedServices.forEach(code => {
+          if (!resultCodes.has(code)) { state.selectedServices.delete(code); state.selectedServiceObjects.delete(code); }
+        });
+      }
     }
   } catch (e) {
     state.filteredServices = [];
@@ -486,12 +506,44 @@ function renderCatalogPage() {
     <div id="catalog-results">${renderCatalogResults()}</div>`;
 }
 
+// Build rows array for granular mode: one row per (svc, moduleCode) combination within filtered BS
+function buildGranularRows(svcs, bsCode) {
+  const rows = [];
+  for (const svc of svcs) {
+    const mods = svc.bs_module_codes || [];
+    if (bsCode && mods.length > 0) {
+      for (const mc of mods) {
+        const key = `${svc.code}||${bsCode}||${mc}`;
+        rows.push({ ...svc, _selKey: key, _bsCode: bsCode, _moduleCode: mc });
+      }
+    } else if (bsCode) {
+      // BS active but service has no module data — put it in General
+      const key = `${svc.code}||${bsCode}||`;
+      rows.push({ ...svc, _selKey: key, _bsCode: bsCode, _moduleCode: null });
+    } else {
+      const key = `${svc.code}||null||null`;
+      rows.push({ ...svc, _selKey: key, _bsCode: null, _moduleCode: null });
+    }
+  }
+  return rows;
+}
+
 function renderCatalogResults() {
   const { loading } = state.catalog;
   const hasSearched = state.catalog.hasSearched;
   const et = state.filters.engagementType;
-  const bsSelected = !!state.filters.businessScenario && et !== 'Max Success Plan';
+  const bsCode = state.filters.businessScenario || null;
+  const bsSelected = !!bsCode && et !== 'Max Success Plan';
   const showEffort = !et || et === 'Max Success Plan';
+  const gran = state.moduleGranularity && state.keepSelected;
+  const selCount = state.selectedServices.size;
+  const uniqueSelectedCodes = gran
+    ? new Set([...state.selectedServiceObjects.keys()].map(k => k.split('||')[0])).size
+    : selCount;
+  const selBadge = selCount === 0 ? '' :
+    gran
+      ? `<span style="font-size:0.8rem;color:#6a6a6a"> — <strong>${selCount} selection${selCount!==1?'s':''} across ${uniqueSelectedCodes} service${uniqueSelectedCodes!==1?'s':''}</strong></span>`
+      : `<span style="font-size:0.8rem;color:#6a6a6a"> — <strong>${selCount} selected</strong></span>`;
   return `
     ${loading ? '<div class="loading"><div class="loading-spinner"></div> Loading...</div>' : ''}
     ${!hasSearched && !loading ? `
@@ -521,21 +573,26 @@ function renderCatalogResults() {
           }
           return `${pills.join('')}<span style="font-size:0.8rem;color:#6a6a6a">overall: <strong>${total}</strong></span>`;
         })()}
-        ${state.selectedServices.size > 0 ? `<span style="font-size:0.8rem;color:#6a6a6a"> — <strong>${state.selectedServices.size} selected</strong></span>` : ''}
+        ${selBadge}
         ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="margin-left:0.75rem;color:#155724;font-weight:600">Successfully downloaded</span>` : ''}
       </span>
       <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:#556;cursor:pointer;white-space:nowrap">
         <input type="checkbox" ${state.keepSelected?'checked':''} onchange="window.toggleKeepSelected(this.checked)" style="cursor:pointer" />
         Keep selected
       </label>
-      ${state.selectedServices.size > 0 ? `<button class="btn btn-secondary btn-sm" onclick="window.clearSelected()" style="white-space:nowrap">Clear selected</button>` : ''}
-      ${state.keepSelected && state.selectedServices.size > 0 ? `<button class="btn btn-secondary btn-sm" onclick="window.toggleShowOnlySelected()" style="white-space:nowrap${state.showOnlySelected?';background:#0070F2;color:#fff;border-color:#0070F2':''}">Show selected</button>` : ''}
+      ${state.keepSelected ? `
+      <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:#556;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" ${state.moduleGranularity?'checked':''} onchange="window.toggleModuleGranularity(this.checked)" style="cursor:pointer" />
+        Keep module granularity
+      </label>` : ''}
+      ${selCount > 0 ? `<button class="btn btn-secondary btn-sm" onclick="window.clearSelected()" style="white-space:nowrap">Clear selected</button>` : ''}
+      ${state.keepSelected && selCount > 0 ? `<button class="btn btn-secondary btn-sm" onclick="window.toggleShowOnlySelected()" style="white-space:nowrap${state.showOnlySelected?';background:#0070F2;color:#fff;border-color:#0070F2':''}">Show selected</button>` : ''}
       <span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Export to:</span>
       <button class="btn btn-primary btn-sm" onclick="openExcelSettings()" title="Export to Excel" style="display:inline-flex;align-items:center;gap:5px">
-        <img src="excel.svg" style="height:18px;width:auto" alt="" />${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
+        <img src="excel.svg" style="height:18px;width:auto" alt="" />${selCount > 0 ? `(${selCount})` : '(all)'}
       </button>
       <button class="btn btn-primary btn-sm" onclick="openPptxListSettings()" title="Service list PPTX (template-based)" style="display:inline-flex;align-items:center;gap:5px">
-        <img src="pptx.svg" style="height:18px;width:auto" alt="" />${state.selectedServices.size > 0 ? `(${state.selectedServices.size})` : '(all)'}
+        <img src="pptx.svg" style="height:18px;width:auto" alt="" />${selCount > 0 ? `(${selCount})` : '(all)'}
       </button>
       <div style="display:none">
         <button class="btn btn-primary btn-sm" disabled style="opacity:0.45;cursor:not-allowed">
@@ -548,7 +605,13 @@ function renderCatalogResults() {
       <thead>
         <tr>
           <th style="width:2.5rem"><input type="checkbox" title="Select all / deselect all"
-            ${state.filteredServices.length > 0 && state.filteredServices.every(s => state.selectedServices.has(s.code)) ? 'checked' : ''}
+            ${state.filteredServices.length > 0 && (() => {
+              if (gran) {
+                const rows = buildGranularRows(state.filteredServices, bsCode);
+                return rows.length > 0 && rows.every(r => state.selectedServices.has(r._selKey));
+              }
+              return state.filteredServices.every(s => state.selectedServices.has(s.code));
+            })() ? 'checked' : ''}
             onchange="toggleSelectAll(this.checked)" /></th>
           <th style="cursor:default;user-select:none">
             <div style="display:flex;align-items:center;gap:0.5rem">
@@ -560,6 +623,7 @@ function renderCatalogResults() {
               <span style="cursor:pointer" onclick="toggleSort('name')">Service Name ${state.sort.col==='name' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}</span>
             </div>
           </th>
+          ${gran ? `<th style="width:22%;white-space:nowrap;font-size:0.78rem">Business Scenario / Module</th>` : ''}
           <th style="cursor:default;user-select:none;width:30%">
             <div style="display:flex;align-items:center;gap:0.5rem">
               <div class="mode-switch" onclick="event.stopPropagation()">
@@ -574,12 +638,17 @@ function renderCatalogResults() {
       </thead>
       <tbody>
         ${(() => {
-          let svcs = (state.showOnlySelected && state.keepSelected && state.selectedServices.size > 0)
-            ? [...state.selectedServiceObjects.values()]
-            : state.filteredServices.slice(0, 2000);
-          if (state.sort.col) {
+          let rows;
+          if (state.showOnlySelected && state.keepSelected && selCount > 0) {
+            rows = [...state.selectedServiceObjects.values()];
+          } else if (gran) {
+            rows = buildGranularRows(state.filteredServices.slice(0, 2000), bsCode);
+          } else {
+            rows = state.filteredServices.slice(0, 2000).map(svc => ({ ...svc, _selKey: svc.code, _bsCode: null, _moduleCode: null }));
+          }
+          if (state.sort.col && !gran) {
             const ET_SORT_ORDER = ['Max Success Plan','Advanced Success Plan','Enterprise Support','Embedded Launch Activities','Cloud Prepackaged Services'];
-            svcs = [...svcs].sort((a, b) => {
+            rows = [...rows].sort((a, b) => {
               if (state.sort.col === 'name') {
                 const va = a.name||'', vb = b.name||'';
                 return state.sort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
@@ -591,13 +660,15 @@ function renderCatalogResults() {
               return state.sort.dir === 'asc' ? rankA - rankB : rankB - rankA;
             });
           }
-          return svcs.map(svc => {
-          const useDeck = state.filters.namingType === 'deck' && state.filters.businessScenario;
+          return rows.map(row => {
+          const svc = row;
+          const useDeck = state.filters.namingType === 'deck' && bsCode;
           const bsNaming = svc.business_scenario_naming || svc.businessScenarioNaming || {};
-          const bsCode = state.filters.businessScenario;
           const deckNameVal = useDeck ? (bsNaming[bsCode] || null) : null;
           const displayName = deckNameVal || svc.name;
           const subName     = deckNameVal && deckNameVal !== svc.name ? svc.name : null;
+          const selKey = row._selKey;
+          const isSelected = state.selectedServices.has(selKey);
           const effortDays = (() => {
             if (!showEffort) return null;
             const cf = svc.classificationFeatures || [];
@@ -606,14 +677,22 @@ function renderCatalogResults() {
             const v = Array.isArray(f.value) ? f.value[0] : f.value;
             return v ? `${v} days` : null;
           })();
+          const bsModLabel = gran ? (() => {
+            const bsName = row._bsCode ? ((state.catalog.bsMap || {})[row._bsCode] || row._bsCode) : null;
+            const modName = row._moduleCode ? ((state.catalog.moduleMap || {})[row._moduleCode] || row._moduleCode) : null;
+            if (!bsName) return '<span style="color:#8696A9;font-size:0.78rem">General</span>';
+            return `<span style="font-size:0.78rem;color:#1D2D3E">${bsName}${modName ? `<br><span style="color:#556B82">${modName}</span>` : ''}</span>`;
+          })() : '';
+          const safeKey = selKey.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
           return `
-          <tr class="${state.selectedServices.has(svc.code) ? 'selected' : ''}">
-            <td><input type="checkbox" ${state.selectedServices.has(svc.code)?'checked':''} onchange="toggleSelect('${svc.code}')" /></td>
+          <tr class="${isSelected ? 'selected' : ''}">
+            <td><input type="checkbox" ${isSelected?'checked':''} onchange="toggleSelect('${safeKey}',${gran})" /></td>
             <td>
               <a href="#" onclick="openServiceDetail('${svc.code}');return false"
                 style="color:#0070F2;text-decoration:none">${displayName}</a>
               ${subName ? `<div style="font-size:0.75rem;color:#6a6a6a">${subName}</div>` : ''}
             </td>
+            ${gran ? `<td>${bsModLabel}</td>` : ''}
             <td>${engagementBadge(svc.engagementType)}</td>
             ${showEffort ? `<td style="font-size:0.8rem;color:#556B82">${effortDays || '—'}</td>` : ''}
           </tr>`;
@@ -891,6 +970,7 @@ window.clearFilters = function() {
   state.selectedServices.clear();
   state.selectedServiceObjects.clear();
   state.showOnlySelected = false;
+  state.moduleGranularity = false;
   render();
 };
 
@@ -905,11 +985,13 @@ window.toggleKeepSelected = function(val) {
   state.keepSelected = val;
   if (!val) {
     state.showOnlySelected = false;
-    // Immediately intersect selection with current filtered results
+    state.moduleGranularity = false;
+    // Immediately intersect selection with current filtered results (code-level)
     if (state.selectedServices.size > 0) {
       const resultCodes = new Set(state.filteredServices.map(s => s.code));
-      state.selectedServices.forEach(code => {
-        if (!resultCodes.has(code)) { state.selectedServices.delete(code); state.selectedServiceObjects.delete(code); }
+      state.selectedServices.forEach(key => {
+        const code = key.includes('||') ? key.split('||')[0] : key;
+        if (!resultCodes.has(code)) { state.selectedServices.delete(key); state.selectedServiceObjects.delete(key); }
       });
     }
   }
@@ -921,20 +1003,48 @@ window.toggleShowOnlySelected = function() {
   patchResults();
 };
 
-window.toggleSelect = function(code) {
-  if (state.selectedServices.has(code)) {
-    state.selectedServices.delete(code);
-    state.selectedServiceObjects.delete(code);
+window.toggleModuleGranularity = function(val) {
+  state.moduleGranularity = val;
+  if (!val) {
+    // Switching off granularity — collapse granular keys back to code-level
+    // Keep only one entry per service code (first encountered)
+    const newSel = new Set();
+    const newObjs = new Map();
+    state.selectedServiceObjects.forEach((rowObj, key) => {
+      const code = key.includes('||') ? key.split('||')[0] : key;
+      if (!newSel.has(code)) {
+        newSel.add(code);
+        newObjs.set(code, { ...rowObj, _selKey: code, _bsCode: null, _moduleCode: null });
+      }
+    });
+    state.selectedServices = newSel;
+    state.selectedServiceObjects = newObjs;
+  }
+  patchResults();
+};
+
+window.toggleSelect = function(selKey, isGranular) {
+  if (state.selectedServices.has(selKey)) {
+    state.selectedServices.delete(selKey);
+    state.selectedServiceObjects.delete(selKey);
   } else {
-    state.selectedServices.add(code);
-    const svc = state.filteredServices.find(s => s.code === code);
-    if (svc) state.selectedServiceObjects.set(code, svc);
+    state.selectedServices.add(selKey);
+    if (isGranular) {
+      // selKey = code||bsCode||moduleCode — find matching row from filteredServices
+      const [code, bsCode, moduleCode] = selKey.split('||');
+      const svc = state.filteredServices.find(s => s.code === code);
+      if (svc) state.selectedServiceObjects.set(selKey, { ...svc, _selKey: selKey, _bsCode: bsCode || null, _moduleCode: moduleCode || null });
+    } else {
+      const svc = state.filteredServices.find(s => s.code === selKey);
+      if (svc) state.selectedServiceObjects.set(selKey, { ...svc, _selKey: selKey, _bsCode: null, _moduleCode: null });
+    }
   }
   patchResults();
 };
 
 window.addSelectedToCart = function() {
-  state.selectedServices.forEach(code => {
+  const uniqueCodes = [...new Set([...state.selectedServices].map(k => k.includes('||') ? k.split('||')[0] : k))];
+  uniqueCodes.forEach(code => {
     if (!state.exportCart.includes(code)) state.exportCart.push(code);
   });
   state.selectedServices.clear();
@@ -1010,8 +1120,25 @@ window.addIncidentResultsToCart = function() {
 };
 
 window.toggleSelectAll = function(checked) {
-  if (checked) state.filteredServices.forEach(s => { state.selectedServices.add(s.code); state.selectedServiceObjects.set(s.code, s); });
-  else { state.selectedServices.clear(); state.selectedServiceObjects.clear(); }
+  const gran = state.moduleGranularity && state.keepSelected;
+  const bsCode = state.filters.businessScenario || null;
+  if (checked) {
+    if (gran) {
+      const rows = buildGranularRows(state.filteredServices, bsCode);
+      rows.forEach(r => {
+        state.selectedServices.add(r._selKey);
+        state.selectedServiceObjects.set(r._selKey, r);
+      });
+    } else {
+      state.filteredServices.forEach(s => {
+        state.selectedServices.add(s.code);
+        state.selectedServiceObjects.set(s.code, { ...s, _selKey: s.code, _bsCode: null, _moduleCode: null });
+      });
+    }
+  } else {
+    state.selectedServices.clear();
+    state.selectedServiceObjects.clear();
+  }
   patchResults();
 };
 
@@ -1028,7 +1155,7 @@ window.generatePptx = async function(template) {
   if (yfEl) state.pptxListSettings.yearFrom = yfEl.value.replace(/\D/g,'').slice(0,4);
   if (ytEl) state.pptxListSettings.yearTo   = ytEl.value.replace(/\D/g,'').slice(0,4);
   const codes = state.selectedServices.size > 0
-    ? [...state.selectedServices]
+    ? [...new Set([...state.selectedServices].map(k => k.includes('||') ? k.split('||')[0] : k))]
     : state.filteredServices.map(s => s.code);
   if (codes.length === 0) { alert('No services to export.'); return; }
   const isListTemplate = template === 'list';
@@ -1319,8 +1446,11 @@ function colCheck(key, label, checked, disabled, title) {
 
 window.exportExcel = async function() {
   const s = state.excelSettings;
-  const svcs = state.selectedServices.size > 0
-    ? state.filteredServices.filter(x => state.selectedServices.has(x.code))
+  const selectedCodes = state.selectedServices.size > 0
+    ? new Set([...state.selectedServices].map(k => k.includes('||') ? k.split('||')[0] : k))
+    : null;
+  const svcs = selectedCodes
+    ? state.filteredServices.filter(x => selectedCodes.has(x.code))
     : state.filteredServices;
   if (svcs.length === 0) { alert('No services to export.'); return; }
   state.excelSettings.open = false; render();
