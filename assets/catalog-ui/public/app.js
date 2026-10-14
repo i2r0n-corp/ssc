@@ -2082,9 +2082,9 @@ function renderAdminPage() {
       <div style="overflow-x:auto">
         <table class="service-table" style="font-size:0.8rem;width:100%;table-layout:fixed">
           <thead><tr>
-            <th style="width:30%">User</th>
-            ${TABS.map(t => `<th style="text-align:center;width:55px;font-size:0.72rem">${TAB_LABELS[t]}</th>`).join('')}
-            <th style="width:36px"></th>
+            <th style="width:40%">User</th>
+            ${TABS.map(t => `<th style="text-align:center;width:13%;font-size:0.72rem">${TAB_LABELS[t]}</th>`).join('')}
+            <th style="width:8%"></th>
           </tr></thead>
           <tbody>
             ${users.map(u => `<tr>
