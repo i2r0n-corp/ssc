@@ -1899,7 +1899,6 @@ function renderExportLogPage() {
 
   return `<div class="el-grid">${leftCol}${rightCol}</div>`;
 }
-}
 
 function renderExportLogDetailModal() {
   const r = state.exportLog.selectedRow;
