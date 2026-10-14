@@ -53,7 +53,7 @@ let state = {
   exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null, sortCol: 'logged_at', sortDir: 'desc' },
   currentUser: null,
   myPermissions: { catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false },
-  admin: { subTab: 'permissions', users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, mcpClosedCollapsed: false, usersCollapsed: false, visitorCollapsed: false, mcpLog: [], mcpLogLoading: false, mcpLogError: null, mcpLogCollapsed: false, selectedMcpLog: null, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null, chart1Collapsed: false, chart2Collapsed: false, chart3Collapsed: false },
+  admin: { subTab: 'permissions', users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, mcpClosedCollapsed: false, usersCollapsed: false, visitorCollapsed: false, mcpLog: [], mcpLogLoading: false, mcpLogError: null, mcpLogCollapsed: false, selectedMcpLog: null, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null, chart1Collapsed: false, chart2Collapsed: false, chart3Collapsed: false, elChart1Collapsed: false, elChart2Collapsed: false, elChart3Collapsed: false },
   mcpModal: { open: false, sent: false, sending: false, error: null },
   accessDeniedModal: false,
   backendDown: false,
@@ -1802,21 +1802,17 @@ window.sortExportLog = function(col) {
 
 function renderExportLogPage() {
   const { rows, loading, error, loaded, sortCol, sortDir } = state.exportLog;
+  const { elChart1Collapsed, elChart2Collapsed, elChart3Collapsed } = state.admin;
   if (loading) return `<div class="card"><div style="color:#6a6a6a;padding:2rem;text-align:center">Loading export log…</div></div>`;
   if (error) return `<div class="card"><div style="color:#dc3545;padding:1rem">Error: ${error}</div></div>`;
   if (!loaded) return `<div class="card"><div style="padding:1rem;color:#6a6a6a">No data yet.</div></div>`;
   if (rows.length === 0) return `<div class="card"><div style="padding:1rem;color:#6a6a6a">No export events recorded yet.</div></div>`;
 
-  const fmt = iso => {
-    const d = new Date(iso);
-    return d.toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' });
-  };
+  const fmt = iso => new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit' });
 
   const sorted = [...rows].sort((a, b) => {
     const av = a[sortCol] ?? '', bv = b[sortCol] ?? '';
-    const cmp = (typeof av === 'number' && typeof bv === 'number')
-      ? av - bv
-      : String(av).localeCompare(String(bv));
+    const cmp = (typeof av === 'number' && typeof bv === 'number') ? av - bv : String(av).localeCompare(String(bv));
     return sortDir === 'asc' ? cmp : -cmp;
   });
 
@@ -1824,37 +1820,85 @@ function renderExportLogPage() {
   const th = (col, label, extra='') =>
     `<th style="cursor:pointer;user-select:none;white-space:nowrap${extra?';'+extra:''}" onclick="window.sortExportLog('${col}')">${label}<span style="opacity:0.5;font-size:0.7em">${arrow(col)}</span></th>`;
 
-  return `
-  <div class="card" style="overflow-x:auto">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
-      <h3 style="margin:0;font-size:1rem">Export Log <span style="font-weight:400;color:#6a6a6a;font-size:0.875rem">(last 500 events)</span></h3>
-      <button class="btn btn-secondary btn-sm" onclick="loadExportLog()">↻ Refresh</button>
+  const display = sorted.slice(0, 200);
+
+  // ── Chart data ───────────────────────────────────────────────────────────────
+  // Chart 1: exports per day (last 30 days)
+  const dayCounts = {};
+  rows.forEach(r => {
+    const d = r.logged_at ? r.logged_at.slice(0,10) : null;
+    if (d) dayCounts[d] = (dayCounts[d] || 0) + 1;
+  });
+  const elDayLabels = Object.keys(dayCounts).sort().slice(-30);
+  const elDayData   = elDayLabels.map(d => dayCounts[d]);
+
+  // Chart 2: top 10 users
+  const userCounts = {};
+  rows.forEach(r => { const u = r.logon_name || r.user_id || '?'; userCounts[u] = (userCounts[u] || 0) + 1; });
+  const elUserEntries = Object.entries(userCounts).sort((a,b) => b[1]-a[1]).slice(0,10);
+  const elUserLabels = elUserEntries.map(([u]) => u.includes('@') ? u.split('@')[0] : u);
+  const elUserData   = elUserEntries.map(([,n]) => n);
+
+  // Chart 3: by type
+  const typeCounts = {};
+  rows.forEach(r => { const t = r.export_type || 'Unknown'; typeCounts[t] = (typeCounts[t] || 0) + 1; });
+  const elTypeLabels = Object.keys(typeCounts);
+  const elTypeData   = elTypeLabels.map(t => typeCounts[t]);
+
+  window._elChartData = { elDayLabels, elDayData, elChart1Collapsed, elUserLabels, elUserData, elChart2Collapsed, elTypeLabels, elTypeData, elChart3Collapsed };
+
+  const collapseBtn = (fn, collapsed) =>
+    `<button class="btn btn-secondary btn-sm" onclick="window.${fn}()"><img src="/arrow.svg" style="width:12px;height:12px;transform:${collapsed?'rotate(-90deg)':'rotate(0deg)'}" /></button>`;
+
+  const rightCol = `
+    <div class="card" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${elChart1Collapsed?'0':'1rem'}">
+        <h3 style="margin:0;font-size:1rem">Exports per day (last 30 days)</h3>
+        ${collapseBtn('adminToggleElChart1', elChart1Collapsed)}
+      </div>
+      ${!elChart1Collapsed ? `<canvas id="el-chart-1" height="180"></canvas>` : ''}
     </div>
-    <table class="service-table" style="font-size:0.8rem">
-      <thead>
-        <tr>
+    <div class="card" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${elChart2Collapsed?'0':'1rem'}">
+        <h3 style="margin:0;font-size:1rem">Top 10 users by exports</h3>
+        ${collapseBtn('adminToggleElChart2', elChart2Collapsed)}
+      </div>
+      ${!elChart2Collapsed ? `<canvas id="el-chart-2" height="220"></canvas>` : ''}
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${elChart3Collapsed?'0':'1rem'}">
+        <h3 style="margin:0;font-size:1rem">Exports by type</h3>
+        ${collapseBtn('adminToggleElChart3', elChart3Collapsed)}
+      </div>
+      ${!elChart3Collapsed ? `<canvas id="el-chart-3" height="200"></canvas>` : ''}
+    </div>`;
+
+  const leftCol = `
+    <div class="card" style="overflow-x:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <h3 style="margin:0;font-size:1rem">Export Log <span style="font-weight:400;color:#6a6a6a;font-size:0.875rem">(last 200 events)</span></h3>
+        <button class="btn btn-secondary btn-sm" onclick="loadExportLog()">↻ Refresh</button>
+      </div>
+      <table class="service-table" style="font-size:0.8rem">
+        <thead><tr>
           ${th('logged_at',    'Date / Time')}
           ${th('logon_name',   'User')}
           ${th('export_type',  'Type')}
           ${th('service_count','#', 'text-align:center')}
-          ${th('filter_bs',    'BS')}
-          ${th('filter_et',    'ET')}
-          ${th('filter_query', 'Query')}
-        </tr>
-      </thead>
-      <tbody>
-        ${sorted.map((r,i) => `<tr onclick="window.openExportLogDetail(${rows.indexOf(r)})" style="cursor:pointer">
-          <td style="white-space:nowrap">${fmt(r.logged_at)}</td>
-          <td style="white-space:nowrap">${fmtUser(r.logon_name || r.user_id)}</td>
-          <td>${r.export_type}</td>
-          <td style="text-align:center">${r.service_count ?? '—'}</td>
-          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.filter_bs||''}">${r.filter_bs || '—'}</td>
-          <td style="white-space:nowrap">${r.filter_et || '—'}</td>
-          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.filter_query||''}">${r.filter_query || '—'}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>
-  </div>`;
+        </tr></thead>
+        <tbody>
+          ${display.map(r => `<tr onclick="window.openExportLogDetail(${rows.indexOf(r)})" style="cursor:pointer">
+            <td style="white-space:nowrap">${fmt(r.logged_at)}</td>
+            <td style="white-space:nowrap">${fmtUser(r.logon_name || r.user_id)}</td>
+            <td>${r.export_type}</td>
+            <td style="text-align:center">${r.service_count ?? '—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+
+  return `<div class="el-grid">${leftCol}${rightCol}</div>`;
+}
 }
 
 function renderExportLogDetailModal() {
@@ -1959,6 +2003,9 @@ window.adminSetSubTab        = function(t) { state.admin.subTab = t; render(); }
 window.adminToggleChart1     = function() { state.admin.chart1Collapsed = !state.admin.chart1Collapsed; render(); };
 window.adminToggleChart2     = function() { state.admin.chart2Collapsed = !state.admin.chart2Collapsed; render(); };
 window.adminToggleChart3     = function() { state.admin.chart3Collapsed = !state.admin.chart3Collapsed; render(); };
+window.adminToggleElChart1   = function() { state.admin.elChart1Collapsed = !state.admin.elChart1Collapsed; render(); };
+window.adminToggleElChart2   = function() { state.admin.elChart2Collapsed = !state.admin.elChart2Collapsed; render(); };
+window.adminToggleElChart3   = function() { state.admin.elChart3Collapsed = !state.admin.elChart3Collapsed; render(); };
 window.adminSelectMcpLog     = function(id) { state.admin.selectedMcpLog = state.admin.selectedMcpLog === id ? null : id; render(); };
 window.adminCloseMcpLog      = function() { state.admin.selectedMcpLog = null; render(); };
 window.adminSelectVisitorUser = function(email) {
@@ -2573,6 +2620,37 @@ function render() {
       if (!d.chart1Collapsed) mkChart('chart-visits-per-day', d.dayLabels,  d.dayData,  'Visits', '#0070F2');
       if (!d.chart2Collapsed) mkChart('chart-page-dist',      d.pageLabels, d.pageData, 'Pages',  COLORS);
       if (!d.chart3Collapsed) mkChart('chart-top-users',      d.userLabels, d.userData, 'Visits', '#1D6FA4');
+    });
+  }
+
+  if (window._elChartData) {
+    requestAnimationFrame(() => {
+      const d = window._elChartData;
+      if (!d || typeof Chart === 'undefined') return;
+      const COLORS = ['#0070F2','#1D6FA4','#5BA4CF','#85C1E9','#AED6F1','#D6EAF8','#F39C12','#E74C3C','#2ECC71','#27AE60'];
+      function mkBar(id, labels, data, label, color) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el._chartInst) el._chartInst.destroy();
+        el._chartInst = new Chart(el, {
+          type: 'bar',
+          data: { labels, datasets: [{ label, data, backgroundColor: color, borderWidth: 0 }] },
+          options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+        });
+      }
+      function mkDonut(id, labels, data) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el._chartInst) el._chartInst.destroy();
+        el._chartInst = new Chart(el, {
+          type: 'doughnut',
+          data: { labels, datasets: [{ data, backgroundColor: COLORS, borderWidth: 2 }] },
+          options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+        });
+      }
+      if (!d.elChart1Collapsed) mkBar('el-chart-1', d.elDayLabels,  d.elDayData,  'Exports', '#0070F2');
+      if (!d.elChart2Collapsed) mkBar('el-chart-2', d.elUserLabels, d.elUserData, 'Exports', '#1D6FA4');
+      if (!d.elChart3Collapsed) mkDonut('el-chart-3', d.elTypeLabels, d.elTypeData);
     });
   }
 }
