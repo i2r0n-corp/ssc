@@ -1930,7 +1930,7 @@ function renderExportLogPage() {
       </table>
     </div>`;
 
-  return `<div class="el-grid">${leftCol}${rightCol}</div>`;
+  return `<div class="el-grid"><div>${leftCol}</div><div>${rightCol}</div></div>`;
 }
 
 function renderExportLogDetailModal() {
@@ -2451,6 +2451,9 @@ function renderAdminPage() {
     .admin-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start; }
     .admin-grid > div { min-width: 0; overflow: visible; }
     @media (max-width:900px) { .admin-grid { grid-template-columns:1fr; } }
+    .el-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start; }
+    .el-grid > div { min-width:0; overflow:visible; }
+    @media (max-width:762px) { .el-grid { grid-template-columns:1fr; } }
   </style>
   ${mcpLogDetailPopup}
   ${visitDetailPopup}
@@ -2707,6 +2710,24 @@ function render() {
       if (!d.elChart4Collapsed) {
         const el4 = document.getElementById('el-chart-4');
         if (el4) {
+          window._elDrillInto = function(idx) {
+            const bsLabel = d.elBsLabels[idx];
+            const modData = d.elBsModCounts[bsLabel];
+            if (!modData) return;
+            const modEntries = Object.entries(modData).sort((a,b) => b[1]-a[1]);
+            const modLabels = modEntries.map(([m]) => m);
+            const modVals   = modEntries.map(([,n]) => n);
+            if (el4._chartInst) el4._chartInst.destroy();
+            el4._chartInst = new Chart(el4, {
+              type: 'bar',
+              data: { labels: modLabels, datasets: [{ label: 'Exports', data: modVals, backgroundColor: '#1D6FA4', borderWidth: 0 }] },
+              options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+            });
+            const lbl = document.getElementById('el-chart-4-drill-label');
+            const back = document.getElementById('el-chart-4-back');
+            if (lbl) lbl.textContent = `— ${bsLabel}`;
+            if (back) back.style.display = '';
+          };
           if (el4._chartInst) el4._chartInst.destroy();
           el4._chartInst = new Chart(el4, {
             type: 'bar',
@@ -2715,26 +2736,7 @@ function render() {
               responsive: true,
               plugins: { legend: { display: false } },
               scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-              onClick: (evt, elems) => {
-                if (!elems.length) return;
-                const idx = elems[0].index;
-                const bsLabel = d.elBsLabels[idx];
-                const modData = d.elBsModCounts[bsLabel];
-                if (!modData) return;
-                const modEntries = Object.entries(modData).sort((a,b) => b[1]-a[1]);
-                const modLabels = modEntries.map(([m]) => m);
-                const modVals   = modEntries.map(([,n]) => n);
-                if (el4._chartInst) el4._chartInst.destroy();
-                el4._chartInst = new Chart(el4, {
-                  type: 'bar',
-                  data: { labels: modLabels, datasets: [{ label: 'Exports', data: modVals, backgroundColor: '#1D6FA4', borderWidth: 0 }] },
-                  options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
-                });
-                const lbl = document.getElementById('el-chart-4-drill-label');
-                const back = document.getElementById('el-chart-4-back');
-                if (lbl) lbl.textContent = `— ${bsLabel}`;
-                if (back) back.style.display = '';
-              }
+              onClick: (evt, elems) => { if (elems.length) window._elDrillInto(elems[0].index); }
             }
           });
         }
