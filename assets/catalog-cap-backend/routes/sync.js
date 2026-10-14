@@ -11,6 +11,7 @@
 const router = require('express').Router();
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const snapshot = require('../store/snapshot');
 
 const EXCEL_DIR = process.env.EXCEL_STORE_PATH || path.join(__dirname, '..', 'data', 'excels');
@@ -498,6 +499,12 @@ function _resolveServiceCode(assignment, flatIndex) {
 
 // ── Main enrichment ───────────────────────────────────────────────────────────
 
+function _rowHash(bsCode, crmIds, deckName, moduleName) {
+  const normCrm = (crmIds || '').split(/[,;/\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean).sort().join('|');
+  const input = `${(bsCode||'').toLowerCase()}||${normCrm}||${(deckName||'').trim().toLowerCase()}||${(moduleName||'').trim().toLowerCase()}`;
+  return crypto.createHash('sha256').update(input).digest('hex').slice(0, 16);
+}
+
 async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog) {
   try {
     const { byCode, byName, moduleAssignments } = parseBsNameMapping(excelBuffer, bsCode);
@@ -522,7 +529,7 @@ async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog
       const [modCode, modNote, modSteps] = _resolveModuleCode(asgn.moduleRaw, flatIndex, bsCode);
       if (!modCode) {
         unresolvedMod++;
-        logRows.push({ type: 'module_injection', status: 'No Module Match', deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: asgn.catalogName, module_name: asgn.moduleRaw, module_code: null, service_code: null, detail: modNote, steps: modSteps });
+        logRows.push({ type: 'module_injection', status: 'No Module Match', row_hash: _rowHash(bsCode, asgn.crmIds.join('/'), asgn.deckName, asgn.moduleRaw), deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: asgn.catalogName, module_name: asgn.moduleRaw, module_code: null, service_code: null, detail: modNote, steps: modSteps });
         continue;
       }
 
@@ -531,13 +538,13 @@ async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog
 
       if (!svcCode) {
         unresolvedSvc++;
-        logRows.push({ type: 'module_injection', status: 'No Service Match', deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: asgn.catalogName, module_name: asgn.moduleRaw, module_code: modCode, service_code: null, detail: `module:${modNote}`, steps: allSteps });
+        logRows.push({ type: 'module_injection', status: 'No Service Match', row_hash: _rowHash(bsCode, asgn.crmIds.join('/'), asgn.deckName, asgn.moduleRaw), deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: asgn.catalogName, module_name: asgn.moduleRaw, module_code: modCode, service_code: null, detail: `module:${modNote}`, steps: allSteps });
         continue;
       }
 
       const modNode = flatIndex[modCode];
       if (!modNode) {
-        logRows.push({ type: 'module_injection', status: 'Module Not In Flat Index', deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: asgn.catalogName, module_name: asgn.moduleRaw, module_code: modCode, service_code: svcCode, detail: `module:${modNote}|svc:${svcNote}`, steps: allSteps });
+        logRows.push({ type: 'module_injection', status: 'Module Not In Flat Index', row_hash: _rowHash(bsCode, asgn.crmIds.join('/'), asgn.deckName, asgn.moduleRaw), deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: asgn.catalogName, module_name: asgn.moduleRaw, module_code: modCode, service_code: svcCode, detail: `module:${modNote}|svc:${svcNote}`, steps: allSteps });
         continue;
       }
 
@@ -552,11 +559,12 @@ async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog
       const children = modNode.childServices || (modNode.childServices = []);
       if (children.includes(svcCode)) {
         alreadyLinked++;
-        logRows.push({ type: 'module_injection', status: 'Already Linked', deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: (child||{}).name || asgn.catalogName, module_name: asgn.moduleRaw, module_code: modCode, service_code: svcCode, detail: `module:${modNote}|svc:${svcNote}`, steps: allSteps });
+        logRows.push({ type: 'module_injection', status: 'Already Linked', row_hash: _rowHash(bsCode, asgn.crmIds.join('/'), asgn.deckName, asgn.moduleRaw), deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: (child||{}).name || asgn.catalogName, module_name: asgn.moduleRaw, module_code: modCode, service_code: svcCode, detail: `module:${modNote}|svc:${svcNote}`, steps: allSteps });
       } else {
         children.push(svcCode);
         injected++;
-        logRows.push({ type: 'module_injection', status: 'Added', deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: (child||{}).name || asgn.catalogName, module_name: asgn.moduleRaw, module_code: modCode, service_code: svcCode, detail: `module:${modNote}|svc:${svcNote}`, steps: allSteps });
+        const isFuzzy = allSteps.some(s => s.method && s.method.toLowerCase().includes('fuzzy') && s.result === 'match');
+        logRows.push({ type: 'module_injection', status: isFuzzy ? 'Fuzzy' : 'Added', row_hash: _rowHash(bsCode, asgn.crmIds.join('/'), asgn.deckName, asgn.moduleRaw), deck_name: asgn.deckName, crm_ids: asgn.crmIds.join('/'), service_name: (child||{}).name || asgn.catalogName, module_name: asgn.moduleRaw, module_code: modCode, service_code: svcCode, detail: `module:${modNote}|svc:${svcNote}`, steps: allSteps });
       }
     }
 
@@ -585,9 +593,9 @@ async function applyExcelEnrichment(flatIndex, bsCode, excelBuffer, injectionLog
 
       for (const lr of logRows) {
         const res = await db.query(
-          `INSERT INTO catalog_matching_log_rows (bs_code, type, status, service_code, service_name, module_code, module_name, deck_name, crm_ids)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-          [bsCode, lr.type, lr.status, lr.service_code||null, lr.service_name||null, lr.module_code||null, lr.module_name||null, lr.deck_name||null, lr.crm_ids||null]
+          `INSERT INTO catalog_matching_log_rows (bs_code, type, status, service_code, service_name, module_code, module_name, deck_name, crm_ids, row_hash)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+          [bsCode, lr.type, lr.status, lr.service_code||null, lr.service_name||null, lr.module_code||null, lr.module_name||null, lr.deck_name||null, lr.crm_ids||null, lr.row_hash||null]
         );
         const logRowId = res.rows[0].id;
         for (const step of (lr.steps || [])) {

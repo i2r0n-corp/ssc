@@ -23,7 +23,7 @@ let state = {
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
   filtersExpanded: false,
   sec3Collapsed: false,
-  debug: { bsCode: '', module: '', serviceName: '', status: '', rows: [], totals: null, loading: false, error: null, selectedRow: null },
+  debug: { bsCode: '', module: '', serviceName: '', status: '', rows: [], totals: null, loading: false, error: null, selectedRow: null, fixForm: null },
   selectedServices: new Set(),
   selectedServiceObjects: new Map(),
   keepSelected: true,
@@ -52,7 +52,7 @@ let state = {
   chat: { messages: [], loading: false, input: '' },
   exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null, sortCol: 'logged_at', sortDir: 'desc' },
   currentUser: null,
-  myPermissions: { catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false },
+  myPermissions: { catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false, editor: false },
   admin: { subTab: 'permissions', users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, mcpClosedCollapsed: false, usersCollapsed: false, visitorCollapsed: false, mcpLog: [], mcpLogLoading: false, mcpLogError: null, mcpLogCollapsed: false, selectedMcpLog: null, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null, chart1Collapsed: false, chart2Collapsed: false, chart3Collapsed: false, elChart1Collapsed: false, elChart2Collapsed: false, elChart3Collapsed: false, elChart4Collapsed: false },
   mcpModal: { open: false, sent: false, sending: false, error: null },
   accessDeniedModal: false,
@@ -1638,8 +1638,10 @@ function renderDebugPage() {
     ['',                  'All statuses'],
     ['Added',             'Added'],
     ['Already Linked',    'Already Linked'],
+    ['Fuzzy',             'Fuzzy'],
     ['No Module Match',   'No Module Match'],
     ['No Service Match',  'No Service Match'],
+    ['Fixed',             'Fixed manually'],
   ].map(([v, l]) => `<option value="${v}" ${status === v ? 'selected' : ''}>${l}</option>`).join('');
 
   const totalsHtml = totals ? `
@@ -1657,9 +1659,11 @@ function renderDebugPage() {
     const map = {
       'Added':            ['#d1ecf1','#0c5460'],
       'Already Linked':   ['#fff3cd','#856404'],
+      'Fuzzy':            ['#fde8c8','#7a4f00'],
       'No Module Match':  ['#e2e3e5','#383d41'],
       'No Service Match': ['#fdecea','#c0392b'],
       'Module Not In Flat Index': ['#fdecea','#c0392b'],
+      'Fixed':            ['#d4edda','#155724'],
     };
     const [bg, color] = map[s] || ['#e2e3e5','#383d41'];
     return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:600;background:${bg};color:${color}">${s||''}</span>`;
@@ -1677,6 +1681,79 @@ function renderDebugPage() {
         <td>${statusBadge(r.status)}</td>
         <td style="font-size:0.75rem;color:#6a6a6a">${r.service_code||''}</td>
       </tr>`).join('');
+
+  const canEdit = state.myPermissions.editor || state.myPermissions.admin;
+  const fixForm = state.debug.fixForm || {};
+  const fixableStatuses = ['No Service Match', 'No Module Match', 'Fuzzy'];
+
+  const fixFormHtml = (r) => {
+    if (!canEdit || !fixableStatuses.includes(r.status)) return '';
+    if (r.status === 'Fixed') return `<div style="margin-top:1rem;padding:0.5rem 1rem;background:#d4edda;border-radius:6px;color:#155724;font-size:0.82rem;font-weight:600">✓ Fixed manually</div>`;
+    const ff = fixForm.rowId === r.id ? fixForm : {};
+    const crmValid = ff.crmValid;
+    const crmBorder = crmValid === true ? '2px solid #28a745' : crmValid === false ? '2px solid #dc3545' : '1px solid #ccc';
+    const svcSelected = ff.selectedService;
+    const keywordResults = ff.keywordResults || [];
+    const moduleList = ff.moduleList || [];
+    const modValid = ff.moduleCode && ff.moduleValid;
+    const modBorder = modValid ? '2px solid #28a745' : '1px solid #ccc';
+    const saveDisabled = ff.saving || !(crmValid === true || svcSelected);
+    const isNoModule = r.status === 'No Module Match';
+
+    const moduleDropdown = isNoModule ? `
+      <div style="margin-top:1rem">
+        <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600;display:block;margin-bottom:4px">Business Module</label>
+        <div style="display:flex;gap:0.5rem;align-items:center">
+          <select style="flex:1;border:${modBorder};border-radius:4px;padding:4px 6px;font-size:0.82rem"
+            onchange="window.debugFixSelectModule(this.value)">
+            <option value="">— select module —</option>
+            ${moduleList.map(m => `<option value="${m.mod_code}" ${ff.moduleCode===m.mod_code?'selected':''}>${m.mod_name.replace(/^[^-]+-\s*/,'')}</option>`).join('')}
+          </select>
+          ${ff.moduleCode ? `<a href="/catalog?module=${encodeURIComponent(ff.moduleCode)}" target="_blank" style="font-size:0.75rem;white-space:nowrap;color:#0070F2">↗ View</a>` : ''}
+        </div>
+      </div>` : '';
+
+    const crmPreFill = ff.rowId === r.id ? (ff.crmId||'') : (r.crm_ids||'').split(/[,;/\s]+/)[0]||'';
+    const kwPreFill  = ff.rowId === r.id ? (ff.keywords||'') : (r.service_name || r.deck_name || '');
+
+    return `
+      <div style="margin-top:1.25rem;border-top:1px solid #e0e0e0;padding-top:1rem">
+        <div style="font-size:0.8rem;font-weight:600;color:#1D2D3E;margin-bottom:0.75rem">Fix this row</div>
+        ${moduleDropdown}
+        <div style="margin-top:0.75rem">
+          <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600;display:block;margin-bottom:4px">CRM ID (Service Number)</label>
+          <div style="display:flex;gap:0.5rem;align-items:center">
+            <input type="text" inputmode="numeric" placeholder="digits only"
+              style="width:180px;border:${crmBorder};border-radius:4px;padding:4px 8px;font-size:0.82rem"
+              value="${crmPreFill.replace(/"/g,'&quot;')}"
+              oninput="window.debugFixCrmInput(this.value,${r.id},'${r.row_hash||''}','${r.bs_code||''}')" />
+            ${crmValid === true && ff.crmServiceName ? `<span style="font-size:0.78rem;color:#28a745">${ff.crmServiceName.replace(/</g,'&lt;')}</span>` : ''}
+            ${crmValid === true && ff.crmServiceCode ? `<a href="/catalog?service=${encodeURIComponent(ff.crmServiceCode)}" target="_blank" style="font-size:0.75rem;color:#0070F2;white-space:nowrap">↗</a>` : ''}
+          </div>
+        </div>
+        <div style="margin-top:0.75rem;position:relative">
+          <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600;display:block;margin-bottom:4px">Catalog name keywords</label>
+          <input type="text" placeholder="type to search…"
+            style="width:100%;border:${svcSelected?'2px solid #28a745':'1px solid #ccc'};border-radius:4px;padding:4px 8px;font-size:0.82rem;box-sizing:border-box"
+            value="${svcSelected ? svcSelected.name.replace(/"/g,'&quot;') : kwPreFill.replace(/"/g,'&quot;')}"
+            oninput="window.debugFixKeywordInput(this.value,${r.id},'${r.row_hash||''}','${r.bs_code||''}','${r.bs_code||''}')" />
+          ${keywordResults.length > 0 ? `
+          <div style="position:absolute;z-index:100;background:white;border:1px solid #ccc;border-radius:4px;width:100%;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.12)">
+            ${keywordResults.map((s, idx) => `<div style="padding:6px 10px;font-size:0.8rem;cursor:pointer;border-bottom:1px solid #f0f0f0"
+              onmousedown="window.debugFixSelectService(${idx},${r.id},'${r.row_hash||''}','${r.bs_code||''}')">
+              <b>${s.name.replace(/</g,'&lt;')}</b> <span style="color:#6a6a6a;font-size:0.72rem">${s.code}</span>
+            </div>`).join('')}
+          </div>` : ''}
+          ${svcSelected ? `<a href="/catalog?service=${encodeURIComponent(svcSelected.code)}" target="_blank" style="font-size:0.75rem;color:#0070F2">↗ View in catalog</a>` : ''}
+        </div>
+        <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center">
+          <button class="btn btn-primary btn-sm" ${saveDisabled?'disabled':''} onclick="window.debugFixSave(${r.id})">
+            ${ff.saving ? 'Saving…' : 'Save fix'}
+          </button>
+          ${ff.savedBadge ? `<span style="color:#28a745;font-size:0.82rem;font-weight:600">✓ Fixed manually</span>` : ''}
+        </div>
+      </div>`;
+  };
 
   return `
     ${state.debug.selectedRow ? (() => {
@@ -1710,6 +1787,7 @@ function renderDebugPage() {
             <h3 style="margin:0 0 1rem">${r.status} &mdash; ${(r.service_name||r.service_code||'').replace(/</g,'&lt;')}</h3>
             ${fields.map(([k,v]) => `<div style="display:flex;gap:0.5rem;margin-bottom:0.3rem;font-size:0.82rem"><span style="min-width:110px;color:#6a6a6a;font-weight:600">${k}</span><span>${String(v).replace(/</g,'&lt;')}</span></div>`).join('')}
             ${stepsHtml}
+            ${fixFormHtml(r)}
           </div>
         </div>`;
     })() : ''}
@@ -1736,6 +1814,12 @@ function renderDebugPage() {
           ${statusOptions}
         </select>
       </div>
+      ${canEdit ? `<div style="display:flex;flex-direction:column;justify-content:flex-end;gap:4px">
+        <label style="font-size:0.75rem;color:transparent;font-weight:600">.</label>
+        <button class="btn btn-secondary btn-sm" onclick="window.exportFixedExcel()"
+          ${!bsCode ? 'disabled title="Select a BS first"' : `title="Download fixed Excel for ${bsCode}"`}
+          style="white-space:nowrap">↓ Export fixed Excel</button>
+      </div>` : ''}
       ${loading ? `<div class="loading"><div class="loading-spinner"></div> Loading…</div>` : ''}
     </div>
     ${error ? `<div class="error-strip">Error: ${error.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : ''}
@@ -1762,10 +1846,109 @@ function renderDebugPage() {
 
 window.openDebugRow = function(id) {
   const row = state.debug.rows.find(r => String(r.id) === String(id));
-  if (row) { state.debug.selectedRow = row; render(); }
+  if (row) {
+    state.debug.selectedRow = row;
+    state.debug.fixForm = null;
+    // Preload modules for No Module Match rows
+    if (row.status === 'No Module Match' && row.bs_code) {
+      apiFetch(`${CAP_BACKEND_URL}/api/catalog/modules-for-bs?bs=${encodeURIComponent(row.bs_code)}`)
+        .then(d => { state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { rowId: row.id, moduleList: d.modules||[] }); render(); })
+        .catch(() => {});
+    }
+    render();
+  }
 };
 window.closeDebugModal = function() {
-  state.debug.selectedRow = null; render();
+  state.debug.selectedRow = null;
+  state.debug.fixForm = null;
+  render();
+};
+
+let _crmDebounce = null;
+window.debugFixCrmInput = function(val, rowId, rowHash, bsCode) {
+  state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { rowId, rowHash, bsCode, crmId: val, crmValid: null, crmServiceCode: null, crmServiceName: null, selectedService: null });
+  render();
+  clearTimeout(_crmDebounce);
+  if (!val || !/^\d+$/.test(val)) {
+    state.debug.fixForm.crmValid = val.length > 0 ? false : null;
+    render(); return;
+  }
+  _crmDebounce = setTimeout(async () => {
+    try {
+      const d = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/debug/validate-crm?crm=${encodeURIComponent(val)}`);
+      state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { crmValid: d.valid, crmServiceCode: d.service_code||null, crmServiceName: d.service_name||null });
+      render();
+    } catch(e) {}
+  }, 400);
+};
+
+let _kwDebounce = null;
+window.debugFixKeywordInput = function(val, rowId, rowHash, bsCode) {
+  state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { rowId, rowHash, bsCode, keywords: val, selectedService: null, keywordResults: [] });
+  render();
+  clearTimeout(_kwDebounce);
+  if (!val || val.length < 2) { render(); return; }
+  _kwDebounce = setTimeout(async () => {
+    try {
+      const params = new URLSearchParams({ query: val });
+      if (bsCode) params.set('businessScenario', bsCode);
+      const d = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/searchServices?${params}`);
+      state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { keywordResults: (d.services||[]).slice(0,10) });
+      render();
+    } catch(e) {}
+  }, 800);
+};
+
+window.debugFixSelectService = function(idx, rowId, rowHash, bsCode) {
+  const svc = (state.debug.fixForm?.keywordResults || [])[idx];
+  if (!svc) return;
+  state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { rowId, rowHash, bsCode, selectedService: svc, keywordResults: [], keywords: svc.name, crmId: svc.serviceNumber||state.debug.fixForm?.crmId||'', crmValid: svc.serviceNumber ? true : null, crmServiceCode: svc.code, crmServiceName: svc.name });
+  render();
+};
+
+window.debugFixSelectModule = function(modCode) {
+  const moduleList = state.debug.fixForm?.moduleList || [];
+  const mod = moduleList.find(m => m.mod_code === modCode);
+  state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { moduleCode: modCode, moduleValid: !!modCode, moduleName: mod?.mod_name||'' });
+  render();
+};
+
+window.debugFixSave = async function(rowId) {
+  const ff = state.debug.fixForm || {};
+  const r = state.debug.selectedRow;
+  if (!r) return;
+  state.debug.fixForm = Object.assign({}, ff, { saving: true });
+  render();
+  try {
+    const body = {
+      log_row_id: r.id,
+      row_hash: r.row_hash || ff.rowHash,
+      bs_code: r.bs_code,
+      crm_id: ff.crmId || null,
+      module_code: ff.moduleCode || r.module_code || null,
+      catalog_name: ff.selectedService?.name || ff.keywords || null,
+      service_code_direct: ff.selectedService?.code || ff.crmServiceCode || null,
+    };
+    const d = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/debug/fix`, { method: 'POST', body: JSON.stringify(body) });
+    // Update row in state
+    const rowIdx = state.debug.rows.findIndex(x => x.id === r.id);
+    if (rowIdx >= 0) {
+      state.debug.rows[rowIdx] = Object.assign({}, state.debug.rows[rowIdx], { status: 'Fixed', service_code: d.service_code, service_name: d.service_name, module_code: d.module_code||state.debug.rows[rowIdx].module_code });
+      state.debug.selectedRow = state.debug.rows[rowIdx];
+    }
+    state.debug.fixForm = Object.assign({}, ff, { saving: false, savedBadge: true });
+    render();
+  } catch(e) {
+    state.debug.fixForm = Object.assign({}, ff, { saving: false });
+    render();
+    alert('Fix failed: ' + e.message);
+  }
+};
+
+window.exportFixedExcel = function() {
+  const bs = state.debug.bsCode;
+  if (!bs) return;
+  window.open(`${CAP_BACKEND_URL}/api/catalog/excel-export/${encodeURIComponent(bs)}`);
 };
 
 window.closeAccessDenied = function() {
@@ -2093,7 +2276,7 @@ window.adminSetPerm = async function(email, tab, value) {
   try {
     await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/users`, {
       method: 'POST',
-      body: JSON.stringify({ email: user.email, tab_catalog: user.tab_catalog, tab_incidents: user.tab_incidents, tab_chat: user.tab_chat, tab_debug: user.tab_debug, tab_exportlog: user.tab_exportlog, tab_admin: user.tab_admin })
+      body: JSON.stringify({ email: user.email, tab_catalog: user.tab_catalog, tab_incidents: user.tab_incidents, tab_chat: user.tab_chat, tab_debug: user.tab_debug, tab_exportlog: user.tab_exportlog, tab_editor: user.tab_editor, tab_admin: user.tab_admin })
     });
   } catch (e) { state.admin.usersError = e.message; render(); }
 };
@@ -2113,7 +2296,7 @@ window.adminAddUser = async function() {
   try {
     await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/users`, {
       method: 'POST',
-      body: JSON.stringify({ email, tab_catalog: true, tab_incidents: false, tab_chat: false, tab_debug: false, tab_exportlog: false, tab_admin: false })
+      body: JSON.stringify({ email, tab_catalog: true, tab_incidents: false, tab_chat: false, tab_debug: false, tab_exportlog: false, tab_editor: false, tab_admin: false })
     });
     state.admin.newEmail = '';
     await loadAdminUsers();
@@ -2138,8 +2321,8 @@ function renderAdminPage() {
           usersCollapsed, visitorCollapsed, mcpLog, mcpLogLoading, mcpLogError, mcpLogCollapsed, selectedMcpLog,
           selectedVisitorUser, visitSortCol, visitSortDir, selectedVisit,
           chart1Collapsed, chart2Collapsed, chart3Collapsed } = state.admin;
-  const TABS = ['incidents','chat','debug','admin'];
-  const TAB_LABELS = { incidents:'Incidents', chat:'Chat', debug:'Debug', admin:'Admin' };
+  const TABS = ['incidents','chat','debug','editor','admin'];
+  const TAB_LABELS = { incidents:'Incidents', chat:'Chat', debug:'Debug', editor:'Editor', admin:'Admin' };
   const fmtDate = iso => new Date(iso).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
 
   const sel = (email, tab, val) =>
@@ -2756,7 +2939,7 @@ apiFetch(`${CAP_BACKEND_URL}/api/catalog/whoami`)
   .catch(() => {});
 apiFetch(`${CAP_BACKEND_URL}/api/catalog/my-permissions`)
   .then(d => {
-    state.myPermissions = { catalog: !!d.catalog, incidents: !!d.incidents, chat: !!d.chat, debug: !!d.debug, exportlog: !!d.exportlog, admin: !!d.admin };
+    state.myPermissions = { catalog: !!d.catalog, incidents: !!d.incidents, chat: !!d.chat, debug: !!d.debug, exportlog: !!d.exportlog, admin: !!d.admin, editor: !!d.editor };
     render();
   })
   .catch(() => {});

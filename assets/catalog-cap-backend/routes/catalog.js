@@ -1074,7 +1074,7 @@ router.get('/injection-log', async (req, res) => {
 
     const rowsRes = await db.query(`
       SELECT r.id, r.bs_code, r.type, r.status, r.service_code, r.service_name,
-             r.module_code, r.module_name, r.deck_name, r.crm_ids, r.created_at
+             r.module_code, r.module_name, r.deck_name, r.crm_ids, r.created_at, r.row_hash
       FROM catalog_matching_log_rows r
       WHERE 1=1 ${where}
       ORDER BY r.bs_code, r.id
@@ -1179,14 +1179,14 @@ router.get('/my-permissions', async (req, res) => {
   try {
     const db = require('../store/db');
     const result = await db.query(
-      `SELECT tab_catalog, tab_incidents, tab_chat, tab_debug, tab_exportlog, tab_admin
+      `SELECT tab_catalog, tab_incidents, tab_chat, tab_debug, tab_exportlog, tab_admin, tab_editor
        FROM catalog_user_permissions WHERE email = $1`, [logonName]
     );
     if (result.rows.length === 0) {
-      return res.json({ catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: isAdmin });
+      return res.json({ catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: isAdmin, editor: false });
     }
     const r = result.rows[0];
-    res.json({ catalog: true, incidents: r.tab_incidents, chat: r.tab_chat, debug: r.tab_debug, exportlog: r.tab_exportlog, admin: r.tab_admin || isAdmin });
+    res.json({ catalog: true, incidents: r.tab_incidents, chat: r.tab_chat, debug: r.tab_debug, exportlog: r.tab_exportlog, admin: r.tab_admin || isAdmin, editor: r.tab_editor || isAdmin });
   } catch (e) {
     res.json({ catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: isAdmin });
   }
@@ -1216,7 +1216,7 @@ router.get('/admin/users', requireAdmin, async (req, res) => {
   try {
     const db = require('../store/db');
     const result = await db.query(
-      `SELECT email, tab_catalog, tab_incidents, tab_chat, tab_debug, tab_exportlog, tab_admin, created_at, updated_at
+      `SELECT email, tab_catalog, tab_incidents, tab_chat, tab_debug, tab_exportlog, tab_admin, tab_editor, created_at, updated_at
        FROM catalog_user_permissions ORDER BY email`
     );
     res.json({ rows: result.rows });
@@ -1226,18 +1226,18 @@ router.get('/admin/users', requireAdmin, async (req, res) => {
 });
 
 router.post('/admin/users', requireAdmin, async (req, res) => {
-  const { email, tab_catalog, tab_incidents, tab_chat, tab_debug, tab_exportlog, tab_admin } = req.body || {};
+  const { email, tab_catalog, tab_incidents, tab_chat, tab_debug, tab_exportlog, tab_admin, tab_editor } = req.body || {};
   if (!email || typeof email !== 'string' || !email.includes('@')) {
     return res.status(400).json({ error: 'Valid email required' });
   }
   try {
     const db = require('../store/db');
     await db.query(
-      `INSERT INTO catalog_user_permissions (email, tab_catalog, tab_incidents, tab_chat, tab_debug, tab_exportlog, tab_admin, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+      `INSERT INTO catalog_user_permissions (email, tab_catalog, tab_incidents, tab_chat, tab_debug, tab_exportlog, tab_admin, tab_editor, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
        ON CONFLICT (email) DO UPDATE SET
-         tab_catalog=$2, tab_incidents=$3, tab_chat=$4, tab_debug=$5, tab_exportlog=$6, tab_admin=$7, updated_at=NOW()`,
-      [email.toLowerCase().trim(), !!tab_catalog, !!tab_incidents, !!tab_chat, !!tab_debug, !!tab_exportlog, !!tab_admin]
+         tab_catalog=$2, tab_incidents=$3, tab_chat=$4, tab_debug=$5, tab_exportlog=$6, tab_admin=$7, tab_editor=$8, updated_at=NOW()`,
+      [email.toLowerCase().trim(), !!tab_catalog, !!tab_incidents, !!tab_chat, !!tab_debug, !!tab_exportlog, !!tab_admin, !!tab_editor]
     );
     res.json({ ok: true });
   } catch (e) {
@@ -1683,6 +1683,168 @@ router.post('/export-excel', async (req, res) => {
     res.json({ downloadUrl: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${buf.toString('base64')}`, ok: true });
   } catch (e) {
     console.error('[excel-export]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Editor — Excel fix feature ────────────────────────────────────────────────
+
+function requireEditor(req, res, next) {
+  const payload = getJwtPayload(req);
+  const logonName = (payload?.user_name || payload?.email || '').toLowerCase();
+  if (ADMIN_USERS.includes(logonName)) return next();
+  const db = require('../store/db');
+  db.query(`SELECT tab_editor, tab_admin FROM catalog_user_permissions WHERE email = $1`, [logonName])
+    .then(r => {
+      if (r.rows.length && (r.rows[0].tab_editor || r.rows[0].tab_admin)) return next();
+      res.status(403).json({ error: 'Forbidden' });
+    })
+    .catch(() => res.status(403).json({ error: 'Forbidden' }));
+}
+
+router.get('/modules-for-bs', async (req, res) => {
+  const bs = (req.query.bs || '').trim();
+  if (!bs) return res.status(400).json({ error: 'bs param required' });
+  try {
+    const db = require('../store/db');
+    const result = await db.query(
+      `SELECT s.code AS mod_code, s.name AS mod_name
+       FROM catalog_hierarchy h JOIN catalog_services s ON s.code = h.child_code
+       WHERE h.parent_code = $1 AND s.service_object = 'Business Scenario module'
+       ORDER BY s.name`,
+      [bs]
+    );
+    res.json({ modules: result.rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/debug/validate-crm', async (req, res) => {
+  const crm = (req.query.crm || '').trim();
+  if (!crm || !/^\d+$/.test(crm)) return res.json({ valid: false });
+  try {
+    const db = require('../store/db');
+    const result = await db.query(
+      `SELECT code, name FROM catalog_services WHERE "serviceNumber" = $1 LIMIT 1`,
+      [crm]
+    );
+    if (result.rows.length === 0) return res.json({ valid: false });
+    const r = result.rows[0];
+    res.json({ valid: true, service_code: r.code, service_name: r.name });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/debug/fix', requireEditor, async (req, res) => {
+  const { log_row_id, row_hash, bs_code, crm_id, module_code, catalog_name, service_code_direct } = req.body || {};
+  if (!row_hash || !bs_code) return res.status(400).json({ error: 'row_hash and bs_code required' });
+  try {
+    const db = require('../store/db');
+
+    let service_code = service_code_direct || null;
+    let service_name = null;
+
+    if (crm_id && /^\d+$/.test(crm_id)) {
+      const r = await db.query(`SELECT code, name FROM catalog_services WHERE "serviceNumber" = $1 LIMIT 1`, [crm_id]);
+      if (r.rows.length === 0) return res.status(400).json({ error: 'CRM ID not found in catalog' });
+      service_code = r.rows[0].code;
+      service_name = r.rows[0].name;
+    } else if (service_code_direct) {
+      const r = await db.query(`SELECT code, name FROM catalog_services WHERE code = $1 LIMIT 1`, [service_code_direct]);
+      if (r.rows.length) service_name = r.rows[0].name;
+    }
+
+    if (!service_code) return res.status(400).json({ error: 'Could not resolve service — provide crm_id or service_code_direct' });
+
+    if (module_code) {
+      await db.query(
+        `INSERT INTO catalog_hierarchy (parent_code, child_code) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [module_code, service_code]
+      );
+    }
+
+    await db.query(
+      `INSERT INTO catalog_excel_fixes (row_hash, bs_code, raw_crm_id, raw_module_code, raw_catalog_name, service_code, module_code, last_applied_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+       ON CONFLICT (row_hash) DO UPDATE SET
+         raw_crm_id=$3, raw_module_code=$4, raw_catalog_name=$5, service_code=$6, module_code=$7, last_applied_at=NOW()`,
+      [row_hash, bs_code, crm_id||null, module_code||null, catalog_name||null, service_code, module_code||null]
+    );
+
+    if (log_row_id) {
+      await db.query(
+        `UPDATE catalog_matching_log_rows SET status='Fixed', service_code=$1, service_name=$2, module_code=$3 WHERE id=$4`,
+        [service_code, service_name, module_code||null, log_row_id]
+      );
+      await db.query(
+        `INSERT INTO catalog_matching_steps (log_row_id, type, excel_value, db_value, method, threshold, result)
+         VALUES ($1,'service',$2,$3,'manual fix',null,'match')`,
+        [log_row_id, crm_id||catalog_name||null, service_code]
+      );
+    }
+
+    res.json({ ok: true, service_code, service_name, module_code: module_code||null });
+  } catch (e) {
+    console.error('[debug/fix]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
+  const { bsCode } = req.params;
+  const crypto = require('crypto');
+  function rowHash(bsCode, crmIds, deckName, moduleName) {
+    const normCrm = (crmIds || '').split(/[,;/\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean).sort().join('|');
+    const input = `${(bsCode||'').toLowerCase()}||${normCrm}||${(deckName||'').trim().toLowerCase()}||${(moduleName||'').trim().toLowerCase()}`;
+    return crypto.createHash('sha256').update(input).digest('hex').slice(0, 16);
+  }
+  try {
+    const db = require('../store/db');
+    const fileRow = await db.query(`SELECT file_data, file_name FROM catalog_excel_files WHERE bs_code = $1`, [bsCode]);
+    if (!fileRow.rows.length || !fileRow.rows[0].file_data) return res.status(404).json({ error: 'No Excel file for this BS' });
+    const { file_data, file_name } = fileRow.rows[0];
+
+    const fixRows = await db.query(`SELECT * FROM catalog_excel_fixes WHERE bs_code = $1`, [bsCode]);
+    const fixMap = {};
+    for (const f of fixRows.rows) fixMap[f.row_hash] = f;
+
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(file_data);
+
+    wb.eachSheet(ws => {
+      let deckName = '';
+      let crmCol = 1, nameCol = 2, moduleCol = -1;
+      ws.eachRow((row, rowNum) => {
+        if (rowNum === 1) {
+          row.eachCell((cell, colNum) => {
+            const v = (cell.value||'').toString().toLowerCase();
+            if (/business.?module/i.test(v)) moduleCol = colNum;
+          });
+          return;
+        }
+        const crmVal = (row.getCell(crmCol).value || '').toString().trim();
+        const nameVal = (row.getCell(nameCol).value || '').toString().trim();
+        const modVal = moduleCol > 0 ? (row.getCell(moduleCol).value || '').toString().trim() : '';
+        if (row.getCell(1).value) deckName = row.getCell(1).value.toString().trim();
+        const h = rowHash(bsCode, crmVal, deckName, modVal);
+        const fix = fixMap[h];
+        if (!fix) return;
+        if (fix.raw_crm_id) row.getCell(crmCol).value = fix.raw_crm_id;
+        if (fix.raw_catalog_name) row.getCell(nameCol).value = fix.raw_catalog_name;
+        if (fix.raw_module_code && moduleCol > 0) row.getCell(moduleCol).value = fix.raw_module_code;
+      });
+    });
+
+    const buf = await wb.xlsx.writeBuffer();
+    const outName = file_name || `${bsCode}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${outName}"`);
+    res.send(Buffer.from(buf));
+  } catch (e) {
+    console.error('[excel-export-fix]', e);
     res.status(500).json({ error: e.message });
   }
 });

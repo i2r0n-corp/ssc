@@ -215,9 +215,23 @@ CREATE TABLE IF NOT EXISTS catalog_user_permissions (
   tab_debug     BOOLEAN NOT NULL DEFAULT false,
   tab_exportlog BOOLEAN NOT NULL DEFAULT false,
   tab_admin     BOOLEAN NOT NULL DEFAULT false,
+  tab_editor    BOOLEAN NOT NULL DEFAULT false,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS catalog_excel_fixes (
+  row_hash         TEXT PRIMARY KEY,
+  bs_code          TEXT NOT NULL,
+  raw_crm_id       TEXT,
+  raw_module_code  TEXT,
+  raw_catalog_name TEXT,
+  service_code     TEXT,
+  module_code      TEXT,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_applied_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_excel_fixes_bs ON catalog_excel_fixes(bs_code);
 
 CREATE TABLE IF NOT EXISTS catalog_visitor_log (
   id           BIGSERIAL PRIMARY KEY,
@@ -283,6 +297,8 @@ async function initSchema() {
     await client.query(`CREATE TABLE IF NOT EXISTS catalog_mcp_log (id BIGSERIAL PRIMARY KEY, hour_bucket TIMESTAMPTZ NOT NULL, logon_name TEXT NOT NULL, call_count INTEGER NOT NULL DEFAULT 0, tool_counts JSONB NOT NULL DEFAULT '{}', calls JSONB NOT NULL DEFAULT '[]', updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_log_user_hour ON catalog_mcp_log(logon_name, hour_bucket)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_mcp_log_hour ON catalog_mcp_log(hour_bucket DESC)`);
+    await client.query(`ALTER TABLE catalog_user_permissions ADD COLUMN IF NOT EXISTS tab_editor BOOLEAN NOT NULL DEFAULT false`);
+    await client.query(`ALTER TABLE catalog_matching_log_rows ADD COLUMN IF NOT EXISTS row_hash TEXT`);
     console.log('[db] Schema initialised');
   } finally {
     client.release();
