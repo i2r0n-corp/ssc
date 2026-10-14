@@ -53,7 +53,7 @@ let state = {
   exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null, sortCol: 'logged_at', sortDir: 'desc' },
   currentUser: null,
   myPermissions: { catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false },
-  admin: { subTab: 'permissions', users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, mcpClosedCollapsed: false, usersCollapsed: false, visitorCollapsed: false, mcpLog: [], mcpLogLoading: false, mcpLogError: null, mcpLogCollapsed: false, selectedMcpLog: null, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null, chart1Collapsed: false, chart2Collapsed: false, chart3Collapsed: false, elChart1Collapsed: false, elChart2Collapsed: false, elChart3Collapsed: false },
+  admin: { subTab: 'permissions', users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, mcpClosedCollapsed: false, usersCollapsed: false, visitorCollapsed: false, mcpLog: [], mcpLogLoading: false, mcpLogError: null, mcpLogCollapsed: false, selectedMcpLog: null, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null, chart1Collapsed: false, chart2Collapsed: false, chart3Collapsed: false, elChart1Collapsed: false, elChart2Collapsed: false, elChart3Collapsed: false, elChart4Collapsed: false },
   mcpModal: { open: false, sent: false, sending: false, error: null },
   accessDeniedModal: false,
   backendDown: false,
@@ -1802,7 +1802,6 @@ window.sortExportLog = function(col) {
 
 function renderExportLogPage() {
   const { rows, loading, error, loaded, sortCol, sortDir } = state.exportLog;
-  const { elChart1Collapsed, elChart2Collapsed, elChart3Collapsed } = state.admin;
   if (loading) return `<div class="card"><div style="color:#6a6a6a;padding:2rem;text-align:center">Loading export log…</div></div>`;
   if (error) return `<div class="card"><div style="color:#dc3545;padding:1rem">Error: ${error}</div></div>`;
   if (!loaded) return `<div class="card"><div style="padding:1rem;color:#6a6a6a">No data yet.</div></div>`;
@@ -1823,29 +1822,53 @@ function renderExportLogPage() {
   const display = sorted.slice(0, 200);
 
   // ── Chart data ───────────────────────────────────────────────────────────────
-  // Chart 1: exports per day (last 30 days)
+  const { elChart1Collapsed, elChart2Collapsed, elChart3Collapsed, elChart4Collapsed } = state.admin;
+
+  const normaliseType = t => {
+    if (!t) return 'Unknown';
+    const l = t.toLowerCase();
+    if (l === 'list' || l === 'pptx-list') return 'pptx-list';
+    if (l === 'mcp-pptx') return 'MCP-pptx';
+    return t;
+  };
+
   const dayCounts = {};
-  rows.forEach(r => {
-    const d = r.logged_at ? r.logged_at.slice(0,10) : null;
-    if (d) dayCounts[d] = (dayCounts[d] || 0) + 1;
-  });
+  rows.forEach(r => { const d = r.logged_at ? r.logged_at.slice(0,10) : null; if (d) dayCounts[d] = (dayCounts[d]||0) + 1; });
   const elDayLabels = Object.keys(dayCounts).sort().slice(-30);
   const elDayData   = elDayLabels.map(d => dayCounts[d]);
 
-  // Chart 2: top 10 users
   const userCounts = {};
-  rows.forEach(r => { const u = r.logon_name || r.user_id || '?'; userCounts[u] = (userCounts[u] || 0) + 1; });
+  rows.forEach(r => { const u = r.logon_name || r.user_id || '?'; userCounts[u] = (userCounts[u]||0) + 1; });
   const elUserEntries = Object.entries(userCounts).sort((a,b) => b[1]-a[1]).slice(0,10);
   const elUserLabels = elUserEntries.map(([u]) => u.includes('@') ? u.split('@')[0] : u);
   const elUserData   = elUserEntries.map(([,n]) => n);
 
-  // Chart 3: by type
   const typeCounts = {};
-  rows.forEach(r => { const t = r.export_type || 'Unknown'; typeCounts[t] = (typeCounts[t] || 0) + 1; });
+  rows.forEach(r => { const t = normaliseType(r.export_type); typeCounts[t] = (typeCounts[t]||0) + 1; });
   const elTypeLabels = Object.keys(typeCounts);
   const elTypeData   = elTypeLabels.map(t => typeCounts[t]);
 
-  window._elChartData = { elDayLabels, elDayData, elChart1Collapsed, elUserLabels, elUserData, elChart2Collapsed, elTypeLabels, elTypeData, elChart3Collapsed };
+  const bsCounts = {};
+  rows.forEach(r => { if (r.filter_bs) bsCounts[r.filter_bs] = (bsCounts[r.filter_bs]||0) + 1; });
+  const elBsEntries = Object.entries(bsCounts).sort((a,b) => b[1]-a[1]).slice(0,10);
+  const elBsLabels  = elBsEntries.map(([bs]) => bs.includes('-') ? bs.replace(/^[^-]+-\s*/,'') : bs);
+  const elBsData    = elBsEntries.map(([,n]) => n);
+  const elBsKeys    = elBsEntries.map(([bs]) => bs);
+  const elBsModCounts = {};
+  rows.forEach(r => {
+    if (!r.filter_bs) return;
+    const bsLabel = r.filter_bs.includes('-') ? r.filter_bs.replace(/^[^-]+-\s*/,'') : r.filter_bs;
+    if (!elBsModCounts[bsLabel]) elBsModCounts[bsLabel] = {};
+    const mods = r.filter_modules && r.filter_modules.length ? r.filter_modules : ['(no module)'];
+    mods.forEach(m => { elBsModCounts[bsLabel][m] = (elBsModCounts[bsLabel][m]||0) + 1; });
+  });
+
+  window._elChartData = {
+    elDayLabels, elDayData, elChart1Collapsed,
+    elUserLabels, elUserData, elChart2Collapsed,
+    elTypeLabels, elTypeData, elChart3Collapsed,
+    elBsLabels, elBsData, elBsKeys, elBsModCounts, elChart4Collapsed,
+  };
 
   const collapseBtn = (fn, collapsed) =>
     `<button class="btn btn-secondary btn-sm" onclick="window.${fn}()"><img src="/arrow.svg" style="width:12px;height:12px;transform:${collapsed?'rotate(-90deg)':'rotate(0deg)'}" /></button>`;
@@ -1865,12 +1888,22 @@ function renderExportLogPage() {
       </div>
       ${!elChart2Collapsed ? `<canvas id="el-chart-2" height="220"></canvas>` : ''}
     </div>
-    <div class="card">
+    <div class="card" style="margin-bottom:1rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${elChart3Collapsed?'0':'1rem'}">
         <h3 style="margin:0;font-size:1rem">Exports by type</h3>
         ${collapseBtn('adminToggleElChart3', elChart3Collapsed)}
       </div>
       ${!elChart3Collapsed ? `<canvas id="el-chart-3" height="200"></canvas>` : ''}
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${elChart4Collapsed?'0':'1rem'}">
+        <h3 style="margin:0;font-size:1rem">BS exports <span id="el-chart-4-drill-label" style="font-size:0.78rem;font-weight:400;color:#0070F2"></span></h3>
+        <div style="display:flex;gap:0.4rem;align-items:center">
+          <button id="el-chart-4-back" class="btn btn-secondary btn-sm" style="display:none;font-size:0.72rem" onclick="window.elChart4DrillBack()">← Back</button>
+          ${collapseBtn('adminToggleElChart4', elChart4Collapsed)}
+        </div>
+      </div>
+      ${!elChart4Collapsed ? `<canvas id="el-chart-4" height="220"></canvas>` : ''}
     </div>`;
 
   const leftCol = `
@@ -2005,6 +2038,27 @@ window.adminToggleChart3     = function() { state.admin.chart3Collapsed = !state
 window.adminToggleElChart1   = function() { state.admin.elChart1Collapsed = !state.admin.elChart1Collapsed; render(); };
 window.adminToggleElChart2   = function() { state.admin.elChart2Collapsed = !state.admin.elChart2Collapsed; render(); };
 window.adminToggleElChart3   = function() { state.admin.elChart3Collapsed = !state.admin.elChart3Collapsed; render(); };
+window.adminToggleElChart4   = function() { state.admin.elChart4Collapsed = !state.admin.elChart4Collapsed; render(); };
+window.elChart4DrillBack     = function() {
+  const d = window._elChartData;
+  if (!d) return;
+  const el4 = document.getElementById('el-chart-4');
+  if (!el4) return;
+  if (el4._chartInst) el4._chartInst.destroy();
+  el4._chartInst = new Chart(el4, {
+    type: 'bar',
+    data: { labels: d.elBsLabels, datasets: [{ label: 'Exports', data: d.elBsData, backgroundColor: '#0070F2', borderWidth: 0 }] },
+    options: {
+      responsive: true, plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+      onClick: (evt, elems) => { if (elems.length) window._elDrillInto(elems[0].index); }
+    }
+  });
+  const lbl = document.getElementById('el-chart-4-drill-label');
+  const back = document.getElementById('el-chart-4-back');
+  if (lbl) lbl.textContent = '';
+  if (back) back.style.display = 'none';
+};
 window.adminSelectMcpLog     = function(id) { state.admin.selectedMcpLog = state.admin.selectedMcpLog === id ? null : id; render(); };
 window.adminCloseMcpLog      = function() { state.admin.selectedMcpLog = null; render(); };
 window.adminSelectVisitorUser = function(email) {
@@ -2650,6 +2704,41 @@ function render() {
       if (!d.elChart1Collapsed) mkBar('el-chart-1', d.elDayLabels,  d.elDayData,  'Exports', '#0070F2');
       if (!d.elChart2Collapsed) mkBar('el-chart-2', d.elUserLabels, d.elUserData, 'Exports', '#1D6FA4');
       if (!d.elChart3Collapsed) mkDonut('el-chart-3', d.elTypeLabels, d.elTypeData);
+      if (!d.elChart4Collapsed) {
+        const el4 = document.getElementById('el-chart-4');
+        if (el4) {
+          if (el4._chartInst) el4._chartInst.destroy();
+          el4._chartInst = new Chart(el4, {
+            type: 'bar',
+            data: { labels: d.elBsLabels, datasets: [{ label: 'Exports', data: d.elBsData, backgroundColor: '#0070F2', borderWidth: 0 }] },
+            options: {
+              responsive: true,
+              plugins: { legend: { display: false } },
+              scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+              onClick: (evt, elems) => {
+                if (!elems.length) return;
+                const idx = elems[0].index;
+                const bsLabel = d.elBsLabels[idx];
+                const modData = d.elBsModCounts[bsLabel];
+                if (!modData) return;
+                const modEntries = Object.entries(modData).sort((a,b) => b[1]-a[1]);
+                const modLabels = modEntries.map(([m]) => m);
+                const modVals   = modEntries.map(([,n]) => n);
+                if (el4._chartInst) el4._chartInst.destroy();
+                el4._chartInst = new Chart(el4, {
+                  type: 'bar',
+                  data: { labels: modLabels, datasets: [{ label: 'Exports', data: modVals, backgroundColor: '#1D6FA4', borderWidth: 0 }] },
+                  options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+                });
+                const lbl = document.getElementById('el-chart-4-drill-label');
+                const back = document.getElementById('el-chart-4-back');
+                if (lbl) lbl.textContent = `— ${bsLabel}`;
+                if (back) back.style.display = '';
+              }
+            }
+          });
+        }
+      }
     });
   }
 }
