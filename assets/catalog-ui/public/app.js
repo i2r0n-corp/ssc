@@ -2080,11 +2080,11 @@ function renderAdminPage() {
       ${usersError ? `<div class="error-strip">⚠ ${usersError}</div>` : ''}
       ${!usersCollapsed ? (usersLoading ? `<div style="color:#6a6a6a;padding:1rem;text-align:center">Loading…</div>` : `
       <div style="overflow-x:auto">
-        <table class="service-table" style="font-size:0.8rem;width:100%;table-layout:fixed">
+        <table class="service-table" style="font-size:0.8rem;width:100%">
           <thead><tr>
-            <th style="width:40%">User</th>
-            ${TABS.map(t => `<th style="text-align:center;width:13%;font-size:0.72rem">${TAB_LABELS[t]}</th>`).join('')}
-            <th style="width:8%"></th>
+            <th>User</th>
+            ${TABS.map(t => `<th style="text-align:center;white-space:nowrap;font-size:0.72rem">${TAB_LABELS[t]}</th>`).join('')}
+            <th style="width:1%"></th>
           </tr></thead>
           <tbody>
             ${users.map(u => `<tr>
