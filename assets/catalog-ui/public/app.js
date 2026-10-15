@@ -2038,6 +2038,7 @@ window.debugFixSave = async function(rowId) {
       const fixedModSep = fixedModRaw.indexOf(' // ');
       const fixedModAfterSep = fixedModSep !== -1 ? fixedModRaw.slice(fixedModSep + 4) : fixedModRaw;
       const fixedModDisplay = isNoModuleMatch ? (fixedModAfterSep.replace(/^Module\s+\d+[^:]*:\s*/i, '').trim() || fixedModAfterSep) : '';
+      console.log('[debugFixSave] orig.status=', orig.status, 'isNoModuleMatch=', isNoModuleMatch, 'fixedModCode=', fixedModCode, 'fixedModRaw=', fixedModRaw, 'fixedModDisplay=', fixedModDisplay);
       state.debug.rows[rowIdx] = Object.assign({}, orig, {
         status: 'Fixed',
         service_code: d.service_code,
