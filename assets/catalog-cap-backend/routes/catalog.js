@@ -1726,7 +1726,7 @@ router.get('/debug/validate-crm', async (req, res) => {
   try {
     const db = require('../store/db');
     const result = await db.query(
-      `SELECT code, name FROM catalog_services WHERE "serviceNumber" = $1 LIMIT 1`,
+      `SELECT code, name FROM catalog_services WHERE service_number = $1 LIMIT 1`,
       [crm]
     );
     if (result.rows.length === 0) return res.json({ valid: false });
@@ -1748,7 +1748,7 @@ router.post('/debug/fix', requireEditor, async (req, res) => {
     let service_name = null;
 
     if (crm_id && /^\d+$/.test(crm_id)) {
-      const r = await db.query(`SELECT code, name FROM catalog_services WHERE "serviceNumber" = $1 LIMIT 1`, [crm_id]);
+      const r = await db.query(`SELECT code, name FROM catalog_services WHERE service_number = $1 LIMIT 1`, [crm_id]);
       if (r.rows.length === 0) return res.status(400).json({ error: 'CRM ID not found in catalog' });
       service_code = r.rows[0].code;
       service_name = r.rows[0].name;

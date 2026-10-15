@@ -1858,7 +1858,7 @@ window.openDebugRow = function(id) {
   // Only validate CRM if we don't already have a resolved service_code
   if (preCrm && !row.service_code) {
     apiFetch(`${CAP_BACKEND_URL}/api/catalog/debug/validate-crm?crm=${encodeURIComponent(preCrm)}`)
-      .then(d => { state.debug.fixForm = Object.assign({}, state.debug.fixForm, { crmValid: d.valid, crmServiceCode: d.service_code||null, crmServiceName: d.service_name||null }); render(); })
+      .then(d => { state.debug.fixForm = Object.assign({}, state.debug.fixForm, { crmValid: d.valid, crmServiceCode: d.service_code||null, crmServiceName: d.service_name||null, selectedService: d.valid ? { code: d.service_code, name: d.service_name||'', serviceNumber: preCrm } : null }); render(); })
       .catch(() => {});
   }
   // Preload modules for No Module Match rows
@@ -1897,7 +1897,7 @@ window.debugFixCrmInput = function(val, rowId, rowHash, bsCode) {
   _crmDebounce = setTimeout(async () => {
     try {
       const d = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/debug/validate-crm?crm=${encodeURIComponent(val)}`);
-      state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { crmValid: d.valid, crmServiceCode: d.service_code||null, crmServiceName: d.service_name||null });
+      state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { crmValid: d.valid, crmServiceCode: d.service_code||null, crmServiceName: d.service_name||null, selectedService: d.valid ? { code: d.service_code, name: d.service_name||'', serviceNumber: val } : null });
       render();
     } catch(e) {}
   }, 400);
