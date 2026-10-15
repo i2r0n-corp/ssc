@@ -1706,6 +1706,7 @@ function renderDebugPage() {
         <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600;display:block;margin-bottom:4px">Business Module</label>
         <div style="display:flex;gap:0.5rem;align-items:center">
           <select style="flex:1;border:${modBorder};border-radius:4px;padding:4px 6px;font-size:0.82rem"
+            value="${ff.moduleCode||''}"
             onchange="window.debugFixSelectModule(this.value)">
             <option value="">— select module —</option>
             ${moduleList.map(m => `<option value="${m.mod_code}" ${ff.moduleCode===m.mod_code?'selected':''}>${(m.mod_name.includes('//')?m.mod_name.replace(/^.*\/\/\s*/,''):m.mod_name).replace(/</g,'&lt;')}</option>`).join('')}
@@ -1867,13 +1868,10 @@ window.closeDebugModal = function() {
 
 let _crmDebounce = null;
 window.debugFixCrmInput = function(val, rowId, rowHash, bsCode) {
-  state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { rowId, rowHash, bsCode, crmId: val, crmValid: null, crmServiceCode: null, crmServiceName: null, selectedService: null });
-  render();
+  const prev = state.debug.fixForm || {};
+  state.debug.fixForm = Object.assign({}, prev, { rowId, rowHash, bsCode, crmId: val, crmValid: /^\d+$/.test(val) ? null : (val.length > 0 ? false : null), crmServiceCode: null, crmServiceName: null, selectedService: null });
   clearTimeout(_crmDebounce);
-  if (!val || !/^\d+$/.test(val)) {
-    state.debug.fixForm.crmValid = val.length > 0 ? false : null;
-    render(); return;
-  }
+  if (!val || !/^\d+$/.test(val)) { render(); return; }
   _crmDebounce = setTimeout(async () => {
     try {
       const d = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/debug/validate-crm?crm=${encodeURIComponent(val)}`);
@@ -1886,7 +1884,6 @@ window.debugFixCrmInput = function(val, rowId, rowHash, bsCode) {
 let _kwDebounce = null;
 window.debugFixKeywordInput = function(val, rowId, rowHash, bsCode) {
   state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { rowId, rowHash, bsCode, keywords: val, selectedService: null, keywordResults: [] });
-  render();
   clearTimeout(_kwDebounce);
   if (!val || val.length < 2) { render(); return; }
   _kwDebounce = setTimeout(async () => {
