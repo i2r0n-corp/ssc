@@ -1680,7 +1680,7 @@ function renderDebugPage() {
         <td style="font-size:0.78rem;color:#6a6a6a;white-space:nowrap">${(r.crm_ids||'').substring(0,15)}</td>
         <td style="font-size:0.82rem;color:#1D2D3E">${r.deck_name||''}</td>
         <td style="font-size:0.82rem">${r._fixedServiceName ? `<span style="color:#28a745;font-size:0.78rem">Fixed to: ${r._fixedServiceName.replace(/</g,'&lt;')}</span>` : (r.service_name||r.service_code||'')}</td>
-        <td style="font-size:0.78rem;color:#556B82">${r._fixedModuleDisplay ? `<span style="color:#6a6a6a">${(r.module_name||r.module_code||'').replace(/</g,'&lt;')}</span><br><span style="color:#28a745">Fixed to: ${r._fixedModuleDisplay.replace(/</g,'&lt;')}</span>` : (r.module_name||r.module_code||'')}</td>
+        <td style="font-size:0.78rem;color:#556B82">${r._fixedModuleDisplay ? `<span style="color:#dc3545;font-size:0.75rem">From Excel: ${(r.module_name||r.module_code||'').replace(/</g,'&lt;')}</span><br><span style="color:#28a745;font-size:0.75rem">Fixed to: ${r._fixedModuleDisplay.replace(/</g,'&lt;')}</span>` : (r.module_name||r.module_code||'')}</td>
         <td>${statusBadge(r.status)}</td>
         <td style="font-size:0.75rem;color:#6a6a6a">${r.service_code||''}</td>
       </tr>`).join('');
