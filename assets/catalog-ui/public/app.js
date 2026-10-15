@@ -1689,7 +1689,7 @@ function renderDebugPage() {
           return r.service_name||r.service_code||'';
         })()}</td>
         <td style="font-size:0.78rem;color:#556B82">${(() => {
-          if (r.status === 'Fixed') {
+          if (r.status === 'Fixed' && r.type === 'No Module Match') {
             const origMod = r._origModuleName || r.module_name || r.module_code || '';
             const fixedModRaw = r._fixedModuleDisplay || (() => {
               const raw = (state.catalog.moduleMap || {})[r.module_code] || '';
