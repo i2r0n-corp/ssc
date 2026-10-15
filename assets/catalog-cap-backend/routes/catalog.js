@@ -1708,7 +1708,7 @@ router.get('/modules-for-bs', async (req, res) => {
   try {
     const db = require('../store/db');
     const result = await db.query(
-      `SELECT s.code AS mod_code, s.name AS mod_name
+      `SELECT s.code AS mod_code, s.name AS mod_name, s.raw_data->>'url' AS mod_url
        FROM catalog_hierarchy h JOIN catalog_services s ON s.code = h.child_code
        WHERE h.parent_code = $1 AND s.service_object = 'Business Scenario module'
        ORDER BY s.name`,

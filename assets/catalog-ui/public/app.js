@@ -1707,9 +1707,9 @@ function renderDebugPage() {
           <select style="flex:1;border:${modBorder};border-radius:4px;padding:4px 6px;font-size:0.82rem"
             onchange="window.debugFixSelectModule(this.value)">
             <option value="">— select module —</option>
-            ${moduleList.map(m => `<option value="${m.mod_code}" ${ff.moduleCode===m.mod_code?'selected':''}>${m.mod_name.replace(/^[^-]+-\s*/,'')}</option>`).join('')}
+            ${moduleList.map(m => `<option value="${m.mod_code}" ${ff.moduleCode===m.mod_code?'selected':''}>${(m.mod_name.includes('//')?m.mod_name.replace(/^.*\/\/\s*/,''):m.mod_name).replace(/</g,'&lt;')}</option>`).join('')}
           </select>
-          ${ff.moduleCode ? `<a href="/catalog?module=${encodeURIComponent(ff.moduleCode)}" target="_blank" style="font-size:0.75rem;white-space:nowrap;color:#0070F2">↗ View</a>` : ''}
+          ${ff.moduleCode && ff.moduleUrl ? `<a href="${ff.moduleUrl}" target="_blank" style="font-size:0.75rem;white-space:nowrap;color:#0070F2">↗ View</a>` : ''}
         </div>
       </div>` : '';
 
@@ -1909,7 +1909,7 @@ window.debugFixSelectService = function(idx, rowId, rowHash, bsCode) {
 window.debugFixSelectModule = function(modCode) {
   const moduleList = state.debug.fixForm?.moduleList || [];
   const mod = moduleList.find(m => m.mod_code === modCode);
-  state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { moduleCode: modCode, moduleValid: !!modCode, moduleName: mod?.mod_name||'' });
+  state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { moduleCode: modCode, moduleValid: !!modCode, moduleName: mod?.mod_name||'', moduleUrl: mod?.mod_url||null });
   render();
 };
 
