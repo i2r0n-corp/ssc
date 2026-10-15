@@ -1739,7 +1739,8 @@ router.get('/debug/validate-crm', async (req, res) => {
 
 router.post('/debug/fix', requireEditor, async (req, res) => {
   const { log_row_id, row_hash, bs_code, crm_id, module_code, catalog_name, service_code_direct } = req.body || {};
-  if (!row_hash || !bs_code) return res.status(400).json({ error: 'row_hash and bs_code required' });
+  const effectiveHash = row_hash || (log_row_id ? `row-${log_row_id}` : null);
+  if (!effectiveHash || !bs_code) return res.status(400).json({ error: 'row_hash (or log_row_id) and bs_code required' });
   try {
     const db = require('../store/db');
 
@@ -1770,7 +1771,7 @@ router.post('/debug/fix', requireEditor, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
        ON CONFLICT (row_hash) DO UPDATE SET
          raw_crm_id=$3, raw_module_code=$4, raw_catalog_name=$5, service_code=$6, module_code=$7, last_applied_at=NOW()`,
-      [row_hash, bs_code, crm_id||null, module_code||null, catalog_name||null, service_code, module_code||null]
+      [effectiveHash, bs_code, crm_id||null, module_code||null, catalog_name||null, service_code, module_code||null]
     );
 
     if (log_row_id) {

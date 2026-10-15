@@ -1852,10 +1852,12 @@ window.openDebugRow = function(id) {
   state.debug.selectedRow = row;
   const preCrm = (row.crm_ids||'').split(/[,;/\s]+/).find(s => /^\d+$/.test(s.trim())) || '';
   const preKw  = row.service_name || row.deck_name || '';
-  state.debug.fixForm = { rowId: row.id, rowHash: row.row_hash||'', bsCode: row.bs_code||'', crmId: preCrm, keywords: preKw, crmValid: null, crmServiceCode: null, crmServiceName: null, selectedService: null, keywordResults: [], moduleList: [], moduleCode: null, moduleValid: false, moduleUrl: null, moduleName: '' };
+  // For rows that already have a resolved service_code, pre-mark as valid
+  const preValid = row.service_code ? true : null;
+  state.debug.fixForm = { rowId: row.id, rowHash: row.row_hash||'', bsCode: row.bs_code||'', crmId: preCrm, keywords: preKw, crmValid: preValid, crmServiceCode: row.service_code||null, crmServiceName: row.service_name||null, selectedService: null, keywordResults: [], moduleList: [], moduleCode: null, moduleValid: false, moduleUrl: null, moduleName: '' };
   render();
-  // Validate pre-filled CRM ID immediately
-  if (preCrm) {
+  // Only validate CRM if we don't already have a resolved service_code
+  if (preCrm && !row.service_code) {
     apiFetch(`${CAP_BACKEND_URL}/api/catalog/debug/validate-crm?crm=${encodeURIComponent(preCrm)}`)
       .then(d => { state.debug.fixForm = Object.assign({}, state.debug.fixForm, { crmValid: d.valid, crmServiceCode: d.service_code||null, crmServiceName: d.service_name||null }); render(); })
       .catch(() => {});
