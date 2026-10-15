@@ -1697,7 +1697,7 @@ function renderDebugPage() {
               const after = sep !== -1 ? raw.slice(sep + 4) : raw;
               return after.replace(/^Module\s+\d+[^:]*:\s*/i, '').trim() || after;
             })();
-            if (origMod && fixedModRaw && origMod !== fixedModRaw) return `<span style="color:#dc3545;font-size:0.75rem">From Excel: ${origMod.replace(/</g,'&lt;')}</span><br><span style="color:#28a745;font-size:0.75rem">Fixed to: ${fixedModRaw.replace(/</g,'&lt;')}</span>`;
+            if (origMod && fixedModRaw) return `<span style="color:#dc3545;font-size:0.75rem">From Excel: ${origMod.replace(/</g,'&lt;')}</span><br><span style="color:#28a745;font-size:0.75rem">Fixed to: ${fixedModRaw.replace(/</g,'&lt;')}</span>`;
           }
           return r.module_name||r.module_code||'';
         })()}</td>
@@ -2037,19 +2037,20 @@ window.debugFixSave = async function(rowId) {
     const rowIdx = state.debug.rows.findIndex(x => x.id === r.id);
     if (rowIdx >= 0) {
       const orig = state.debug.rows[rowIdx];
+      const isNoModuleMatch = orig.type === 'No Module Match';
       // Resolve fixed-to module display name from moduleMap
       const fixedModCode = ff.moduleCode || d.module_code || orig.module_code;
       const fixedModRaw = (state.catalog.moduleMap || {})[fixedModCode] || ff.moduleName || d.module_name || '';
       const fixedModSep = fixedModRaw.indexOf(' // ');
       const fixedModAfterSep = fixedModSep !== -1 ? fixedModRaw.slice(fixedModSep + 4) : fixedModRaw;
-      const fixedModDisplay = fixedModAfterSep.replace(/^Module\s+\d+[^:]*:\s*/i, '').trim() || fixedModAfterSep;
+      const fixedModDisplay = isNoModuleMatch ? (fixedModAfterSep.replace(/^Module\s+\d+[^:]*:\s*/i, '').trim() || fixedModAfterSep) : '';
       state.debug.rows[rowIdx] = Object.assign({}, orig, {
         status: 'Fixed',
         service_code: d.service_code,
         service_name: d.service_name,
         module_code: fixedModCode || orig.module_code,
         _origServiceName: orig.service_name || orig.service_code || '',
-        _origModuleName: orig.module_name || orig.module_code || '',
+        _origModuleName: isNoModuleMatch ? (orig.module_name || orig.module_code || '') : '',
         _fixedServiceName: d.service_name || '',
         _fixedModuleDisplay: fixedModDisplay,
       });
