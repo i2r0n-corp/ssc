@@ -1690,7 +1690,7 @@ function renderDebugPage() {
     if (!canEdit) return '';
     if (!fixableStatuses.includes(r.status) && r.status !== 'Fixed') return '';
     if (r.status === 'Fixed') return `<div style="margin-top:1rem;padding:0.5rem 1rem;background:#d4edda;border-radius:6px;color:#155724;font-size:0.82rem;font-weight:600">✓ Fixed manually</div>`;
-    const ff = fixForm.rowId === r.id ? fixForm : {};
+    const ff = fixForm.rowId == r.id ? fixForm : {};
     const crmValid = ff.crmValid;
     const crmBorder = crmValid === true ? '2px solid #28a745' : crmValid === false ? '2px solid #dc3545' : '1px solid #ccc';
     const svcSelected = ff.selectedService;
@@ -1709,7 +1709,7 @@ function renderDebugPage() {
             value="${ff.moduleCode||''}"
             onchange="window.debugFixSelectModule(this.value)">
             <option value="">— select module —</option>
-            ${moduleList.map(m => `<option value="${m.mod_code}" ${ff.moduleCode===m.mod_code?'selected':''}>${(m.mod_name.includes('//')?m.mod_name.replace(/^.*\/\/\s*/,''):m.mod_name).replace(/</g,'&lt;')}</option>`).join('')}
+            ${moduleList.map(m => `<option value="${m.mod_code}" ${String(ff.moduleCode)===String(m.mod_code)?'selected':''}>${(m.mod_name.includes('//')?m.mod_name.replace(/^.*\/\/\s*/,''):m.mod_name).replace(/</g,'&lt;')}</option>`).join('')}
           </select>
           ${ff.moduleCode && ff.moduleUrl ? `<a href="${ff.moduleUrl}" target="_blank" style="font-size:0.75rem;white-space:nowrap;color:#0070F2">↗ View</a>` : ''}
         </div>
@@ -1869,7 +1869,21 @@ window.closeDebugModal = function() {
 let _crmDebounce = null;
 window.debugFixCrmInput = function(val, rowId, rowHash, bsCode) {
   const prev = state.debug.fixForm || {};
-  state.debug.fixForm = Object.assign({}, prev, { rowId, rowHash, bsCode, crmId: val, crmValid: /^\d+$/.test(val) ? null : (val.length > 0 ? false : null), crmServiceCode: null, crmServiceName: null, selectedService: null });
+  state.debug.fixForm = {
+    ...prev,
+    rowId, rowHash, bsCode,
+    crmId: val,
+    crmValid: /^\d+$/.test(val) ? null : (val.length > 0 ? false : null),
+    crmServiceCode: null,
+    crmServiceName: null,
+    selectedService: null,
+    // explicitly keep module fields
+    moduleCode:  prev.moduleCode  || null,
+    moduleValid: prev.moduleValid || false,
+    moduleUrl:   prev.moduleUrl   || null,
+    moduleName:  prev.moduleName  || '',
+    moduleList:  prev.moduleList  || [],
+  };
   clearTimeout(_crmDebounce);
   if (!val || !/^\d+$/.test(val)) { render(); return; }
   _crmDebounce = setTimeout(async () => {
@@ -1883,7 +1897,19 @@ window.debugFixCrmInput = function(val, rowId, rowHash, bsCode) {
 
 let _kwDebounce = null;
 window.debugFixKeywordInput = function(val, rowId, rowHash, bsCode) {
-  state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { rowId, rowHash, bsCode, keywords: val, selectedService: null, keywordResults: [] });
+  const prev = state.debug.fixForm || {};
+  state.debug.fixForm = {
+    ...prev,
+    rowId, rowHash, bsCode,
+    keywords: val,
+    selectedService: null,
+    keywordResults: [],
+    moduleCode:  prev.moduleCode  || null,
+    moduleValid: prev.moduleValid || false,
+    moduleUrl:   prev.moduleUrl   || null,
+    moduleName:  prev.moduleName  || '',
+    moduleList:  prev.moduleList  || [],
+  };
   clearTimeout(_kwDebounce);
   if (!val || val.length < 2) { render(); return; }
   _kwDebounce = setTimeout(async () => {
