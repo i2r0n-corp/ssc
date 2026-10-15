@@ -1687,7 +1687,8 @@ function renderDebugPage() {
   const fixableStatuses = ['No Service Match', 'No Module Match', 'Fuzzy'];
 
   const fixFormHtml = (r) => {
-    if (!canEdit || !fixableStatuses.includes(r.status)) return '';
+    if (!canEdit) return '';
+    if (!fixableStatuses.includes(r.status) && r.status !== 'Fixed') return '';
     if (r.status === 'Fixed') return `<div style="margin-top:1rem;padding:0.5rem 1rem;background:#d4edda;border-radius:6px;color:#155724;font-size:0.82rem;font-weight:600">✓ Fixed manually</div>`;
     const ff = fixForm.rowId === r.id ? fixForm : {};
     const crmValid = ff.crmValid;
@@ -1697,7 +1698,7 @@ function renderDebugPage() {
     const moduleList = ff.moduleList || [];
     const modValid = ff.moduleCode && ff.moduleValid;
     const modBorder = modValid ? '2px solid #28a745' : '1px solid #ccc';
-    const saveDisabled = ff.saving || !(crmValid === true || svcSelected);
+    const saveDisabled = ff.saving || (isNoModule ? !(modValid && (crmValid === true || svcSelected)) : !(crmValid === true || svcSelected));
     const isNoModule = r.status === 'No Module Match';
 
     const moduleDropdown = isNoModule ? `
