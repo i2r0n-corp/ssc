@@ -2031,7 +2031,7 @@ window.debugFixSave = async function(rowId) {
     const rowIdx = state.debug.rows.findIndex(x => x.id === r.id);
     if (rowIdx >= 0) {
       const orig = state.debug.rows[rowIdx];
-      const isNoModuleMatch = !!(ff.moduleCode && ff.moduleCode !== orig.module_code);
+      const isNoModuleMatch = !orig.module_code;
       // Resolve fixed-to module display name from moduleMap
       const fixedModCode = ff.moduleCode || d.module_code || orig.module_code;
       const fixedModRaw = (state.catalog.moduleMap || {})[fixedModCode] || ff.moduleName || d.module_name || '';
