@@ -1679,8 +1679,28 @@ function renderDebugPage() {
         <td style="font-size:0.78rem;color:#556B82;white-space:nowrap">${r.bs_code||''}</td>
         <td style="font-size:0.78rem;color:#6a6a6a;white-space:nowrap">${(r.crm_ids||'').substring(0,15)}</td>
         <td style="font-size:0.82rem;color:#1D2D3E">${r.deck_name||''}</td>
-        <td style="font-size:0.82rem">${r._fixedServiceName ? `<span style="color:#28a745;font-size:0.78rem">Fixed to: ${r._fixedServiceName.replace(/</g,'&lt;')}</span>` : (r.service_name||r.service_code||'')}</td>
-        <td style="font-size:0.78rem;color:#556B82">${r._fixedModuleDisplay ? `<span style="color:#dc3545;font-size:0.75rem">From Excel: ${(r.module_name||r.module_code||'').replace(/</g,'&lt;')}</span><br><span style="color:#28a745;font-size:0.75rem">Fixed to: ${r._fixedModuleDisplay.replace(/</g,'&lt;')}</span>` : (r.module_name||r.module_code||'')}</td>
+        <td style="font-size:0.82rem">${(() => {
+          if (r.status === 'Fixed') {
+            const origSvc = r._origServiceName || '';
+            const fixedSvc = r._fixedServiceName || r.service_name || '';
+            if (origSvc && origSvc !== fixedSvc) return `<span style="color:#dc3545;font-size:0.75rem">From Excel: ${origSvc.replace(/</g,'&lt;')}</span><br><span style="color:#28a745;font-size:0.75rem">Fixed to: ${fixedSvc.replace(/</g,'&lt;')}</span>`;
+            if (fixedSvc) return `<span style="color:#28a745;font-size:0.75rem">Fixed to: ${fixedSvc.replace(/</g,'&lt;')}</span>`;
+          }
+          return r.service_name||r.service_code||'';
+        })()}</td>
+        <td style="font-size:0.78rem;color:#556B82">${(() => {
+          if (r.status === 'Fixed') {
+            const origMod = r._origModuleName || r.module_name || r.module_code || '';
+            const fixedModRaw = r._fixedModuleDisplay || (() => {
+              const raw = (state.catalog.moduleMap || {})[r.module_code] || '';
+              const sep = raw.indexOf(' // ');
+              const after = sep !== -1 ? raw.slice(sep + 4) : raw;
+              return after.replace(/^Module\s+\d+[^:]*:\s*/i, '').trim() || after;
+            })();
+            if (origMod && fixedModRaw) return `<span style="color:#dc3545;font-size:0.75rem">From Excel: ${origMod.replace(/</g,'&lt;')}</span><br><span style="color:#28a745;font-size:0.75rem">Fixed to: ${fixedModRaw.replace(/</g,'&lt;')}</span>`;
+          }
+          return r.module_name||r.module_code||'';
+        })()}</td>
         <td>${statusBadge(r.status)}</td>
         <td style="font-size:0.75rem;color:#6a6a6a">${r.service_code||''}</td>
       </tr>`).join('');
@@ -2012,15 +2032,20 @@ window.debugFixSave = async function(rowId) {
     // Update row in state
     const rowIdx = state.debug.rows.findIndex(x => x.id === r.id);
     if (rowIdx >= 0) {
-      const fixedModRaw = ff.moduleName || d.module_name || '';
+      const orig = state.debug.rows[rowIdx];
+      // Resolve fixed-to module display name from moduleMap
+      const fixedModCode = ff.moduleCode || d.module_code || orig.module_code;
+      const fixedModRaw = (state.catalog.moduleMap || {})[fixedModCode] || ff.moduleName || d.module_name || '';
       const fixedModSep = fixedModRaw.indexOf(' // ');
       const fixedModAfterSep = fixedModSep !== -1 ? fixedModRaw.slice(fixedModSep + 4) : fixedModRaw;
       const fixedModDisplay = fixedModAfterSep.replace(/^Module\s+\d+[^:]*:\s*/i, '').trim() || fixedModAfterSep;
-      state.debug.rows[rowIdx] = Object.assign({}, state.debug.rows[rowIdx], {
+      state.debug.rows[rowIdx] = Object.assign({}, orig, {
         status: 'Fixed',
         service_code: d.service_code,
         service_name: d.service_name,
-        module_code: d.module_code || state.debug.rows[rowIdx].module_code,
+        module_code: fixedModCode || orig.module_code,
+        _origServiceName: orig.service_name || orig.service_code || '',
+        _origModuleName: orig.module_name || orig.module_code || '',
         _fixedServiceName: d.service_name || '',
         _fixedModuleDisplay: fixedModDisplay,
       });
