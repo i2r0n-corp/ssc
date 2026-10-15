@@ -1715,8 +1715,8 @@ function renderDebugPage() {
         </div>
       </div>` : '';
 
-    const crmPreFill = ff.rowId === r.id ? (ff.crmId||'') : (r.crm_ids||'').split(/[,;/\s]+/)[0]||'';
-    const kwPreFill  = ff.rowId === r.id ? (ff.keywords||'') : (r.service_name || r.deck_name || '');
+    const crmPreFill = ff.crmId != null ? ff.crmId : (r.crm_ids||'').split(/[,;/\s]+/).find(s => /^\d+$/.test(s.trim()))||'';
+    const kwPreFill  = ff.keywords != null ? ff.keywords : (r.service_name || r.deck_name || '');
 
     return `
       <div style="margin-top:1.25rem;border-top:1px solid #e0e0e0;padding-top:1rem">
@@ -1848,16 +1848,23 @@ function renderDebugPage() {
 
 window.openDebugRow = function(id) {
   const row = state.debug.rows.find(r => String(r.id) === String(id));
-  if (row) {
-    state.debug.selectedRow = row;
-    state.debug.fixForm = null;
-    // Preload modules for No Module Match rows
-    if (row.status === 'No Module Match' && row.bs_code) {
-      apiFetch(`${CAP_BACKEND_URL}/api/catalog/modules-for-bs?bs=${encodeURIComponent(row.bs_code)}`)
-        .then(d => { state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { rowId: row.id, moduleList: d.modules||[] }); render(); })
-        .catch(() => {});
-    }
-    render();
+  if (!row) return;
+  state.debug.selectedRow = row;
+  const preCrm = (row.crm_ids||'').split(/[,;/\s]+/).find(s => /^\d+$/.test(s.trim())) || '';
+  const preKw  = row.service_name || row.deck_name || '';
+  state.debug.fixForm = { rowId: row.id, rowHash: row.row_hash||'', bsCode: row.bs_code||'', crmId: preCrm, keywords: preKw, crmValid: null, crmServiceCode: null, crmServiceName: null, selectedService: null, keywordResults: [], moduleList: [], moduleCode: null, moduleValid: false, moduleUrl: null, moduleName: '' };
+  render();
+  // Validate pre-filled CRM ID immediately
+  if (preCrm) {
+    apiFetch(`${CAP_BACKEND_URL}/api/catalog/debug/validate-crm?crm=${encodeURIComponent(preCrm)}`)
+      .then(d => { state.debug.fixForm = Object.assign({}, state.debug.fixForm, { crmValid: d.valid, crmServiceCode: d.service_code||null, crmServiceName: d.service_name||null }); render(); })
+      .catch(() => {});
+  }
+  // Preload modules for No Module Match rows
+  if (row.status === 'No Module Match' && row.bs_code) {
+    apiFetch(`${CAP_BACKEND_URL}/api/catalog/modules-for-bs?bs=${encodeURIComponent(row.bs_code)}`)
+      .then(d => { state.debug.fixForm = Object.assign({}, state.debug.fixForm, { moduleList: d.modules||[] }); render(); })
+      .catch(() => {});
   }
 };
 window.closeDebugModal = function() {
