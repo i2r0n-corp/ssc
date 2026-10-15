@@ -1689,7 +1689,7 @@ function renderDebugPage() {
           return r.service_name||r.service_code||'';
         })()}</td>
         <td style="font-size:0.78rem;color:#556B82">${(() => {
-          if (r.status === 'Fixed' && r.type === 'No Module Match') {
+          if (r.status === 'Fixed') {
             const origMod = r._origModuleName || r.module_name || r.module_code || '';
             const fixedModRaw = r._fixedModuleDisplay || (() => {
               const raw = (state.catalog.moduleMap || {})[r.module_code] || '';
@@ -1697,7 +1697,7 @@ function renderDebugPage() {
               const after = sep !== -1 ? raw.slice(sep + 4) : raw;
               return after.replace(/^Module\s+\d+[^:]*:\s*/i, '').trim() || after;
             })();
-            if (origMod && fixedModRaw) return `<span style="color:#dc3545;font-size:0.75rem">From Excel: ${origMod.replace(/</g,'&lt;')}</span><br><span style="color:#28a745;font-size:0.75rem">Fixed to: ${fixedModRaw.replace(/</g,'&lt;')}</span>`;
+            if (origMod && fixedModRaw && origMod !== fixedModRaw) return `<span style="color:#dc3545;font-size:0.75rem">From Excel: ${origMod.replace(/</g,'&lt;')}</span><br><span style="color:#28a745;font-size:0.75rem">Fixed to: ${fixedModRaw.replace(/</g,'&lt;')}</span>`;
           }
           return r.module_name||r.module_code||'';
         })()}</td>
