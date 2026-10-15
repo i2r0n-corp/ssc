@@ -89,7 +89,7 @@ router.get('/searchServices', (req, res) => {
       const bsModSubq = businessScenario
         ? `, ARRAY(SELECT hm.parent_code FROM catalog_hierarchy hm JOIN catalog_hierarchy h1b ON h1b.child_code = hm.parent_code WHERE h1b.parent_code = $1 AND hm.child_code = s.code) AS bs_module_codes`
         : `, NULL::text[] AS bs_module_codes`;
-      let sql = `SELECT s.*, ${businessScenario ? 'bn.deck_name, bn.bs_code AS bn_bs_code' : 'NULL::text AS deck_name, NULL::text AS bn_bs_code'}${bsModSubq} FROM catalog_services s ${bsJoin} WHERE s.service_object NOT IN ('Business Scenario', 'Business Scenario module') AND s.name IS NOT NULL`;
+      let sql = `SELECT s.*, ${businessScenario ? 'bn.deck_name, bn.bs_code AS bn_bs_code' : 'NULL::text AS deck_name, NULL::text AS bn_bs_code'}${bsModSubq} FROM catalog_services s ${bsJoin} WHERE s.service_object NOT IN ('Business Scenario', 'Business Scenario module') AND NOT (s.service_object = 'Service' AND EXISTS (SELECT 1 FROM catalog_classification cc WHERE cc.service_code = s.code AND cc.feature_key = 'engagementType' AND cc.feature_value = 'Max Success Plan')) AND s.name IS NOT NULL`;
 
       if (query) {
         params.push(`%${query.toLowerCase()}%`);
@@ -234,6 +234,7 @@ router.get('/searchServices', (req, res) => {
       const seen = new Set();
       const results = Object.values(flatIndex).filter(svc => {
         if (svc.serviceObject === 'Business Scenario' || svc.serviceObject === 'Business Scenario module') return false;
+        if (svc.serviceObject === 'Service' && svc.engagementType === 'Max Success Plan') return false;
         if (!svc.name) return false;
         if (seen.has(svc.code)) return false;
         const textMatch = !q || svc.name.toLowerCase().includes(q) || (svc.shortDescription||'').toLowerCase().includes(q);
@@ -345,7 +346,7 @@ router.get('/filterServices', async (req, res) => {
       const bsModSubq = businessScenario
         ? `, ARRAY(SELECT hm.parent_code FROM catalog_hierarchy hm JOIN catalog_hierarchy h1b ON h1b.child_code = hm.parent_code WHERE h1b.parent_code = $1 AND hm.child_code = s.code) AS bs_module_codes`
         : `, NULL::text[] AS bs_module_codes`;
-      let sql = `SELECT s.*, ${businessScenario ? 'bn.deck_name, bn.bs_code AS bn_bs_code' : 'NULL::text AS deck_name, NULL::text AS bn_bs_code'}${bsModSubq} FROM catalog_services s ${bsJoin} WHERE s.service_object NOT IN ('Business Scenario', 'Business Scenario module') AND s.name IS NOT NULL`;
+      let sql = `SELECT s.*, ${businessScenario ? 'bn.deck_name, bn.bs_code AS bn_bs_code' : 'NULL::text AS deck_name, NULL::text AS bn_bs_code'}${bsModSubq} FROM catalog_services s ${bsJoin} WHERE s.service_object NOT IN ('Business Scenario', 'Business Scenario module') AND NOT (s.service_object = 'Service' AND EXISTS (SELECT 1 FROM catalog_classification cc WHERE cc.service_code = s.code AND cc.feature_key = 'engagementType' AND cc.feature_value = 'Max Success Plan')) AND s.name IS NOT NULL`;
 
       if (engagementType) {
         params.push(engagementType);
@@ -480,6 +481,7 @@ router.get('/filterServices', async (req, res) => {
     const seen = new Set();
     const results = Object.values(flatIndex).filter(svc => {
       if (svc.serviceObject === 'Business Scenario' || svc.serviceObject === 'Business Scenario module') return false;
+      if (svc.serviceObject === 'Service' && svc.engagementType === 'Max Success Plan') return false;
       if (!svc.name) return false;
       if (seen.has(svc.code)) return false;
       const etArr = Array.isArray(svc.engagementType) ? svc.engagementType : (svc.engagementType ? [svc.engagementType] : []);
