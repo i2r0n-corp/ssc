@@ -1739,6 +1739,23 @@ router.get('/debug/validate-crm', async (req, res) => {
   }
 });
 
+router.get('/debug/validate-code', async (req, res) => {
+  const code = (req.query.code || '').trim();
+  if (!code || code.length < 3) return res.json({ valid: false });
+  try {
+    const db = require('../store/db');
+    const result = await db.query(
+      `SELECT code, name, service_number FROM catalog_services WHERE code = $1 LIMIT 1`,
+      [code]
+    );
+    if (result.rows.length === 0) return res.json({ valid: false });
+    const r = result.rows[0];
+    res.json({ valid: true, service_code: r.code, service_name: r.name, service_number: r.service_number||'' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/debug/fix', requireEditor, async (req, res) => {
   const { log_row_id, row_hash, bs_code, crm_id, module_code, catalog_name, service_code_direct } = req.body || {};
   const effectiveHash = row_hash || (log_row_id ? `row-${log_row_id}` : null);

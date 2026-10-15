@@ -1679,8 +1679,8 @@ function renderDebugPage() {
         <td style="font-size:0.78rem;color:#556B82;white-space:nowrap">${r.bs_code||''}</td>
         <td style="font-size:0.78rem;color:#6a6a6a;white-space:nowrap">${(r.crm_ids||'').substring(0,15)}</td>
         <td style="font-size:0.82rem;color:#1D2D3E">${r.deck_name||''}</td>
-        <td style="font-size:0.82rem">${r.service_name||r.service_code||''}</td>
-        <td style="font-size:0.78rem;color:#556B82">${r.module_name||r.module_code||''}</td>
+        <td style="font-size:0.82rem">${r._fixedServiceName ? `<span style="color:#28a745;font-size:0.78rem">Fixed to: ${r._fixedServiceName.replace(/</g,'&lt;')}</span>` : (r.service_name||r.service_code||'')}</td>
+        <td style="font-size:0.78rem;color:#556B82">${r._fixedModuleDisplay ? `<span style="color:#6a6a6a">${(r.module_name||r.module_code||'').replace(/</g,'&lt;')}</span><br><span style="color:#28a745">Fixed to: ${r._fixedModuleDisplay.replace(/</g,'&lt;')}</span>` : (r.module_name||r.module_code||'')}</td>
         <td>${statusBadge(r.status)}</td>
         <td style="font-size:0.75rem;color:#6a6a6a">${r.service_code||''}</td>
       </tr>`).join('');
@@ -1695,14 +1695,16 @@ function renderDebugPage() {
     if (r.status === 'Fixed') return `<div style="margin-top:1rem;padding:0.5rem 1rem;background:#d4edda;border-radius:6px;color:#155724;font-size:0.82rem;font-weight:600">✓ Fixed manually</div>`;
     const ff = fixForm.rowId == r.id ? fixForm : {};
     const crmValid = ff.crmValid;
+    const codeValid = ff.codeValid;
     const crmBorder = crmValid === true ? '2px solid #28a745' : crmValid === false ? '2px solid #dc3545' : '1px solid #ccc';
+    const codeBorder = codeValid === true ? '2px solid #28a745' : codeValid === false ? '2px solid #dc3545' : '1px solid #ccc';
     const svcSelected = ff.selectedService;
     const keywordResults = ff.keywordResults || [];
     const moduleList = ff.moduleList || [];
     const modValid = ff.moduleCode && ff.moduleValid;
     const modBorder = modValid ? '2px solid #28a745' : '1px solid #ccc';
     const isNoModule = r.status === 'No Module Match';
-    const saveDisabled = ff.saving || (isNoModule ? !(modValid && (crmValid === true || svcSelected)) : !(crmValid === true || svcSelected));
+    const saveDisabled = ff.saving || (isNoModule ? !(modValid && (crmValid === true || codeValid === true || svcSelected)) : !(crmValid === true || codeValid === true || svcSelected));
 
     const moduleDropdown = isNoModule ? `
       <div style="margin-top:1rem">
@@ -1725,15 +1727,20 @@ function renderDebugPage() {
       <div style="margin-top:1.25rem;border-top:1px solid #e0e0e0;padding-top:1rem">
         <div style="font-size:0.8rem;font-weight:600;color:#1D2D3E;margin-bottom:0.75rem">Fix this row</div>
         ${moduleDropdown}
-        <div style="margin-top:0.75rem">
-          <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600;display:block;margin-bottom:4px">CRM ID (Service Number)</label>
-          <div style="display:flex;gap:0.5rem;align-items:center">
-            <input type="text" inputmode="numeric" placeholder="digits only"
-              style="width:180px;border:${crmBorder};border-radius:4px;padding:4px 8px;font-size:0.82rem"
+        <div style="margin-top:0.75rem;display:flex;gap:0.75rem;align-items:flex-end">
+          <div style="flex:0 0 auto">
+            <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600;display:block;margin-bottom:4px">CRM ID</label>
+            <input type="text" inputmode="numeric" placeholder="min 6 digits"
+              style="width:130px;border:${crmBorder};border-radius:4px;padding:4px 8px;font-size:0.82rem"
               value="${crmPreFill.replace(/"/g,'&quot;')}"
               oninput="window.debugFixCrmInput(this.value,${r.id},'${r.row_hash||''}','${r.bs_code||''}')" />
-            ${crmValid === true && ff.crmServiceName ? `<span style="font-size:0.78rem;color:#28a745">${ff.crmServiceName.replace(/</g,'&lt;')}</span>` : ''}
-            ${crmValid === true && ff.crmServiceCode ? `<a href="/catalog?service=${encodeURIComponent(ff.crmServiceCode)}" target="_blank" style="font-size:0.75rem;color:#0070F2;white-space:nowrap">↗</a>` : ''}
+          </div>
+          <div style="flex:0 0 auto">
+            <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600;display:block;margin-bottom:4px">Code</label>
+            <input type="text" placeholder="min 13 chars"
+              style="width:190px;border:${codeBorder};border-radius:4px;padding:4px 8px;font-size:0.82rem"
+              value="${(ff.codeId||'').replace(/"/g,'&quot;')}"
+              oninput="window.debugFixCodeInput(this.value,${r.id},'${r.row_hash||''}','${r.bs_code||''}')" />
           </div>
         </div>
         <div style="margin-top:0.75rem;position:relative">
@@ -1749,7 +1756,6 @@ function renderDebugPage() {
               <b>${s.name.replace(/</g,'&lt;')}</b> <span style="color:#6a6a6a;font-size:0.72rem">${s.code}</span>
             </div>`).join('')}
           </div>` : ''}
-          ${svcSelected ? `<a href="/catalog?service=${encodeURIComponent(svcSelected.code)}" target="_blank" style="font-size:0.75rem;color:#0070F2">↗ View in catalog</a>` : ''}
         </div>
         <div style="margin-top:1rem;display:flex;gap:0.75rem;align-items:center">
           <button class="btn btn-primary btn-sm" ${saveDisabled?'disabled':''} onclick="window.debugFixSave(${r.id})">
@@ -1856,12 +1862,12 @@ window.openDebugRow = function(id) {
   const preCrm = (row.crm_ids||'').split(/[,;/\s]+/).find(s => /^\d+$/.test(s.trim())) || '';
   const preKw  = row.service_name || row.deck_name || '';
   const preSelectedService = row.service_code ? { code: row.service_code, name: row.service_name||'', serviceNumber: preCrm } : null;
-  state.debug.fixForm = { rowId: row.id, rowHash: row.row_hash||'', bsCode: row.bs_code||'', crmId: preCrm, keywords: preKw, crmValid: row.service_code ? true : null, crmServiceCode: row.service_code||null, crmServiceName: row.service_name||null, selectedService: preSelectedService, keywordResults: [], moduleList: [], moduleCode: null, moduleValid: false, moduleUrl: null, moduleName: '' };
+  state.debug.fixForm = { rowId: row.id, rowHash: row.row_hash||'', bsCode: row.bs_code||'', crmId: preCrm, codeId: row.service_code||'', keywords: preKw, crmValid: row.service_code ? true : null, codeValid: row.service_code ? true : null, crmServiceCode: row.service_code||null, crmServiceName: row.service_name||null, selectedService: preSelectedService, keywordResults: [], moduleList: [], moduleCode: null, moduleValid: false, moduleUrl: null, moduleName: '' };
   render();
   // Only validate CRM if we don't already have a resolved service_code
   if (preCrm && !row.service_code) {
     apiFetch(`${CAP_BACKEND_URL}/api/catalog/debug/validate-crm?crm=${encodeURIComponent(preCrm)}`)
-      .then(d => { state.debug.fixForm = Object.assign({}, state.debug.fixForm, { crmValid: d.valid, crmServiceCode: d.service_code||null, crmServiceName: d.service_name||null, selectedService: d.valid ? { code: d.service_code, name: d.service_name||'', serviceNumber: preCrm } : null }); render(); })
+      .then(d => { state.debug.fixForm = Object.assign({}, state.debug.fixForm, { crmValid: d.valid, codeValid: d.valid ? true : null, codeId: d.valid ? (d.service_code||'') : '', crmServiceCode: d.service_code||null, crmServiceName: d.service_name||null, selectedService: d.valid ? { code: d.service_code, name: d.service_name||'', serviceNumber: preCrm } : null }); render(); })
       .catch(() => {});
   }
   // Preload modules for No Module Match rows
@@ -1888,7 +1894,6 @@ window.debugFixCrmInput = function(val, rowId, rowHash, bsCode) {
     crmServiceCode: null,
     crmServiceName: null,
     selectedService: null,
-    // explicitly keep module fields
     moduleCode:  prev.moduleCode  || null,
     moduleValid: prev.moduleValid || false,
     moduleUrl:   prev.moduleUrl   || null,
@@ -1896,14 +1901,53 @@ window.debugFixCrmInput = function(val, rowId, rowHash, bsCode) {
     moduleList:  prev.moduleList  || [],
   };
   clearTimeout(_crmDebounce);
-  if (!val || !/^\d+$/.test(val)) { render(); return; }
+  if (!val || !/^\d+$/.test(val) || val.length < 6) { render(); return; }
   _crmDebounce = setTimeout(async () => {
     try {
       const d = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/debug/validate-crm?crm=${encodeURIComponent(val)}`);
-      state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { crmValid: d.valid, crmServiceCode: d.service_code||null, crmServiceName: d.service_name||null, selectedService: d.valid ? { code: d.service_code, name: d.service_name||'', serviceNumber: val } : null });
+      state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, {
+        crmValid: d.valid, codeValid: d.valid ? true : null,
+        codeId: d.valid ? (d.service_code||'') : '',
+        crmServiceCode: d.service_code||null, crmServiceName: d.service_name||null,
+        keywords: d.valid ? (d.service_name||state.debug.fixForm?.keywords||'') : (state.debug.fixForm?.keywords||''),
+        selectedService: d.valid ? { code: d.service_code, name: d.service_name||'', serviceNumber: val } : null,
+      });
       render();
     } catch(e) {}
-  }, 400);
+  }, 1000);
+};
+
+let _codeDebounce = null;
+window.debugFixCodeInput = function(val, rowId, rowHash, bsCode) {
+  const prev = state.debug.fixForm || {};
+  state.debug.fixForm = {
+    ...prev,
+    rowId, rowHash, bsCode,
+    codeId: val,
+    codeValid: val.length > 0 ? null : null,
+    crmServiceCode: null, crmServiceName: null,
+    selectedService: null,
+    moduleCode:  prev.moduleCode  || null,
+    moduleValid: prev.moduleValid || false,
+    moduleUrl:   prev.moduleUrl   || null,
+    moduleName:  prev.moduleName  || '',
+    moduleList:  prev.moduleList  || [],
+  };
+  clearTimeout(_codeDebounce);
+  if (!val || val.length < 13) { render(); return; }
+  _codeDebounce = setTimeout(async () => {
+    try {
+      const d = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/debug/validate-code?code=${encodeURIComponent(val)}`);
+      state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, {
+        codeValid: d.valid, crmValid: d.valid ? true : null,
+        crmId: d.valid ? (d.service_number||state.debug.fixForm?.crmId||'') : (state.debug.fixForm?.crmId||''),
+        keywords: d.valid ? (d.service_name||state.debug.fixForm?.keywords||'') : (state.debug.fixForm?.keywords||''),
+        crmServiceCode: d.service_code||null, crmServiceName: d.service_name||null,
+        selectedService: d.valid ? { code: d.service_code, name: d.service_name||'', serviceNumber: d.service_number||'' } : null,
+      });
+      render();
+    } catch(e) {}
+  }, 1000);
 };
 
 let _kwDebounce = null;
@@ -1937,7 +1981,7 @@ window.debugFixKeywordInput = function(val, rowId, rowHash, bsCode) {
 window.debugFixSelectService = function(idx, rowId, rowHash, bsCode) {
   const svc = (state.debug.fixForm?.keywordResults || [])[idx];
   if (!svc) return;
-  state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { rowId, rowHash, bsCode, selectedService: svc, keywordResults: [], keywords: svc.name, crmId: svc.serviceNumber||state.debug.fixForm?.crmId||'', crmValid: svc.serviceNumber ? true : null, crmServiceCode: svc.code, crmServiceName: svc.name });
+  state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { rowId, rowHash, bsCode, selectedService: svc, keywordResults: [], keywords: svc.name, crmId: svc.serviceNumber||state.debug.fixForm?.crmId||'', crmValid: svc.serviceNumber ? true : null, codeId: svc.code||'', codeValid: true, crmServiceCode: svc.code, crmServiceName: svc.name });
   render();
 };
 
@@ -1962,13 +2006,24 @@ window.debugFixSave = async function(rowId) {
       crm_id: ff.crmId || null,
       module_code: ff.moduleCode || r.module_code || null,
       catalog_name: ff.selectedService?.name || ff.keywords || null,
-      service_code_direct: ff.selectedService?.code || ff.crmServiceCode || null,
+      service_code_direct: ff.selectedService?.code || ff.codeId || ff.crmServiceCode || null,
     };
     const d = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/debug/fix`, { method: 'POST', body: JSON.stringify(body) });
     // Update row in state
     const rowIdx = state.debug.rows.findIndex(x => x.id === r.id);
     if (rowIdx >= 0) {
-      state.debug.rows[rowIdx] = Object.assign({}, state.debug.rows[rowIdx], { status: 'Fixed', service_code: d.service_code, service_name: d.service_name, module_code: d.module_code||state.debug.rows[rowIdx].module_code });
+      const fixedModRaw = ff.moduleName || d.module_name || '';
+      const fixedModSep = fixedModRaw.indexOf(' // ');
+      const fixedModAfterSep = fixedModSep !== -1 ? fixedModRaw.slice(fixedModSep + 4) : fixedModRaw;
+      const fixedModDisplay = fixedModAfterSep.replace(/^Module\s+\d+[^:]*:\s*/i, '').trim() || fixedModAfterSep;
+      state.debug.rows[rowIdx] = Object.assign({}, state.debug.rows[rowIdx], {
+        status: 'Fixed',
+        service_code: d.service_code,
+        service_name: d.service_name,
+        module_code: d.module_code || state.debug.rows[rowIdx].module_code,
+        _fixedServiceName: d.service_name || '',
+        _fixedModuleDisplay: fixedModDisplay,
+      });
       state.debug.selectedRow = state.debug.rows[rowIdx];
     }
     state.debug.fixForm = Object.assign({}, ff, { saving: false, savedBadge: true });
