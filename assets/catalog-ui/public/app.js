@@ -1852,9 +1852,8 @@ window.openDebugRow = function(id) {
   state.debug.selectedRow = row;
   const preCrm = (row.crm_ids||'').split(/[,;/\s]+/).find(s => /^\d+$/.test(s.trim())) || '';
   const preKw  = row.service_name || row.deck_name || '';
-  // For rows that already have a resolved service_code, pre-mark as valid
-  const preValid = row.service_code ? true : null;
-  state.debug.fixForm = { rowId: row.id, rowHash: row.row_hash||'', bsCode: row.bs_code||'', crmId: preCrm, keywords: preKw, crmValid: preValid, crmServiceCode: row.service_code||null, crmServiceName: row.service_name||null, selectedService: null, keywordResults: [], moduleList: [], moduleCode: null, moduleValid: false, moduleUrl: null, moduleName: '' };
+  const preSelectedService = row.service_code ? { code: row.service_code, name: row.service_name||'', serviceNumber: preCrm } : null;
+  state.debug.fixForm = { rowId: row.id, rowHash: row.row_hash||'', bsCode: row.bs_code||'', crmId: preCrm, keywords: preKw, crmValid: row.service_code ? true : null, crmServiceCode: row.service_code||null, crmServiceName: row.service_name||null, selectedService: preSelectedService, keywordResults: [], moduleList: [], moduleCode: null, moduleValid: false, moduleUrl: null, moduleName: '' };
   render();
   // Only validate CRM if we don't already have a resolved service_code
   if (preCrm && !row.service_code) {
