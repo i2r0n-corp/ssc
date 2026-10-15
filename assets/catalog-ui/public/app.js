@@ -1750,14 +1750,14 @@ function renderDebugPage() {
         <div style="margin-top:0.75rem;display:flex;gap:0.75rem;align-items:flex-end">
           <div style="flex:0 0 auto">
             <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600;display:block;margin-bottom:4px">CRM ID</label>
-            <input type="text" inputmode="numeric" placeholder="min 6 digits"
+            <input type="text" inputmode="numeric" placeholder="min 6 digits" id="fix-crm-${r.id}"
               style="width:130px;border:${crmBorder};border-radius:4px;padding:4px 8px;font-size:0.82rem"
               value="${crmPreFill.replace(/"/g,'&quot;')}"
               oninput="window.debugFixCrmInput(this.value,${r.id},'${r.row_hash||''}','${r.bs_code||''}')" />
           </div>
           <div style="flex:0 0 auto">
             <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600;display:block;margin-bottom:4px">Code</label>
-            <input type="text" placeholder="min 13 chars"
+            <input type="text" placeholder="min 13 chars" id="fix-code-${r.id}"
               style="width:190px;border:${codeBorder};border-radius:4px;padding:4px 8px;font-size:0.82rem"
               value="${(ff.codeId||'').replace(/"/g,'&quot;')}"
               oninput="window.debugFixCodeInput(this.value,${r.id},'${r.row_hash||''}','${r.bs_code||''}')" />
@@ -1765,9 +1765,9 @@ function renderDebugPage() {
         </div>
         <div style="margin-top:0.75rem;position:relative">
           <label style="font-size:0.75rem;color:#6a6a6a;font-weight:600;display:block;margin-bottom:4px">Catalog name keywords</label>
-          <input type="text" placeholder="type to search…"
+          <input type="text" placeholder="type to search…" id="fix-kw-${r.id}"
             style="width:100%;border:${svcSelected?'2px solid #28a745':'1px solid #ccc'};border-radius:4px;padding:4px 8px;font-size:0.82rem;box-sizing:border-box"
-            value="${svcSelected ? svcSelected.name.replace(/"/g,'&quot;') : kwPreFill.replace(/"/g,'&quot;')}"
+            value="${kwPreFill.replace(/"/g,'&quot;')}"
             oninput="window.debugFixKeywordInput(this.value,${r.id},'${r.row_hash||''}','${r.bs_code||''}')" />
           ${keywordResults.length > 0 ? `
           <div style="position:absolute;z-index:100;background:white;border:1px solid #ccc;border-radius:4px;width:100%;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.12)">
@@ -1921,7 +1921,9 @@ window.debugFixCrmInput = function(val, rowId, rowHash, bsCode) {
     moduleList:  prev.moduleList  || [],
   };
   clearTimeout(_crmDebounce);
-  if (!val || !/^\d+$/.test(val) || val.length < 6) { render(); return; }
+  const el = document.getElementById('fix-crm-' + rowId);
+  if (el) el.style.border = '1px solid #ccc';
+  if (!val || !/^\d+$/.test(val) || val.length < 6) return;
   _crmDebounce = setTimeout(async () => {
     try {
       const d = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/debug/validate-crm?crm=${encodeURIComponent(val)}`);
@@ -1954,7 +1956,9 @@ window.debugFixCodeInput = function(val, rowId, rowHash, bsCode) {
     moduleList:  prev.moduleList  || [],
   };
   clearTimeout(_codeDebounce);
-  if (!val || val.length < 13) { render(); return; }
+  const el = document.getElementById('fix-code-' + rowId);
+  if (el) el.style.border = '1px solid #ccc';
+  if (!val || val.length < 13) return;
   _codeDebounce = setTimeout(async () => {
     try {
       const d = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/debug/validate-code?code=${encodeURIComponent(val)}`);
@@ -1986,16 +1990,16 @@ window.debugFixKeywordInput = function(val, rowId, rowHash, bsCode) {
     moduleList:  prev.moduleList  || [],
   };
   clearTimeout(_kwDebounce);
-  if (!val || val.length < 2) { render(); return; }
+  const kwEl = document.getElementById('fix-kw-' + rowId);
+  if (kwEl) kwEl.style.border = '1px solid #ccc';
+  if (!val || val.length < 6) return;
   _kwDebounce = setTimeout(async () => {
     try {
-      const params = new URLSearchParams({ query: val });
-      if (bsCode) params.set('businessScenario', bsCode);
-      const d = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/searchServices?${params}`);
+      const d = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/searchServices?query=${encodeURIComponent(val)}`);
       state.debug.fixForm = Object.assign({}, state.debug.fixForm||{}, { keywordResults: (d.services||[]).slice(0,10) });
       render();
     } catch(e) {}
-  }, 800);
+  }, 1000);
 };
 
 window.debugFixSelectService = function(idx, rowId, rowHash, bsCode) {
