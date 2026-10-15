@@ -1698,8 +1698,8 @@ function renderDebugPage() {
     const moduleList = ff.moduleList || [];
     const modValid = ff.moduleCode && ff.moduleValid;
     const modBorder = modValid ? '2px solid #28a745' : '1px solid #ccc';
-    const saveDisabled = ff.saving || (isNoModule ? !(modValid && (crmValid === true || svcSelected)) : !(crmValid === true || svcSelected));
     const isNoModule = r.status === 'No Module Match';
+    const saveDisabled = ff.saving || (isNoModule ? !(modValid && (crmValid === true || svcSelected)) : !(crmValid === true || svcSelected));
 
     const moduleDropdown = isNoModule ? `
       <div style="margin-top:1rem">
@@ -1737,7 +1737,7 @@ function renderDebugPage() {
           <input type="text" placeholder="type to search…"
             style="width:100%;border:${svcSelected?'2px solid #28a745':'1px solid #ccc'};border-radius:4px;padding:4px 8px;font-size:0.82rem;box-sizing:border-box"
             value="${svcSelected ? svcSelected.name.replace(/"/g,'&quot;') : kwPreFill.replace(/"/g,'&quot;')}"
-            oninput="window.debugFixKeywordInput(this.value,${r.id},'${r.row_hash||''}','${r.bs_code||''}','${r.bs_code||''}')" />
+            oninput="window.debugFixKeywordInput(this.value,${r.id},'${r.row_hash||''}','${r.bs_code||''}')" />
           ${keywordResults.length > 0 ? `
           <div style="position:absolute;z-index:100;background:white;border:1px solid #ccc;border-radius:4px;width:100%;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.12)">
             ${keywordResults.map((s, idx) => `<div style="padding:6px 10px;font-size:0.8rem;cursor:pointer;border-bottom:1px solid #f0f0f0"
