@@ -87,7 +87,7 @@ const AVG_CHAR_W    = Math.round(FONT_SZ_EMU * 0.50); // 50800 EMU — slightly 
 // ── XML escape ────────────────────────────────────────────────────────────────
 
 function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+  return String(s||'').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
 }
 
 // ── Run properties ────────────────────────────────────────────────────────────
@@ -456,7 +456,7 @@ function generateListPptxBuffer(services, opts = {}) {
   }
 
   function stripHtml(s) {
-    return (s||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+    return (s||'').replace(/<[^>]+>/g,' ').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'').replace(/\s+/g,' ').trim();
   }
 
   function getSvcRow(svc, streamText, isStreamStart, streamRowSpan) {

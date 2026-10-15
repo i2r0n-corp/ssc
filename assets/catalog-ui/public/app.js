@@ -1240,6 +1240,9 @@ window.generatePptx = async function(template) {
         truncateObjectives: s.truncateObjectives,
         switchTypes: s.switchTypes,
         moduleName: (() => {
+          // When exporting a selection, services may have come from different modules —
+          // always null so the backend does per-service hierarchy lookup
+          if (state.selectedServices.size > 0) return null;
           if (mods.length === 1) return state.catalog.moduleMap[mods[0]] || mods[0];
           if (mods.length === 0 && state.filters.module) return state.catalog.moduleMap[state.filters.module] || state.filters.module;
           return null;
