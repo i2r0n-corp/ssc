@@ -53,7 +53,7 @@ let state = {
   exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null, sortCol: 'logged_at', sortDir: 'desc' },
   currentUser: null,
   myPermissions: { catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false, editor: false },
-  admin: { subTab: 'permissions', users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, mcpClosedCollapsed: false, usersCollapsed: false, visitorCollapsed: false, mcpLog: [], mcpLogLoading: false, mcpLogError: null, mcpLogCollapsed: false, selectedMcpLog: null, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null, chart1Collapsed: false, chart2Collapsed: false, chart3Collapsed: false, elChart1Collapsed: false, elChart2Collapsed: false, elChart3Collapsed: false, elChart4Collapsed: false, debugLog: [], debugLogLoading: false, debugLogError: null },
+  admin: { subTab: 'permissions', users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, mcpClosedCollapsed: false, usersCollapsed: false, visitorCollapsed: false, mcpLog: [], mcpLogLoading: false, mcpLogError: null, mcpLogCollapsed: false, selectedMcpLog: null, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null, chart1Collapsed: false, chart2Collapsed: false, chart3Collapsed: false, elChart1Collapsed: false, elChart2Collapsed: false, elChart3Collapsed: false, elChart4Collapsed: false, debugLog: [], debugLogLoading: false, debugLogError: null, selectedDebugFix: null },
   mcpModal: { open: false, sent: false, sending: false, error: null },
   accessDeniedModal: false,
   backendDown: false,
@@ -2345,7 +2345,9 @@ window.adminToggleMcpClosed  = function() { state.admin.mcpClosedCollapsed  = !s
 window.adminToggleUsers      = function() { state.admin.usersCollapsed      = !state.admin.usersCollapsed;      render(); };
 window.adminToggleVisitor    = function() { state.admin.visitorCollapsed    = !state.admin.visitorCollapsed;    render(); };
 window.adminToggleMcpLog     = function() { state.admin.mcpLogCollapsed     = !state.admin.mcpLogCollapsed;     render(); };
-window.adminSetSubTab        = function(t) { state.admin.subTab = t; render(); };window.adminToggleChart1     = function() { state.admin.chart1Collapsed = !state.admin.chart1Collapsed; render(); };
+window.adminSetSubTab        = function(t) { state.admin.subTab = t; render(); };
+window.adminOpenDebugFix     = function(idx) { state.admin.selectedDebugFix = idx; render(); };
+window.adminCloseDebugFix    = function() { state.admin.selectedDebugFix = null; render(); };window.adminToggleChart1     = function() { state.admin.chart1Collapsed = !state.admin.chart1Collapsed; render(); };
 window.adminToggleChart2     = function() { state.admin.chart2Collapsed = !state.admin.chart2Collapsed; render(); };
 window.adminToggleChart3     = function() { state.admin.chart3Collapsed = !state.admin.chart3Collapsed; render(); };
 window.adminToggleElChart1   = function() { state.admin.elChart1Collapsed = !state.admin.elChart1Collapsed; render(); };
@@ -2772,10 +2774,10 @@ function renderAdminPage() {
             <th>Orig Status</th><th>Service Code</th><th>Module Code</th>
           </tr></thead>
           <tbody>
-            ${debugLog.map(r => {
+            ${debugLog.map((r, idx) => {
               const statusBg = r.orig_status === 'No Module Match' ? '#fff3cd' : r.orig_status === 'No Service Match' ? '#f8d7da' : '#e2e3e5';
               const dt = r.last_applied_at ? new Date(r.last_applied_at).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
-              return `<tr>
+              return `<tr onclick="window.adminOpenDebugFix(${idx})" style="cursor:pointer">
               <td style="white-space:nowrap">${dt}</td>
               <td>${(r.fixed_by||'').replace(/</g,'&lt;')}</td>
               <td style="white-space:nowrap">${r.bs_code||''}</td>
@@ -2787,6 +2789,33 @@ function renderAdminPage() {
             }).join('')}
           </tbody>
         </table>` : ''}
+        ${state.admin.selectedDebugFix !== null && debugLog[state.admin.selectedDebugFix] ? (() => {
+          const f = debugLog[state.admin.selectedDebugFix];
+          const dt = f.last_applied_at ? new Date(f.last_applied_at).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+          const row = (k, v) => v ? `<tr><td style="color:#6a6a6a;font-size:0.78rem;padding:5px 10px;white-space:nowrap;font-weight:600">${k}</td><td style="font-size:0.82rem;padding:5px 10px">${v}</td></tr>` : '';
+          return `<div class="modal-overlay" onclick="if(event.target===this)window.adminCloseDebugFix()">
+            <div class="modal-box" style="max-width:520px">
+              <button class="modal-close" onclick="window.adminCloseDebugFix()">✕</button>
+              <h3 style="margin:0 0 1rem;font-size:1rem;color:#1D2D3E">Fix Detail</h3>
+              <table style="width:100%;border-collapse:collapse;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden">
+                ${row('Fixed by', (f.fixed_by||'').replace(/</g,'&lt;'))}
+                ${row('Date', dt)}
+                ${row('BS Code', f.bs_code)}
+                ${row('Deck Name', (f.deck_name||'').replace(/</g,'&lt;'))}
+                ${row('Original Status', f.orig_status)}
+                ${row('Original Service Name', (f.orig_service_name||'').replace(/</g,'&lt;'))}
+                ${row('Original Module Name', (f.module_name||'').replace(/</g,'&lt;'))}
+                ${row('Fixed to Service Code', f.service_code)}
+                ${row('Fixed to Module Code', f.module_code)}
+                ${row('CRM ID entered', f.raw_crm_id)}
+                ${row('Module code selected', f.raw_module_code)}
+              </table>
+              <div style="margin-top:1rem;text-align:right">
+                <button class="btn btn-secondary btn-sm" onclick="window.adminCloseDebugFix()">Close</button>
+              </div>
+            </div>
+          </div>`;
+        })() : ''}
       </div>`
     : `<div class="admin-grid"><div>${tabVisitLeft}</div><div>${tabVisitRight}</div></div>`;
 
