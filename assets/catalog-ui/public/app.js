@@ -3152,8 +3152,8 @@ function renderLoadSelPopup() {
               const dt = new Date(s.updated_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'});
               const keyCount = Array.isArray(s.selected_keys) ? s.selected_keys.length : 0;
               const infoIcon = s.description
-                ? `<img src="info.svg" title="${s.description.replace(/"/g,'&quot;')}" style="width:0.82rem;height:0.82rem;flex-shrink:0;opacity:0.55;cursor:default" />`
-                : `<span style="display:inline-flex;width:0.82rem;height:0.82rem;flex-shrink:0"></span>`;
+                ? `<span class="info-tip" data-tip="${s.description.replace(/"/g,'&quot;')}" style="flex-shrink:0"><img src="/info.svg" style="width:12px;height:12px;opacity:0.35;vertical-align:middle;transition:opacity 0.15s" /></span>`
+                : `<span style="display:inline-flex;width:12px;height:12px;flex-shrink:0"></span>`;
               return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;border-bottom:1px solid #f0f3f7">
                 ${infoIcon}
                 <div style="flex:1;min-width:0">
