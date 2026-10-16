@@ -4,6 +4,12 @@
 
 const router = require('express').Router();
 const fs = require('fs');
+
+function stripModName(s) {
+  if (!s) return '';
+  const a = s.includes(' // ') ? s.split(' // ').slice(1).join(' // ') : s;
+  return a.replace(/^Module\s+[^:]+:\s*/i, '').trim() || a;
+}
 const path = require('path');
 const snapshot = require('../store/snapshot');
 
@@ -1454,10 +1460,7 @@ router.post('/export-excel', async (req, res) => {
           );
           for (const row of r.rows) {
             if (!svcModuleMap[row.svc_code]) {
-              const raw = row.mod_name || '';
-              const sepIdx = raw.indexOf(' // ');
-              const afterSep = sepIdx !== -1 ? raw.slice(sepIdx + 4) : raw;
-              svcModuleMap[row.svc_code] = afterSep.replace(/^Module\s+[^:]+:\s*/i, '');
+              svcModuleMap[row.svc_code] = stripModName(row.mod_name);
             }
           }
         }
@@ -1865,7 +1868,6 @@ router.post('/debug/fix', requireEditor, async (req, res) => {
 
 router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
   const { bsCode } = req.params;
-  const crypto = require('crypto');
   function normCrmIds(raw) {
     const NA = new Set(['n/a', 'na', 'a/n', 'an', '-', 'tbd', 'n.a.']);
     const parts = (raw || '').split(/[,;/\s]+/).map(s => s.trim().toLowerCase()).filter(s => s && !NA.has(s));
@@ -1877,12 +1879,14 @@ router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
     if (!fileRow.rows.length || !fileRow.rows[0].file_data) return res.status(404).json({ error: 'No Excel file for this BS' });
     const { file_data, file_name } = fileRow.rows[0];
 
-    // Load fixes joined with their matching log rows to get the original Excel values for matching
+    // Load fixes joined with their matching log rows + module name from catalog_services
     const fixRows = await db.query(`
-      SELECT f.*, r.crm_ids AS orig_crm_ids, r.deck_name AS orig_deck_name, r.module_name AS orig_module_name
+      SELECT f.*, r.crm_ids AS orig_crm_ids, r.deck_name AS orig_deck_name, r.module_name AS orig_module_name,
+             s.name AS module_display_name
       FROM catalog_excel_fixes f
       LEFT JOIN catalog_matching_log_rows r
         ON r.row_hash = f.row_hash OR ('row-' || r.id::text) = f.row_hash
+      LEFT JOIN catalog_services s ON s.code = f.raw_module_code
       WHERE f.bs_code = $1
     `, [bsCode]);
 
@@ -1923,7 +1927,7 @@ router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
         console.log('[excel-export] MATCH row', rowNum, '→ applying fix');
         if (fix.raw_crm_id) row.getCell(crmCol).value = fix.raw_crm_id;
         if (fix.raw_catalog_name) row.getCell(nameCol).value = fix.raw_catalog_name;
-        if (fix.raw_module_code && moduleCol > 0) row.getCell(moduleCol).value = fix.raw_module_code;
+        if (fix.raw_module_code && moduleCol > 0) row.getCell(moduleCol).value = stripModName(fix.module_display_name) || fix.raw_module_code;
       });
     });
 

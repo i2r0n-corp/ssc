@@ -8,6 +8,12 @@
 const CAP_BACKEND_URL = window.CAP_BACKEND_URL || 'http://localhost:4004';
 const AGENT_BASE_URL  = window.AGENT_BASE_URL  || 'http://localhost:5000';
 
+function stripModName(s) {
+  if (!s) return '';
+  const a = s.includes(' // ') ? s.split(' // ').slice(1).join(' // ') : s;
+  return a.replace(/^Module\s+[^:]+:\s*/i, '').trim() || a;
+}
+
 function fmtUser(emailOrLogon) {
   if (!emailOrLogon) return '—';
   const local = emailOrLogon.split('@')[0];
@@ -460,7 +466,7 @@ function renderCatalogFilters() {
           </div>
           <div class="check-panel" style="max-height:10.2rem;margin-top:0.25rem">
             ${uniqueMods.map(([code, name]) => {
-              const label = name.includes(' // ') ? name.split(' // ').slice(1).join(' // ') : name;
+              const label = stripModName(name);
               return `<label>
                 <input type="checkbox" value="${code}" ${selectedMods.includes(code)?'checked':''}
                   onchange="updateCheckboxFilter('modules', '${code}', this.checked)" />
@@ -713,7 +719,7 @@ function renderCatalogResults() {
           const bsModLabel = gran ? (() => {
             const bsName = row._bsCode ? ((state.catalog.bsMap || {})[row._bsCode] || row._bsCode) : null;
             const modNameRaw = row._moduleCode ? ((state.catalog.moduleMap || {})[row._moduleCode] || row._moduleCode) : null;
-            const modName = modNameRaw && modNameRaw.includes(' // ') ? modNameRaw.split(' // ').slice(1).join(' // ') : modNameRaw;
+            const modName = modNameRaw ? stripModName(modNameRaw) : modNameRaw;
             if (!bsName) return '<span style="color:#8696A9;font-size:0.78rem">General</span>';
             return `<span style="font-size:0.78rem;color:#1D2D3E;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block" title="${bsName}">${bsName}</span>${modName ? `<span style="color:#556B82;font-size:0.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block" title="${modName}">${modName}</span>` : ''}`;
           })() : '';
@@ -1693,14 +1699,11 @@ function renderDebugPage() {
             const origMod = r._origModuleName || r.module_name || '';
             const fixedModRaw = r._fixedModuleDisplay || (() => {
               if (!r.module_code) return '';
-              const raw = (state.catalog.moduleMap || {})[r.module_code] || '';
-              const sep = raw.indexOf(' // ');
-              const after = sep !== -1 ? raw.slice(sep + 4) : raw;
-              return after.replace(/^Module\s+\d+[^:]*:\s*/i, '').trim() || after;
+              return stripModName((state.catalog.moduleMap || {})[r.module_code] || '');
             })();
             if (origMod && fixedModRaw) return `<span style="color:#dc3545;font-size:0.75rem">From Excel: ${origMod.replace(/</g,'&lt;')}</span><br><span style="color:#28a745;font-size:0.75rem">Fixed to: ${fixedModRaw.replace(/</g,'&lt;')}</span>`;
           }
-          return r.module_name||r.module_code||'';
+          return stripModName(r.module_name||r.module_code||'');
         })()}</td>
         <td>${statusBadge(r.status)}</td>
         <td style="font-size:0.75rem;color:#6a6a6a">${r.service_code||''}</td>
@@ -2042,9 +2045,7 @@ window.debugFixSave = async function(rowId) {
       // Resolve fixed-to module display name from moduleMap
       const fixedModCode = ff.moduleCode || d.module_code || orig.module_code;
       const fixedModRaw = (state.catalog.moduleMap || {})[fixedModCode] || ff.moduleName || d.module_name || '';
-      const fixedModSep = fixedModRaw.indexOf(' // ');
-      const fixedModAfterSep = fixedModSep !== -1 ? fixedModRaw.slice(fixedModSep + 4) : fixedModRaw;
-      const fixedModDisplay = isNoModuleMatch ? (fixedModAfterSep.replace(/^Module\s+\d+[^:]*:\s*/i, '').trim() || fixedModAfterSep) : '';
+      const fixedModDisplay = isNoModuleMatch ? stripModName(fixedModRaw) : '';
       state.debug.rows[rowIdx] = Object.assign({}, orig, {
         status: 'Fixed',
         service_code: d.service_code,

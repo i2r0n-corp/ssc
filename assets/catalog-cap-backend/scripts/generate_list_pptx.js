@@ -4,6 +4,12 @@ const fs   = require('fs');
 const path = require('path');
 const zlib = require('zlib');
 
+function stripModName(s) {
+  if (!s) return '';
+  const a = s.includes(' // ') ? s.split(' // ').slice(1).join(' // ') : s;
+  return a.replace(/^Module\s+[^:]+:\s*/i, '').trim() || a;
+}
+
 // ── ZIP read/write ────────────────────────────────────────────────────────────
 
 function readZip(buf) {
@@ -444,12 +450,7 @@ function generateListPptxBuffer(services, opts = {}) {
   function getStreamText(modName, bsName) {
     if (streamMode === 'custom' || streamMode === 'customNoBS') return streamCustom || modName;
     if (streamMode === 'moduleOnly') {
-      // Full string format: "BS Name // Module N: Actual Module Name"
-      // Extract the part after " // ", then strip the "Module N: " prefix if present
-      const sepIdx = modName.indexOf(' // ');
-      const afterSep = sepIdx !== -1 ? modName.slice(sepIdx + 4) : modName;
-      // Strip leading "Module <digits/chars>: " prefix
-      return afterSep.replace(/^Module\s+[^:]+:\s*/i, '');
+      return stripModName(modName);
     }
     // bsAndModule: full string as-is
     return modName;
