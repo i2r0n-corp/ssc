@@ -1306,9 +1306,11 @@ window.generatePptx = async function(template) {
         let anyHaveModule = false;
         state.selectedServiceObjects.forEach((obj, key) => {
           const code = key.includes('||') ? key.split('||')[0] : key;
-          if (obj._moduleCode) {
+          const modCode = (obj._moduleCode && obj._moduleCode !== 'null') ? obj._moduleCode : null;
+          const bsCodeVal = (obj._bsCode && obj._bsCode !== 'null') ? obj._bsCode : null;
+          if (modCode) {
             anyHaveModule = true;
-            entries.push({ svcCode: code, moduleCode: obj._moduleCode, bsCode: obj._bsCode || null });
+            entries.push({ svcCode: code, moduleCode: modCode, bsCode: bsCodeVal });
           } else {
             entries.push({ svcCode: code, moduleCode: null, bsCode: null });
           }
@@ -1438,14 +1440,17 @@ function renderPptxListSettingsModal() {
   const truncateEnabled = !activeET || activeET.toLowerCase().includes('foundational') || activeET.toLowerCase().includes('enterprise support');
   const pdEnabled = !activeET || activeET.toLowerCase().includes('max');
 
-  const streamOn = s.cols.stream && bsActive;
+  const hasGranSelection = state.selectedServices.size > 0 &&
+    [...state.selectedServices].some(k => k.includes('||') && !k.endsWith('||null||null'));
+  const streamAvailable = bsActive || hasGranSelection;
+  const streamOn = s.cols.stream && streamAvailable;
 
   const sectionLabel = 'font-weight:600;font-size:0.82rem;color:#1D2D3E;margin-bottom:0.5rem;margin-top:0.85rem';
   const checkLabel   = 'display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem';
   const checkLabelOff = 'display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;opacity:0.45;cursor:not-allowed;color:#9BA8B0;';
   const tip = (text) => `<span title="${text}" style="display:inline-flex;align-items:center;justify-content:center;width:0.82rem;height:0.82rem;border-radius:50%;background:#1D6FA4;color:#fff;font-size:0.6rem;font-weight:700;cursor:default;flex-shrink:0;line-height:1">?</span>`;
 
-  const streamOptions = bsActive ? `
+  const streamOptions = streamAvailable ? `
     <div style="display:flex;flex-direction:column;gap:0.35rem">
       <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
         <input type="radio" name="streamMode" value="bsAndModule" ${s.streamMode==='bsAndModule'?'checked':''} onchange="setPptxStreamMode('bsAndModule')"/>
@@ -1492,10 +1497,10 @@ function renderPptxListSettingsModal() {
 
       <!-- Stream | Timeline row 50/50 -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:0.75rem">
-        <!-- Stream — hidden when no BS -->
-        <div style="${bsActive ? '' : 'display:none'}">
-          <label style="${streamOn ? checkLabel : checkLabelOff}" ${!bsActive?'title="Only available when Business Scenario is selected"':''}>
-            <input type="checkbox" ${streamOn?'checked':''} ${!bsActive?'disabled':''} onchange="togglePptxCol('stream')"/>
+        <!-- Stream — hidden when no BS or gran selection -->
+        <div style="${streamAvailable ? '' : 'display:none'}">
+          <label style="${streamOn ? checkLabel : checkLabelOff}" ${!streamAvailable?'title="Only available when Business Scenario is selected or gran services are selected"':''}>
+            <input type="checkbox" ${streamOn?'checked':''} ${!streamAvailable?'disabled':''} onchange="togglePptxCol('stream')"/>
             Stream ${tip('Shows a side label per slide indicating the module or scenario grouping')}
           </label>
           <div style="margin-top:0.4rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${streamOn?'':'display:none'}">
@@ -3043,12 +3048,12 @@ function renderSaveSelPopup() {
       <button class="modal-close" onclick="window.closeSaveSelPopup()">✕</button>
       <h3 style="margin-top:0;font-size:1rem;margin-bottom:1rem">Save current selection</h3>
       <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:1rem">
-        <input type="text" class="form-control form-control-sm" style="flex:1"
+        <input type="text" id="save-sel-name-input" class="form-control form-control-sm" style="flex:1"
           placeholder="Selection name…"
           value="${(p.nameInput||'').replace(/"/g,'&quot;')}"
-          oninput="state.saveSelPopup.nameInput=this.value"
+          oninput="state.saveSelPopup.nameInput=this.value;document.getElementById('save-sel-btn').disabled=!this.value.trim()"
           onkeydown="if(event.key==='Enter')window.doSaveSelection()">
-        <button class="btn btn-primary btn-sm" ${p.saving||!p.nameInput?.trim()?'disabled':''}
+        <button id="save-sel-btn" class="btn btn-primary btn-sm" ${p.saving||!p.nameInput?.trim()?'disabled':''}
           onclick="window.doSaveSelection()">${p.saving?'Saving…':'Save'}</button>
       </div>
       <div>
