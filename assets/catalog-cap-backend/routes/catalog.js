@@ -1913,12 +1913,13 @@ router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
 
     wb.eachSheet(ws => {
       let deckName = '';
-      let deckCol = 1, crmCol = 2, nameCol = 3, moduleCol = -1;
+      let deckCol = 1, crmCol = 2, nameCol = 3, moduleCol = -1, commentsCol = -1;
       ws.eachRow((row, rowNum) => {
         if (rowNum === 1) {
           row.eachCell((cell, colNum) => {
             const v = (cell.value||'').toString().toLowerCase();
             if (/business.?module/i.test(v)) moduleCol = colNum;
+            if (/comment/i.test(v)) commentsCol = colNum;
           });
           return;
         }
@@ -1934,6 +1935,7 @@ router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
         if (fix.raw_crm_id) row.getCell(crmCol).value = fix.raw_crm_id;
         if (fix.raw_catalog_name) row.getCell(nameCol).value = fix.raw_catalog_name;
         if (fix.raw_module_code && moduleCol > 0) row.getCell(moduleCol).value = stripModName(fix.module_display_name) || fix.raw_module_code;
+        if (fix.service_code && commentsCol > 0) row.getCell(commentsCol).value = fix.service_code;
       });
     });
 
