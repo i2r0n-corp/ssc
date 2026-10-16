@@ -665,7 +665,7 @@ function renderCatalogResults() {
               <span style="cursor:pointer" onclick="toggleSort('name')">Service Name ${state.sort.col==='name' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}</span>
             </div>
           </th>
-          ${gran ? `<th style="width:35%;white-space:nowrap;font-size:0.78rem">Business Scenario / Module</th>` : ''}
+          ${gran ? `<th style="width:35%;white-space:nowrap;font-size:0.78rem;cursor:pointer;user-select:none" onclick="toggleSort('bsMod')">Business Scenario / Module <span style="opacity:0.5;font-size:0.7em">${state.sort.col==='bsMod' ? (state.sort.dir==='asc'?'▲':'▼') : '⇅'}</span></th>` : ''}
           <th style="cursor:default;user-select:none;width:${gran ? '20%' : '30%'}">
             <div style="display:flex;align-items:center;gap:0.5rem">
               <div class="mode-switch" onclick="event.stopPropagation()">
@@ -700,6 +700,20 @@ function renderCatalogResults() {
               const rankA = etsA.reduce((min, e) => { const i = ET_SORT_ORDER.indexOf(e); return i >= 0 ? Math.min(min, i) : min; }, 99);
               const rankB = etsB.reduce((min, e) => { const i = ET_SORT_ORDER.indexOf(e); return i >= 0 ? Math.min(min, i) : min; }, 99);
               return state.sort.dir === 'asc' ? rankA - rankB : rankB - rankA;
+            });
+          }
+          if (state.sort.col === 'bsMod' && gran) {
+            const bsMap = state.catalog.bsMap || {};
+            const modMap = state.catalog.moduleMap || {};
+            rows = [...rows].sort((a, b) => {
+              const bsA = bsMap[a._bsCode] || a._bsCode || '';
+              const bsB = bsMap[b._bsCode] || b._bsCode || '';
+              const bsCmp = bsA.localeCompare(bsB);
+              if (bsCmp !== 0) return state.sort.dir === 'asc' ? bsCmp : -bsCmp;
+              const modA = stripModName(modMap[a._moduleCode] || a._moduleCode || '');
+              const modB = stripModName(modMap[b._moduleCode] || b._moduleCode || '');
+              const modCmp = modA.localeCompare(modB);
+              return state.sort.dir === 'asc' ? modCmp : -modCmp;
             });
           }
           return rows.map(row => {
