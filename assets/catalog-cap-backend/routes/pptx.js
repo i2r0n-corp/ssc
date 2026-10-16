@@ -116,13 +116,14 @@ router.post('/generatePptx', async (req, res) => {
       const fixedModuleName = (opts.moduleName != null) ? opts.moduleName : null;
       const selectedModuleCodes = Array.isArray(opts.selectedModuleCodes) && opts.selectedModuleCodes.length > 0
         ? opts.selectedModuleCodes : null;
-      // Per-service module code map sent from frontend (gran mode selection with no single BS filter)
-      const serviceModuleMap = (opts.serviceModuleMap && typeof opts.serviceModuleMap === 'object')
-        ? opts.serviceModuleMap : null;
+      // Per-service module info sent from frontend (gran mode selection with no single BS filter).
+      // Format: array of { svcCode, moduleCode, bsCode } — one entry per selection key,
+      // duplicates allowed (same svc under two BSes = two entries).
+      const serviceModuleEntries = Array.isArray(opts.serviceModuleMap) ? opts.serviceModuleMap : null;
 
       // Build per-service module name map
       // Case A: BS filter set — query hierarchy to get module names
-      // Case B: no BS filter but serviceModuleMap provided — resolve module codes to names via flatIndex
+      // Case B: no BS filter but serviceModuleEntries provided — resolve module codes to names
       let svcModuleMap = null;
       let modPositionMap = {};  // mod_code → position for sorting
       if (bsCode && fixedModuleName === null) {
@@ -163,11 +164,12 @@ router.post('/generatePptx', async (req, res) => {
           }
         }
         modPositionMap._bySvc = svcPositionMap;
-      } else if (!bsCode && serviceModuleMap) {
-        // No BS filter: use module codes from the selection to look up module names and positions
-        const moduleCodes = [...new Set(Object.values(serviceModuleMap).filter(Boolean))];
-        let modNames = {};
-        let modPositions = {};
+      } else if (!bsCode && serviceModuleEntries) {
+        // No BS filter: resolve module codes to names, build ordered svc list with parent_name.
+        const moduleCodes = [...new Set(serviceModuleEntries.map(e => e.moduleCode).filter(Boolean))];
+        const bsCodes     = [...new Set(serviceModuleEntries.map(e => e.bsCode).filter(Boolean))];
+        const isMultiBS   = bsCodes.length > 1;
+        let modNames = {}, modPositions = {}, bsNamesMap = {};
         if (moduleCodes.length > 0) {
           const modRows = await db.query(
             `SELECT s.code, s.name,
@@ -180,16 +182,76 @@ router.post('/generatePptx', async (req, res) => {
             modPositions[row.code] = row.mod_pos ?? 9999;
           }
         }
-        svcModuleMap = {};
-        const svcPositionMap = {};
-        for (const [svcCode, modCode] of Object.entries(serviceModuleMap)) {
-          if (modCode) {
-            svcModuleMap[svcCode] = modNames[modCode] || modCode;
-            svcPositionMap[svcCode] = modPositions[modCode] ?? 9999;
-            if (modCode) modPositionMap[modCode] = modPositions[modCode] ?? 9999;
-          }
+        if (isMultiBS && bsCodes.length > 0) {
+          const bsRows = await db.query(
+            `SELECT code, name FROM catalog_services WHERE code = ANY($1)`,
+            [bsCodes]
+          );
+          for (const row of bsRows.rows) bsNamesMap[row.code] = row.name;
         }
-        modPositionMap._bySvc = svcPositionMap;
+        // Build ordered service list — one entry per serviceModuleEntries row (duplicates OK)
+        const orderedSvcs = [];
+        for (const entry of serviceModuleEntries) {
+          const svc = flatIndex[entry.svcCode];
+          if (!svc) continue;
+          const rawModName = modNames[entry.moduleCode] || entry.moduleCode;
+          // Strip to leaf name (same logic as stripModName in generate_list_pptx.js)
+          const parts = rawModName.split(' // ');
+          const leafName = (parts.find((p, i) => i > 0 && !/^Module\s+\S/i.test(p)) || parts[parts.length - 1])
+            .replace(/^Module\s+[^:]+:\s*/i, '').trim() || rawModName;
+          // In multi-BS: prefix with short BS label so slides group per BS+module
+          let label = leafName;
+          if (isMultiBS && entry.bsCode) {
+            const bsFullName = bsNamesMap[entry.bsCode] || entry.bsCode;
+            const bsShort = bsFullName.replace(/^\S+\s*-\s*/, '');
+            label = `${bsShort} / ${leafName}`;
+          }
+          const modPos = modPositions[entry.moduleCode] ?? 9999;
+          orderedSvcs.push({
+            code:              entry.svcCode,
+            name:              svc._name || svc.name,
+            short_description: svc.shortDescription || '',
+            summary:           svc.summary || '',
+            key_benefits:      svc.keyBenefits || '',
+            description:       svc.description || '',
+            engagement_type:   svc._engagementType || '',
+            parent_name:       label,
+            phases:            svc._phases || [],
+            business_scenario_naming: svc._bsNaming || {},
+            effort_days:       svc._effortDays || '',
+            _modPos:           modPos,
+          });
+          modPositionMap[entry.moduleCode] = modPos;
+        }
+        // Sort by module position, then by service name within a module
+        orderedSvcs.sort((a, b) => {
+          const pd = a._modPos - b._modPos;
+          if (pd !== 0) return pd;
+          return (a.name || '').localeCompare(b.name || '');
+        });
+
+        const buf = generateListPptxBuffer(orderedSvcs, {
+          title:              opts.title || 'Services Description',
+          groupByET:          !!opts.groupByET,
+          groupMode:          opts.groupMode || 'perModule',
+          bsCode:             null,
+          bsName:             '',
+          useDeckName:        !!opts.useDeckName,
+          yearFrom:           opts.yearFrom,
+          yearTo:             opts.yearTo,
+          cols:               opts.cols || null,
+          streamMode:         opts.streamMode || null,
+          streamCustom:       opts.streamCustom || '',
+          truncateObjectives: !!opts.truncateObjectives,
+          yearBorders:        !!opts.yearBorders,
+          switchTypes:        !!opts.switchTypes,
+          showPD:             !!(opts.cols && opts.cols.pd),
+        });
+        fs.writeFileSync(filePath, buf);
+
+        const token = uuidv4();
+        downloadTokens.set(token, { fileId, expires: Date.now() + DOWNLOAD_TOKEN_TTL_MS });
+        return res.json({ downloadUrl: `/api/pptx/download/${token}`, filename });
       }
 
       const svcs = services.map(s => {

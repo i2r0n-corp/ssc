@@ -1263,6 +1263,8 @@ window.generatePptx = async function(template) {
   const ytEl = document.getElementById('pptx-year-to');
   if (yfEl) state.pptxListSettings.yearFrom = yfEl.value.replace(/\D/g,'').slice(0,4);
   if (ytEl) state.pptxListSettings.yearTo   = ytEl.value.replace(/\D/g,'').slice(0,4);
+  // For list template with multi-BS gran selection, serviceCodes may need duplicates
+  // (same svc under two BSes = two rows in the PPTX). Resolved after listOptions is built.
   const codes = state.selectedServices.size > 0
     ? [...new Set([...state.selectedServices].map(k => k.includes('||') ? k.split('||')[0] : k))]
     : state.filteredServices.map(s => s.code);
@@ -1295,26 +1297,25 @@ window.generatePptx = async function(template) {
         if (mods.length === 0 && bsCode) return (state.catalog.bsToMods || {})[bsCode] || null;
         return null;
       })();
-      // When exporting from a gran selection, provide per-service module info so the backend
-      // can assign stream labels even when no single BS filter is active.
-      // Only built when there is no BS filter (otherwise Case A in backend uses hierarchy directly).
-      // Only sent if every selected service has a module code — otherwise the mixed
-      // labeled/unlabeled result is worse than a flat export.
+      // When exporting from a gran selection with no BS filter, provide per-service module info
+      // as an ordered array so the backend can assign stream labels and handle duplicate svc codes
+      // (same service selected under two BSes = two rows). Only built when no BS filter is active
+      // and every selected service has a module code.
       const serviceModuleMap = (() => {
         if (state.selectedServices.size === 0) return null;
         if (bsCode) return null; // backend Case A handles this via hierarchy query
-        const map = {};
-        let hasAny = false;
+        const entries = [];
+        let allHaveModule = true;
         state.selectedServiceObjects.forEach((obj, key) => {
           const code = key.includes('||') ? key.split('||')[0] : key;
-          if (obj._moduleCode) { map[code] = obj._moduleCode; hasAny = true; }
+          if (obj._moduleCode) {
+            entries.push({ svcCode: code, moduleCode: obj._moduleCode, bsCode: obj._bsCode || null });
+          } else {
+            allHaveModule = false;
+          }
         });
-        if (!hasAny) return null;
-        // If any selected service is missing a module code, fall back to flat (no map)
-        // so the export isn't a mix of labeled and unlabeled groups
-        const allCodes = [...state.selectedServices].map(k => k.includes('||') ? k.split('||')[0] : k);
-        const allHaveModule = allCodes.every(c => map[c]);
-        return allHaveModule ? map : null;
+        if (!allHaveModule || entries.length === 0) return null;
+        return entries;
       })();
       // Stream column is meaningful when we have BS/module context (either via filter or via selection)
       const hasModuleContext = !!(bsCode || serviceModuleMap);
@@ -1333,8 +1334,6 @@ window.generatePptx = async function(template) {
         truncateObjectives: s.truncateObjectives,
         switchTypes: s.switchTypes,
         moduleName: (() => {
-          // When exporting a selection, services may have come from different modules —
-          // always null so the backend does per-service hierarchy lookup
           if (state.selectedServices.size > 0) return null;
           if (mods.length === 1) return state.catalog.moduleMap[mods[0]] || mods[0];
           if (mods.length === 0 && state.filters.module) return state.catalog.moduleMap[state.filters.module] || state.filters.module;
@@ -3055,7 +3054,7 @@ function renderSaveSelPopup() {
       </div>
       <div>
         <a href="#" style="font-size:0.8rem;color:#0070F2;text-decoration:none"
-          onclick="state.saveSelPopup.listOpen=!state.saveSelPopup.listOpen;render();return false">
+          onclick="window.toggleSaveSelList();return false">
           ${p.listOpen?'▲':'▼'} Saved selections (${savedList.length})
         </a>
         ${p.listOpen ? `
@@ -3079,20 +3078,30 @@ function renderSaveSelPopup() {
   </div>`;
 }
 
-window.openSaveSelPopup = async function() {
+window.openSaveSelPopup = function() {
   state.saveSelPopup.open = true;
   state.saveSelPopup.saving = false;
   render();
-  try {
-    const rows = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections`);
-    state.savedSelections = rows;
-  } catch (e) { /* non-fatal */ }
-  render();
+  // Fetch saved list in background — only re-render if listOpen so the input isn't disturbed
+  apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections`)
+    .then(rows => { state.savedSelections = rows; if (state.saveSelPopup.listOpen) render(); })
+    .catch(() => {});
 };
 
 window.closeSaveSelPopup = function() {
   state.saveSelPopup.open = false;
   render();
+};
+
+window.toggleSaveSelList = function() {
+  state.saveSelPopup.listOpen = !state.saveSelPopup.listOpen;
+  if (state.saveSelPopup.listOpen) {
+    apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections`)
+      .then(rows => { state.savedSelections = rows; render(); })
+      .catch(() => render());
+  } else {
+    render();
+  }
 };
 
 window.doSaveSelection = async function() {
