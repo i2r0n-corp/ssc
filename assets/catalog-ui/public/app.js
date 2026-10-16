@@ -1295,12 +1295,35 @@ window.generatePptx = async function(template) {
         if (mods.length === 0 && bsCode) return (state.catalog.bsToMods || {})[bsCode] || null;
         return null;
       })();
+      // When exporting from a gran selection, provide per-service module info so the backend
+      // can assign stream labels even when no single BS filter is active.
+      // Only built when there is no BS filter (otherwise Case A in backend uses hierarchy directly).
+      // Only sent if every selected service has a module code — otherwise the mixed
+      // labeled/unlabeled result is worse than a flat export.
+      const serviceModuleMap = (() => {
+        if (state.selectedServices.size === 0) return null;
+        if (bsCode) return null; // backend Case A handles this via hierarchy query
+        const map = {};
+        let hasAny = false;
+        state.selectedServiceObjects.forEach((obj, key) => {
+          const code = key.includes('||') ? key.split('||')[0] : key;
+          if (obj._moduleCode) { map[code] = obj._moduleCode; hasAny = true; }
+        });
+        if (!hasAny) return null;
+        // If any selected service is missing a module code, fall back to flat (no map)
+        // so the export isn't a mix of labeled and unlabeled groups
+        const allCodes = [...state.selectedServices].map(k => k.includes('||') ? k.split('||')[0] : k);
+        const allHaveModule = allCodes.every(c => map[c]);
+        return allHaveModule ? map : null;
+      })();
+      // Stream column is meaningful when we have BS/module context (either via filter or via selection)
+      const hasModuleContext = !!(bsCode || serviceModuleMap);
       body.listOptions = {
-        cols: { ...s.cols, stream: bsCode ? s.cols.stream : false },
+        cols: { ...s.cols, stream: hasModuleContext ? s.cols.stream : false },
         yearFrom: s.years ? s.yearFrom : '0',
         yearTo:   s.years ? s.yearTo   : '0',
         groupByET: s.groupByET,
-        groupMode: (!bsCode || resolvedStreamMode === 'custom') ? 'acrossAll' : 'perModule',
+        groupMode: (!hasModuleContext || resolvedStreamMode === 'custom' || resolvedStreamMode === 'customNoBS') ? 'acrossAll' : 'perModule',
         useDeckName: s.useDeckName,
         yearBorders: s.years ? s.yearBorders : false,
         title: s.title,
@@ -1318,6 +1341,7 @@ window.generatePptx = async function(template) {
           return null;
         })(),
         selectedModuleCodes,
+        serviceModuleMap,
       };
     }
     const data = await apiFetch(`${CAP_BACKEND_URL}/api/pptx/generatePptx`, {

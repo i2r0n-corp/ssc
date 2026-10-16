@@ -116,8 +116,13 @@ router.post('/generatePptx', async (req, res) => {
       const fixedModuleName = (opts.moduleName != null) ? opts.moduleName : null;
       const selectedModuleCodes = Array.isArray(opts.selectedModuleCodes) && opts.selectedModuleCodes.length > 0
         ? opts.selectedModuleCodes : null;
+      // Per-service module code map sent from frontend (gran mode selection with no single BS filter)
+      const serviceModuleMap = (opts.serviceModuleMap && typeof opts.serviceModuleMap === 'object')
+        ? opts.serviceModuleMap : null;
 
-      // Build per-service module name map — only when BS is selected
+      // Build per-service module name map
+      // Case A: BS filter set — query hierarchy to get module names
+      // Case B: no BS filter but serviceModuleMap provided — resolve module codes to names via flatIndex
       let svcModuleMap = null;
       let modPositionMap = {};  // mod_code → position for sorting
       if (bsCode && fixedModuleName === null) {
@@ -158,16 +163,41 @@ router.post('/generatePptx', async (req, res) => {
           }
         }
         modPositionMap._bySvc = svcPositionMap;
+      } else if (!bsCode && serviceModuleMap) {
+        // No BS filter: use module codes from the selection to look up module names and positions
+        const moduleCodes = [...new Set(Object.values(serviceModuleMap).filter(Boolean))];
+        let modNames = {};
+        let modPositions = {};
+        if (moduleCodes.length > 0) {
+          const modRows = await db.query(
+            `SELECT s.code, s.name,
+                    (SELECT hh.position FROM catalog_hierarchy hh WHERE hh.child_code = s.code LIMIT 1) AS mod_pos
+             FROM catalog_services s WHERE s.code = ANY($1) AND s.service_object = 'Business Scenario module'`,
+            [moduleCodes]
+          );
+          for (const row of modRows.rows) {
+            modNames[row.code] = row.name;
+            modPositions[row.code] = row.mod_pos ?? 9999;
+          }
+        }
+        svcModuleMap = {};
+        const svcPositionMap = {};
+        for (const [svcCode, modCode] of Object.entries(serviceModuleMap)) {
+          if (modCode) {
+            svcModuleMap[svcCode] = modNames[modCode] || modCode;
+            svcPositionMap[svcCode] = modPositions[modCode] ?? 9999;
+            if (modCode) modPositionMap[modCode] = modPositions[modCode] ?? 9999;
+          }
+        }
+        modPositionMap._bySvc = svcPositionMap;
       }
 
       const svcs = services.map(s => {
         const phases = s._phases || [];
         const et     = s._engagementType || '';
-        const parentName = !bsCode
-          ? ''
-          : fixedModuleName !== null
-            ? fixedModuleName
-            : (svcModuleMap ? (svcModuleMap[s.code] || '') : '');
+        const parentName = fixedModuleName !== null
+          ? fixedModuleName
+          : (svcModuleMap ? (svcModuleMap[s.code] || '') : '');
         return {
           code:             s.code,
           name:             s._name || s.name,
@@ -183,13 +213,12 @@ router.post('/generatePptx', async (req, res) => {
         };
       });
 
-      // No BS: sort alphabetically by name — no module structure
-      // BS: sort by module position so generator receives services grouped correctly
-      if (!bsCode) {
-        svcs.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      } else if (svcModuleMap && modPositionMap._bySvc) {
+      // Sort by module position when module context is available; else alphabetically
+      if (svcModuleMap && modPositionMap._bySvc) {
         const bySvc = modPositionMap._bySvc;
         svcs.sort((a, b) => (bySvc[a.code] ?? 9999) - (bySvc[b.code] ?? 9999));
+      } else {
+        svcs.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       }
 
       const buf = generateListPptxBuffer(svcs, {
