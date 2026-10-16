@@ -227,11 +227,14 @@ router.post('/generatePptx', async (req, res) => {
             business_scenario_naming: svc._bsNaming || {},
             effort_days:       svc._effortDays || '',
             _modPos:           modPos,
+            _bsSort:           entry.bsCode ? (bsNamesMap[entry.bsCode] || entry.bsCode) : 'zzz',
           });
           if (entry.moduleCode) modPositionMap[entry.moduleCode] = modPos;
         }
-        // Sort by module position, then by service name within a module
+        // Sort by BS name first, then module position, then service name
         orderedSvcs.sort((a, b) => {
+          const bsCmp = a._bsSort.localeCompare(b._bsSort);
+          if (bsCmp !== 0) return bsCmp;
           const pd = a._modPos - b._modPos;
           if (pd !== 0) return pd;
           return (a.name || '').localeCompare(b.name || '');
