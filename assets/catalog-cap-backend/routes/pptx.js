@@ -194,19 +194,26 @@ router.post('/generatePptx', async (req, res) => {
         for (const entry of serviceModuleEntries) {
           const svc = flatIndex[entry.svcCode];
           if (!svc) continue;
-          const rawModName = modNames[entry.moduleCode] || entry.moduleCode;
-          // Strip to leaf name (same logic as stripModName in generate_list_pptx.js)
-          const parts = rawModName.split(' // ');
-          const leafName = (parts.find((p, i) => i > 0 && !/^Module\s+\S/i.test(p)) || parts[parts.length - 1])
-            .replace(/^Module\s+[^:]+:\s*/i, '').trim() || rawModName;
-          // In multi-BS: prefix with short BS label so slides group per BS+module
-          let label = leafName;
-          if (isMultiBS && entry.bsCode) {
-            const bsFullName = bsNamesMap[entry.bsCode] || entry.bsCode;
-            const bsShort = bsFullName.replace(/^\S+\s*-\s*/, '');
-            label = `${bsShort} / ${leafName}`;
+          let label;
+          let modPos;
+          if (!entry.moduleCode) {
+            label = 'General';
+            modPos = 99999; // sort General group last
+          } else {
+            const rawModName = modNames[entry.moduleCode] || entry.moduleCode;
+            // Strip to leaf name (same logic as stripModName in generate_list_pptx.js)
+            const parts = rawModName.split(' // ');
+            const leafName = (parts.find((p, i) => i > 0 && !/^Module\s+\S/i.test(p)) || parts[parts.length - 1])
+              .replace(/^Module\s+[^:]+:\s*/i, '').trim() || rawModName;
+            // In multi-BS: prefix with short BS label so slides group per BS+module
+            label = leafName;
+            if (isMultiBS && entry.bsCode) {
+              const bsFullName = bsNamesMap[entry.bsCode] || entry.bsCode;
+              const bsShort = bsFullName.replace(/^\S+\s*-\s*/, '');
+              label = `${bsShort} / ${leafName}`;
+            }
+            modPos = modPositions[entry.moduleCode] ?? 9999;
           }
-          const modPos = modPositions[entry.moduleCode] ?? 9999;
           orderedSvcs.push({
             code:              entry.svcCode,
             name:              svc._name || svc.name,
@@ -221,7 +228,7 @@ router.post('/generatePptx', async (req, res) => {
             effort_days:       svc._effortDays || '',
             _modPos:           modPos,
           });
-          modPositionMap[entry.moduleCode] = modPos;
+          if (entry.moduleCode) modPositionMap[entry.moduleCode] = modPos;
         }
         // Sort by module position, then by service name within a module
         orderedSvcs.sort((a, b) => {

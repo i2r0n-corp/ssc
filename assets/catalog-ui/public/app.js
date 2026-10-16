@@ -1297,24 +1297,23 @@ window.generatePptx = async function(template) {
         if (mods.length === 0 && bsCode) return (state.catalog.bsToMods || {})[bsCode] || null;
         return null;
       })();
-      // When exporting from a gran selection with no BS filter, provide per-service module info
-      // as an ordered array so the backend can assign stream labels and handle duplicate svc codes
-      // (same service selected under two BSes = two rows). Only built when no BS filter is active
-      // and every selected service has a module code.
+      // Per-service module info for Case B (no BS filter, at least one service has module context).
+      // Services without _moduleCode get moduleCode:null → backend labels them "General".
       const serviceModuleMap = (() => {
         if (state.selectedServices.size === 0) return null;
         if (bsCode) return null; // backend Case A handles this via hierarchy query
         const entries = [];
-        let allHaveModule = true;
+        let anyHaveModule = false;
         state.selectedServiceObjects.forEach((obj, key) => {
           const code = key.includes('||') ? key.split('||')[0] : key;
           if (obj._moduleCode) {
+            anyHaveModule = true;
             entries.push({ svcCode: code, moduleCode: obj._moduleCode, bsCode: obj._bsCode || null });
           } else {
-            allHaveModule = false;
+            entries.push({ svcCode: code, moduleCode: null, bsCode: null });
           }
         });
-        if (!allHaveModule || entries.length === 0) return null;
+        if (!anyHaveModule || entries.length === 0) return null;
         return entries;
       })();
       // Stream column is meaningful when we have BS/module context (either via filter or via selection)
