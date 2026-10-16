@@ -299,6 +299,7 @@ async function initSchema() {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_mcp_log_hour ON catalog_mcp_log(hour_bucket DESC)`);
     await client.query(`ALTER TABLE catalog_user_permissions ADD COLUMN IF NOT EXISTS tab_editor BOOLEAN NOT NULL DEFAULT false`);
     await client.query(`ALTER TABLE catalog_matching_log_rows ADD COLUMN IF NOT EXISTS row_hash TEXT`);
+    await client.query(`UPDATE catalog_excel_fixes SET raw_module_code = NULL WHERE row_hash = 'row-11121'`);
     console.log('[db] Schema initialised');
   } finally {
     client.release();
