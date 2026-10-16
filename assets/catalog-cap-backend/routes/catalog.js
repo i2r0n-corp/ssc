@@ -1798,10 +1798,17 @@ router.post('/debug/fix', requireEditor, async (req, res) => {
     );
 
     if (log_row_id) {
-      await db.query(
-        `UPDATE catalog_matching_log_rows SET status='Fixed', service_code=$1, service_name=$2${module_code ? ', module_code=$3' : ''} WHERE id=$4`,
-        module_code ? [service_code, service_name, module_code, log_row_id] : [service_code, service_name, log_row_id]
-      );
+      if (module_code) {
+        await db.query(
+          `UPDATE catalog_matching_log_rows SET status='Fixed', service_code=$1, service_name=$2, module_code=$3 WHERE id=$4`,
+          [service_code, service_name, module_code, log_row_id]
+        );
+      } else {
+        await db.query(
+          `UPDATE catalog_matching_log_rows SET status='Fixed', service_code=$1, service_name=$2 WHERE id=$3`,
+          [service_code, service_name, log_row_id]
+        );
+      }
       await db.query(
         `INSERT INTO catalog_matching_steps (log_row_id, type, excel_value, db_value, method, threshold, result)
          VALUES ($1,'service',$2,$3,'manual fix',null,'match')`,
