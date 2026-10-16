@@ -225,29 +225,11 @@ async function applyFilters() {
     }
     // When keepSelected is OFF, drop selections no longer in results
     if (!state.keepSelected && state.selectedServices.size > 0) {
-      if (state.moduleGranularity) {
-        // In granularity mode, keys are code||bsCode||moduleCode — keep only those matching current results
-        const validKeys = new Set();
-        const newBsCode = state.filters.businessScenario || null;
-        for (const svc of state.filteredServices) {
-          const mods = svc.bs_module_codes || [];
-          if (newBsCode && mods.length > 0) {
-            mods.forEach(mc => validKeys.add(`${svc.code}||${newBsCode}||${mc}`));
-          } else if (newBsCode) {
-            validKeys.add(`${svc.code}||${newBsCode}||`);
-          } else {
-            validKeys.add(`${svc.code}||null||null`);
-          }
-        }
-        state.selectedServices.forEach(key => {
-          if (!validKeys.has(key)) { state.selectedServices.delete(key); state.selectedServiceObjects.delete(key); }
-        });
-      } else {
-        const resultCodes = new Set(state.filteredServices.map(s => s.code));
-        state.selectedServices.forEach(code => {
-          if (!resultCodes.has(code)) { state.selectedServices.delete(code); state.selectedServiceObjects.delete(code); }
-        });
-      }
+      const resultCodes = new Set(state.filteredServices.map(s => s.code));
+      state.selectedServices.forEach(key => {
+        const code = key.includes('||') ? key.split('||')[0] : key;
+        if (!resultCodes.has(code)) { state.selectedServices.delete(key); state.selectedServiceObjects.delete(key); }
+      });
     }
   } catch (e) {
     state.filteredServices = [];
