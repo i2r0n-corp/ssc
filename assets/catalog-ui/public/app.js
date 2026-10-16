@@ -1689,7 +1689,7 @@ function renderDebugPage() {
           return r.service_name||r.service_code||'';
         })()}</td>
         <td style="font-size:0.78rem;color:#556B82">${(() => {
-          if (r.status === 'Fixed') {
+          if (r.status === 'Fixed' && r.module_was_fixed) {
             const origMod = r._origModuleName || r.module_name || '';
             const fixedModRaw = r._fixedModuleDisplay || (() => {
               if (!r.module_code) return '';
@@ -1698,7 +1698,7 @@ function renderDebugPage() {
               const after = sep !== -1 ? raw.slice(sep + 4) : raw;
               return after.replace(/^Module\s+\d+[^:]*:\s*/i, '').trim() || after;
             })();
-            if (origMod && fixedModRaw && origMod !== fixedModRaw) return `<span style="color:#dc3545;font-size:0.75rem">From Excel: ${origMod.replace(/</g,'&lt;')}</span><br><span style="color:#28a745;font-size:0.75rem">Fixed to: ${fixedModRaw.replace(/</g,'&lt;')}</span>`;
+            if (origMod && fixedModRaw) return `<span style="color:#dc3545;font-size:0.75rem">From Excel: ${origMod.replace(/</g,'&lt;')}</span><br><span style="color:#28a745;font-size:0.75rem">Fixed to: ${fixedModRaw.replace(/</g,'&lt;')}</span>`;
           }
           return r.module_name||r.module_code||'';
         })()}</td>
@@ -2050,6 +2050,7 @@ window.debugFixSave = async function(rowId) {
         service_code: d.service_code,
         service_name: d.service_name,
         module_code: fixedModCode || orig.module_code,
+        module_was_fixed: isNoModuleMatch,
         _origServiceName: orig.service_name || orig.service_code || '',
         _origModuleName: isNoModuleMatch ? (orig.module_name || orig.module_code || '') : '',
         _fixedServiceName: d.service_name || '',

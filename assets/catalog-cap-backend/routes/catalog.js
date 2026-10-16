@@ -1076,8 +1076,10 @@ router.get('/injection-log', async (req, res) => {
 
     const rowsRes = await db.query(`
       SELECT r.id, r.bs_code, r.type, r.status, r.service_code, r.service_name,
-             r.module_code, r.module_name, r.deck_name, r.crm_ids, r.created_at, r.row_hash
+             r.module_code, r.module_name, r.deck_name, r.crm_ids, r.created_at, r.row_hash,
+             CASE WHEN f.raw_module_code IS NOT NULL THEN true ELSE false END AS module_was_fixed
       FROM catalog_matching_log_rows r
+      LEFT JOIN catalog_excel_fixes f ON f.row_hash = r.row_hash
       WHERE 1=1 ${where}
       ORDER BY r.bs_code, r.id
       LIMIT 2000
