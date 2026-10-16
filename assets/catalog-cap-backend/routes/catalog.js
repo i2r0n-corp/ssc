@@ -1785,6 +1785,7 @@ router.post('/debug/fix', requireEditor, async (req, res) => {
   const { log_row_id, row_hash, bs_code, crm_id, module_code, catalog_name, service_code_direct } = req.body || {};
   const effectiveHash = row_hash || (log_row_id ? `row-${log_row_id}` : null);
   if (!effectiveHash || !bs_code) return res.status(400).json({ error: 'row_hash (or log_row_id) and bs_code required' });
+  const fixedBy = (getJwtPayload(req)?.user_name || getJwtPayload(req)?.email || null);
   try {
     const db = require('../store/db');
 
@@ -1811,11 +1812,11 @@ router.post('/debug/fix', requireEditor, async (req, res) => {
     }
 
     await db.query(
-      `INSERT INTO catalog_excel_fixes (row_hash, bs_code, raw_crm_id, raw_module_code, raw_catalog_name, service_code, module_code, last_applied_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+      `INSERT INTO catalog_excel_fixes (row_hash, bs_code, raw_crm_id, raw_module_code, raw_catalog_name, service_code, module_code, fixed_by, last_applied_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
        ON CONFLICT (row_hash) DO UPDATE SET
-         raw_crm_id=$3, raw_module_code=$4, raw_catalog_name=$5, service_code=$6, module_code=$7, last_applied_at=NOW()`,
-      [effectiveHash, bs_code, crm_id||null, module_code||null, catalog_name||null, service_code, module_code||null]
+         raw_crm_id=$3, raw_module_code=$4, raw_catalog_name=$5, service_code=$6, module_code=$7, fixed_by=$8, last_applied_at=NOW()`,
+      [effectiveHash, bs_code, crm_id||null, module_code||null, catalog_name||null, service_code, module_code||null, fixedBy||null]
     );
 
     if (log_row_id) {
