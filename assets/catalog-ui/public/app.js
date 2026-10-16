@@ -686,7 +686,13 @@ function renderCatalogResults() {
           } else if (gran) {
             rows = buildGranularRows(state.filteredServices.slice(0, 2000), bsCode);
           } else {
-            rows = state.filteredServices.slice(0, 2000).map(svc => ({ ...svc, _selKey: svc.code, _bsCode: null, _moduleCode: null }));
+            rows = state.filteredServices.slice(0, 2000).map(svc => {
+              const mods = svc.bs_module_codes || [];
+              const selectedMods = state.filters.modules || [];
+              const visibleMods = bsCode && mods.length > 0 ? (selectedMods.length > 0 ? mods.filter(mc => selectedMods.includes(mc)) : mods) : [];
+              const mc = visibleMods.length > 0 ? visibleMods[0] : null;
+              return { ...svc, _selKey: svc.code, _bsCode: bsCode, _moduleCode: mc };
+            });
           }
           if (state.sort.col && state.sort.col !== 'bsMod') {
             const ET_SORT_ORDER = ['Max Success Plan','Advanced Success Plan','Enterprise Support','Embedded Launch Activities','Cloud Prepackaged Services'];
@@ -1067,17 +1073,33 @@ window.toggleShowOnlySelected = function() {
 
 window.toggleModuleGranularity = function(val) {
   state.moduleGranularity = val;
+  const bsCode = state.filters.businessScenario || null;
   if (!val) {
-    // Switching off granularity — collapse granular keys back to code-level
-    // Keep only one entry per service code (first encountered)
+    // Switching OFF — collapse granular keys back to code-level
     const newSel = new Set();
     const newObjs = new Map();
     state.selectedServiceObjects.forEach((rowObj, key) => {
       const code = key.includes('||') ? key.split('||')[0] : key;
       if (!newSel.has(code)) {
         newSel.add(code);
-        newObjs.set(code, { ...rowObj, _selKey: code, _bsCode: null, _moduleCode: null });
+        // Preserve _bsCode/_moduleCode from the granular key so BS/Module column still shows
+        const parts = key.includes('||') ? key.split('||') : [key, null, null];
+        newObjs.set(code, { ...rowObj, _selKey: code, _bsCode: parts[1] || null, _moduleCode: parts[2] || null });
       }
+    });
+    state.selectedServices = newSel;
+    state.selectedServiceObjects = newObjs;
+  } else {
+    // Switching ON — map each code-level key to one granular key using stored _bsCode + _moduleCode
+    const newSel = new Set();
+    const newObjs = new Map();
+    state.selectedServiceObjects.forEach((rowObj, key) => {
+      if (key.includes('||')) { newSel.add(key); newObjs.set(key, rowObj); return; }
+      const bs = rowObj._bsCode || bsCode;
+      const mc = rowObj._moduleCode || null;
+      const gKey = mc ? `${key}||${bs}||${mc}` : `${key}||${bs || 'null'}||`;
+      newSel.add(gKey);
+      newObjs.set(gKey, { ...rowObj, _selKey: gKey, _bsCode: bs, _moduleCode: mc });
     });
     state.selectedServices = newSel;
     state.selectedServiceObjects = newObjs;
@@ -1092,13 +1114,20 @@ window.toggleSelect = function(selKey, isGranular) {
   } else {
     state.selectedServices.add(selKey);
     if (isGranular) {
-      // selKey = code||bsCode||moduleCode — find matching row from filteredServices
-      const [code, bsCode, moduleCode] = selKey.split('||');
+      const [code, bs, moduleCode] = selKey.split('||');
       const svc = state.filteredServices.find(s => s.code === code);
-      if (svc) state.selectedServiceObjects.set(selKey, { ...svc, _selKey: selKey, _bsCode: bsCode || null, _moduleCode: moduleCode || null });
+      if (svc) state.selectedServiceObjects.set(selKey, { ...svc, _selKey: selKey, _bsCode: bs || null, _moduleCode: moduleCode || null });
     } else {
+      // selKey is bare code in non-gran mode — store BS+module context for gran compatibility
       const svc = state.filteredServices.find(s => s.code === selKey);
-      if (svc) state.selectedServiceObjects.set(selKey, { ...svc, _selKey: selKey, _bsCode: null, _moduleCode: null });
+      if (svc) {
+        const bs = state.filters.businessScenario || null;
+        const mods = svc.bs_module_codes || [];
+        const selectedMods = state.filters.modules || [];
+        const visibleMods = bs && mods.length > 0 ? (selectedMods.length > 0 ? mods.filter(mc => selectedMods.includes(mc)) : mods) : [];
+        const mc = visibleMods.length > 0 ? visibleMods[0] : null;
+        state.selectedServiceObjects.set(selKey, { ...svc, _selKey: selKey, _bsCode: bs, _moduleCode: mc });
+      }
     }
   }
   patchResults();
@@ -1192,9 +1221,14 @@ window.toggleSelectAll = function(checked) {
         state.selectedServiceObjects.set(r._selKey, r);
       });
     } else {
+      const bs = state.filters.businessScenario || null;
+      const selectedMods = state.filters.modules || [];
       state.filteredServices.forEach(s => {
+        const mods = s.bs_module_codes || [];
+        const visibleMods = bs && mods.length > 0 ? (selectedMods.length > 0 ? mods.filter(mc => selectedMods.includes(mc)) : mods) : [];
+        const mc = visibleMods.length > 0 ? visibleMods[0] : null;
         state.selectedServices.add(s.code);
-        state.selectedServiceObjects.set(s.code, { ...s, _selKey: s.code, _bsCode: null, _moduleCode: null });
+        state.selectedServiceObjects.set(s.code, { ...s, _selKey: s.code, _bsCode: bs, _moduleCode: mc });
       });
     }
   } else {
