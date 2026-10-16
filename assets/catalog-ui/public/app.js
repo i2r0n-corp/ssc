@@ -1302,7 +1302,7 @@ window.generatePptx = async function(template) {
       // Resolve stream label for PPTX
       let resolvedStreamMode = s.streamMode;
       let resolvedStreamCustom = s.streamCustom;
-      if (!bsCode && resolvedStreamMode !== 'customNoBS') {
+      if ((!bsCode || serviceModuleMap) && resolvedStreamMode !== 'customNoBS') {
         resolvedStreamMode = 'moduleOnly';
       }
       // Build selectedModuleCodes: explicit selection, or all BS modules when BS selected + none checked
@@ -1313,17 +1313,18 @@ window.generatePptx = async function(template) {
         if (mods.length === 0 && bsCode) return (state.catalog.bsToMods || {})[bsCode] || null;
         return null;
       })();
-      // Per-service module info for Case B (no BS filter, at least one service has module context).
+      // Per-service module info for Case B (no BS filter, or multi-BS selection).
       // Services without _moduleCode get moduleCode:null → backend labels them "General".
       const serviceModuleMap = (() => {
         if (state.selectedServices.size === 0) return null;
-        if (bsCode) return null; // backend Case A handles this via hierarchy query
         const entries = [];
         let anyHaveModule = false;
+        const bsCodesInSelection = new Set();
         state.selectedServiceObjects.forEach((obj, key) => {
           const code = key.includes('||') ? key.split('||')[0] : key;
           const modCode = (obj._moduleCode && obj._moduleCode !== 'null') ? obj._moduleCode : null;
           const bsCodeVal = (obj._bsCode && obj._bsCode !== 'null') ? obj._bsCode : null;
+          if (bsCodeVal) bsCodesInSelection.add(bsCodeVal);
           if (modCode) {
             anyHaveModule = true;
             entries.push({ svcCode: code, moduleCode: modCode, bsCode: bsCodeVal });
@@ -1332,6 +1333,8 @@ window.generatePptx = async function(template) {
           }
         });
         if (!anyHaveModule || entries.length === 0) return null;
+        // Single BS in selection and filter matches — let backend Case A handle it via hierarchy
+        if (bsCodesInSelection.size === 1 && bsCode && bsCodesInSelection.has(bsCode)) return null;
         return entries;
       })();
       // Stream column is meaningful when we have BS/module context (either via filter or via selection)
@@ -1345,7 +1348,7 @@ window.generatePptx = async function(template) {
         useDeckName: s.useDeckName,
         yearBorders: s.years ? s.yearBorders : false,
         title: s.title,
-        bsCode,
+        bsCode: serviceModuleMap ? null : bsCode,
         streamMode: resolvedStreamMode,
         streamCustom: resolvedStreamCustom,
         truncateObjectives: s.truncateObjectives,
