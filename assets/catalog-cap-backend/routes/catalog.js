@@ -1102,18 +1102,20 @@ router.get('/injection-log', async (req, res) => {
     }
 
     const rows = rowsRes.rows.map(r => ({
-      id:           r.id,
-      bs_code:      r.bs_code,
-      type:         r.type,
-      status:       r.status,
-      service_code: r.service_code,
-      service_name: r.service_name,
-      module_code:  r.module_code,
-      module_name:  r.module_name,
-      deck_name:    r.deck_name,
-      crm_ids:      r.crm_ids,
-      created_at:   r.created_at,
-      steps:        stepsMap[r.id] || []
+      id:               r.id,
+      bs_code:          r.bs_code,
+      type:             r.type,
+      status:           r.status,
+      service_code:     r.service_code,
+      service_name:     r.service_name,
+      module_code:      r.module_code,
+      module_name:      r.module_name,
+      deck_name:        r.deck_name,
+      crm_ids:          r.crm_ids,
+      created_at:       r.created_at,
+      row_hash:         r.row_hash,
+      module_was_fixed: r.module_was_fixed,
+      steps:            stepsMap[r.id] || []
     }));
 
     res.json({ count: rows.length, totals, rows });
