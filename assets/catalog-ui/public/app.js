@@ -1689,9 +1689,16 @@ function renderDebugPage() {
           return r.service_name||r.service_code||'';
         })()}</td>
         <td style="font-size:0.78rem;color:#556B82">${(() => {
-          if (r.status === 'Fixed' && r._fixedModuleDisplay) {
-            const origMod = r._origModuleName || r.module_name || r.module_code || '';
-            if (origMod) return `<span style="color:#dc3545;font-size:0.75rem">From Excel: ${origMod.replace(/</g,'&lt;')}</span><br><span style="color:#28a745;font-size:0.75rem">Fixed to: ${r._fixedModuleDisplay.replace(/</g,'&lt;')}</span>`;
+          if (r.status === 'Fixed') {
+            const origMod = r._origModuleName || r.module_name || '';
+            const fixedModRaw = r._fixedModuleDisplay || (() => {
+              if (!r.module_code) return '';
+              const raw = (state.catalog.moduleMap || {})[r.module_code] || '';
+              const sep = raw.indexOf(' // ');
+              const after = sep !== -1 ? raw.slice(sep + 4) : raw;
+              return after.replace(/^Module\s+\d+[^:]*:\s*/i, '').trim() || after;
+            })();
+            if (origMod && fixedModRaw && origMod !== fixedModRaw) return `<span style="color:#dc3545;font-size:0.75rem">From Excel: ${origMod.replace(/</g,'&lt;')}</span><br><span style="color:#28a745;font-size:0.75rem">Fixed to: ${fixedModRaw.replace(/</g,'&lt;')}</span>`;
           }
           return r.module_name||r.module_code||'';
         })()}</td>
