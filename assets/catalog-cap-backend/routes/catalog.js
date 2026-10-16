@@ -1867,7 +1867,9 @@ router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
   const { bsCode } = req.params;
   const crypto = require('crypto');
   function normCrmIds(raw) {
-    return (raw || '').split(/[,;/\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean).sort().join('|');
+    const NA = new Set(['n/a', 'na', 'a/n', 'an', '-', 'tbd', 'n.a.']);
+    const parts = (raw || '').split(/[,;/\s]+/).map(s => s.trim().toLowerCase()).filter(s => s && !NA.has(s));
+    return parts.sort().join('|');
   }
   try {
     const db = require('../store/db');
