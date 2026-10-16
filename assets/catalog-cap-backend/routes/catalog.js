@@ -1065,6 +1065,27 @@ router.get('/injection-log', async (req, res) => {
     `, bsCode ? [bsCode] : []);
     const totals = totalsRes.rows[0];
 
+    // Fixed counts
+    const fixedRes = await db.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE status='Fixed' AND module_code IS NOT NULL AND id IN (
+          SELECT r2.id FROM catalog_matching_log_rows r2
+          LEFT JOIN catalog_excel_fixes f ON f.row_hash = COALESCE(r2.row_hash, 'row-' || r2.id::text)
+          WHERE f.raw_module_code IS NOT NULL
+        )) AS fixed_mod,
+        COUNT(*) FILTER (WHERE status='Fixed' AND module_code IS NOT NULL AND id NOT IN (
+          SELECT r2.id FROM catalog_matching_log_rows r2
+          LEFT JOIN catalog_excel_fixes f ON f.row_hash = COALESCE(r2.row_hash, 'row-' || r2.id::text)
+          WHERE f.raw_module_code IS NOT NULL
+        )) AS fixed_svc
+      FROM catalog_matching_log_rows
+      WHERE status='Fixed' ${bsCode ? 'AND bs_code=$1' : ''}
+    `, bsCode ? [bsCode] : []);
+    if (fixedRes.rows[0]) {
+      totals.fixed_mod = parseInt(fixedRes.rows[0].fixed_mod) || 0;
+      totals.fixed_svc = parseInt(fixedRes.rows[0].fixed_svc) || 0;
+    }
+
     // Build filter for log rows
     const params = [];
     let pIdx = 1;

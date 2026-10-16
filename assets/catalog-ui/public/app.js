@@ -1653,8 +1653,8 @@ function renderDebugPage() {
       <span>Unmatched: <b>${totals.unmatched||0}</b></span>
       <span>Injected: <b>${totals.injected||0}</b></span>
       <span>Already linked: <b>${totals.already_linked||0}</b></span>
-      <span>No module: <b>${totals.unresolved_mod||0}</b></span>
-      <span>No service: <b>${totals.unresolved_svc||0}</b></span>
+      <span>No module: <b style="color:#dc3545">${totals.unresolved_mod||0}</b>${totals.fixed_mod ? ` <b style="color:#28a745">${totals.fixed_mod} fixed</b>` : ''}</span>
+      <span>No service: <b style="color:#dc3545">${totals.unresolved_svc||0}</b>${totals.fixed_svc ? ` <b style="color:#28a745">${totals.fixed_svc} fixed</b>` : ''}</span>
       <span style="margin-left:auto;color:#6a6a6a">${rows.length} rows shown</span>
     </div>` : '';
 
