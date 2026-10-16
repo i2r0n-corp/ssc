@@ -1924,7 +1924,7 @@ router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
         console.log('[excel-export] row', rowNum, 'key:', key);
         const fix = fixMap[key];
         if (!fix) return;
-        console.log('[excel-export] MATCH row', rowNum, '→ applying fix');
+        console.log('[excel-export] MATCH row', rowNum, '→ applying fix, module_display_name:', fix.module_display_name, 'raw_module_code:', fix.raw_module_code, 'stripped:', stripModName(fix.module_display_name));
         if (fix.raw_crm_id) row.getCell(crmCol).value = fix.raw_crm_id;
         if (fix.raw_catalog_name) row.getCell(nameCol).value = fix.raw_catalog_name;
         if (fix.raw_module_code && moduleCol > 0) row.getCell(moduleCol).value = stripModName(fix.module_display_name) || fix.raw_module_code;
