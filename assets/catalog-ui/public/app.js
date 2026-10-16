@@ -69,7 +69,8 @@ let state = {
   exportTotal: null,
   sessionId: Math.random().toString(36).slice(2),
   savedSelections: [],
-  saveSelPopup: { open: false, nameInput: '', saving: false, listOpen: false },
+  saveSelPopup: { open: false, nameInput: '', saving: false },
+  loadSelPopup: { open: false },
 };
 
 function saveCart() {
@@ -341,6 +342,7 @@ function renderSelectionControls() {
       <button class="btn btn-secondary btn-sm" ${(!state.keepSelected||selCount===0)?'disabled':''} onclick="window.toggleShowOnlySelected()" style="white-space:nowrap${state.showOnlySelected&&state.keepSelected&&selCount>0?';background:#0070F2;color:#fff;border-color:#0070F2':''}">Show selected</button>
       <button class="btn btn-secondary btn-sm" ${selCount===0?'disabled':''} onclick="window.clearSelected()" style="white-space:nowrap">Clear selected</button>
       <button class="btn btn-secondary btn-sm" ${selCount===0?'disabled':''} onclick="window.openSaveSelPopup()" style="white-space:nowrap">Save selection</button>
+      <button class="btn btn-secondary btn-sm" ${state.savedSelections.length===0?'disabled':''} onclick="window.openLoadSelPopup()" style="white-space:nowrap">Load selection</button>
       <button class="btn btn-secondary btn-sm" ${!hasActiveFilters?'disabled':''} onclick="window.clearFilters()" style="white-space:nowrap">Reset</button>
     </span>
   </div>`;
@@ -3041,13 +3043,12 @@ window.requestMcpAccess = async function() {
 function renderSaveSelPopup() {
   const p = state.saveSelPopup;
   if (!p.open) return '';
-  const savedList = state.savedSelections;
   return `
   <div class="modal-overlay" onclick="if(event.target===this)window.closeSaveSelPopup()">
     <div class="modal-box" style="max-width:440px">
       <button class="modal-close" onclick="window.closeSaveSelPopup()">✕</button>
       <h3 style="margin-top:0;font-size:1rem;margin-bottom:1rem">Save current selection</h3>
-      <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:1rem">
+      <div style="display:flex;gap:0.5rem;align-items:center">
         <input type="text" id="save-sel-name-input" class="form-control form-control-sm" style="flex:1"
           placeholder="Selection name…"
           value="${(p.nameInput||'').replace(/"/g,'&quot;')}"
@@ -3055,28 +3056,6 @@ function renderSaveSelPopup() {
           onkeydown="if(event.key==='Enter')window.doSaveSelection()">
         <button id="save-sel-btn" class="btn btn-primary btn-sm" ${p.saving||!p.nameInput?.trim()?'disabled':''}
           onclick="window.doSaveSelection()">${p.saving?'Saving…':'Save'}</button>
-      </div>
-      <div>
-        <a href="#" style="font-size:0.8rem;color:#0070F2;text-decoration:none"
-          onclick="window.toggleSaveSelList();return false">
-          ${p.listOpen?'▲':'▼'} Saved selections (${savedList.length})
-        </a>
-        ${p.listOpen ? `
-        <div style="margin-top:0.5rem;max-height:260px;overflow-y:auto;border:1px solid #dce3ea;border-radius:6px">
-          ${savedList.length === 0
-            ? `<div style="padding:0.75rem 1rem;font-size:0.85rem;color:#8696A9">No saved selections yet.</div>`
-            : savedList.map(s => {
-                const dt = new Date(s.updated_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'});
-                const keyCount = Array.isArray(s.selected_keys) ? s.selected_keys.length : 0;
-                return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;border-bottom:1px solid #f0f3f7">
-                  <span style="flex:1;font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.name.replace(/"/g,'&quot;')}">${s.name}</span>
-                  <span style="font-size:0.75rem;color:#8696A9;white-space:nowrap">${keyCount} svc · ${dt}</span>
-                  <button class="btn btn-secondary btn-sm" style="padding:0.15rem 0.5rem;font-size:0.75rem" onclick="window.loadSavedSelection(${s.id})">Load</button>
-                  <button class="btn btn-secondary btn-sm" style="padding:0.15rem 0.5rem;font-size:0.75rem;color:#c0392b" onclick="window.deleteSavedSelection(${s.id})">✕</button>
-                </div>`;
-              }).join('')
-          }
-        </div>` : ''}
       </div>
     </div>
   </div>`;
@@ -3093,10 +3072,6 @@ window.openSaveSelPopup = function() {
   state.saveSelPopup.saving = false;
   state.saveSelPopup.nameInput = '';
   render();
-  // Fetch saved list in background — only re-render if listOpen so the input isn't disturbed
-  apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections`)
-    .then(rows => { state.savedSelections = rows; if (state.saveSelPopup.listOpen) render(); })
-    .catch(() => {});
 };
 
 window.closeSaveSelPopup = function() {
@@ -3104,15 +3079,44 @@ window.closeSaveSelPopup = function() {
   render();
 };
 
-window.toggleSaveSelList = function() {
-  state.saveSelPopup.listOpen = !state.saveSelPopup.listOpen;
-  if (state.saveSelPopup.listOpen) {
-    apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections`)
-      .then(rows => { state.savedSelections = rows; render(); })
-      .catch(() => render());
-  } else {
-    render();
-  }
+function renderLoadSelPopup() {
+  if (!state.loadSelPopup.open) return '';
+  const savedList = state.savedSelections;
+  return `
+  <div class="modal-overlay" onclick="if(event.target===this)window.closeLoadSelPopup()">
+    <div class="modal-box" style="max-width:480px">
+      <button class="modal-close" onclick="window.closeLoadSelPopup()">✕</button>
+      <h3 style="margin-top:0;font-size:1rem;margin-bottom:1rem">Saved selections</h3>
+      <div style="max-height:360px;overflow-y:auto;border:1px solid #dce3ea;border-radius:6px">
+        ${savedList.length === 0
+          ? `<div style="padding:0.75rem 1rem;font-size:0.85rem;color:#8696A9">No saved selections.</div>`
+          : savedList.map(s => {
+              const dt = new Date(s.updated_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'});
+              const keyCount = Array.isArray(s.selected_keys) ? s.selected_keys.length : 0;
+              return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;border-bottom:1px solid #f0f3f7">
+                <span style="flex:1;font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.name.replace(/"/g,'&quot;')}">${s.name}</span>
+                <span style="font-size:0.75rem;color:#8696A9;white-space:nowrap">${keyCount} svc · ${dt}</span>
+                <button class="btn btn-secondary btn-sm" style="padding:0.15rem 0.5rem;font-size:0.75rem" onclick="window.loadSavedSelection(${s.id})">Load</button>
+                <button class="btn btn-secondary btn-sm" style="padding:0.15rem 0.5rem;font-size:0.75rem;color:#c0392b" onclick="window.deleteSavedSelection(${s.id})">✕</button>
+              </div>`;
+            }).join('')
+        }
+      </div>
+    </div>
+  </div>`;
+}
+
+window.openLoadSelPopup = function() {
+  state.loadSelPopup.open = true;
+  render();
+  apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections`)
+    .then(rows => { state.savedSelections = rows; render(); })
+    .catch(() => {});
+};
+
+window.closeLoadSelPopup = function() {
+  state.loadSelPopup.open = false;
+  render();
 };
 
 window.doSaveSelection = async function() {
@@ -3142,6 +3146,7 @@ window.loadSavedSelection = function(id) {
   state.selectedServiceObjects = new Map();
   state.keepSelected = true;
   state.saveSelPopup.open = false;
+  state.loadSelPopup.open = false;
   render();
 };
 
@@ -3208,6 +3213,7 @@ function render() {
     ${renderExportLogDetailModal()}
     ${renderMcpModal()}
     ${renderSaveSelPopup()}
+    ${renderLoadSelPopup()}
     ${state.accessDeniedModal ? `
     <div class="modal-overlay" onclick="if(event.target===this)window.closeAccessDenied()">
       <div class="modal-box" style="max-width:420px">
@@ -3373,6 +3379,9 @@ apiFetch(`${CAP_BACKEND_URL}/api/catalog/my-permissions`)
   .catch(() => {});
 apiFetch(`${CAP_BACKEND_URL}/api/catalog/export-stats`)
   .then(d => { state.exportTotal = d.total ?? null; render(); })
+  .catch(() => {});
+apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections`)
+  .then(rows => { state.savedSelections = rows; render(); })
   .catch(() => {});
 // Log app load visit
 apiFetch(`${CAP_BACKEND_URL}/api/catalog/visitor`, { method: 'POST', body: JSON.stringify({ page: 'app-load', sessionId: state.sessionId }) }).catch(() => {});
