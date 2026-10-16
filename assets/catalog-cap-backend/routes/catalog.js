@@ -1887,7 +1887,7 @@ router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
 
     wb.eachSheet(ws => {
       let deckName = '';
-      let crmCol = 1, nameCol = 2, moduleCol = -1;
+      let deckCol = 1, crmCol = 2, nameCol = 3, moduleCol = -1;
       ws.eachRow((row, rowNum) => {
         if (rowNum === 1) {
           row.eachCell((cell, colNum) => {
@@ -1896,10 +1896,10 @@ router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
           });
           return;
         }
+        const deckVal = (row.getCell(deckCol).value || '').toString().trim();
         const crmVal = (row.getCell(crmCol).value || '').toString().trim();
-        const nameVal = (row.getCell(nameCol).value || '').toString().trim();
         const modVal = moduleCol > 0 ? (row.getCell(moduleCol).value || '').toString().trim() : '';
-        if (row.getCell(1).value) deckName = row.getCell(1).value.toString().trim();
+        if (deckVal) deckName = deckVal;
         const h = rowHash(bsCode, crmVal, deckName, modVal);
         const fix = fixMap[h];
         if (!fix) return;
