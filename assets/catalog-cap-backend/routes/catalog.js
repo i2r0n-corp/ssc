@@ -1866,10 +1866,8 @@ router.post('/debug/fix', requireEditor, async (req, res) => {
 router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
   const { bsCode } = req.params;
   const crypto = require('crypto');
-  function rowHash(bsCode, crmIds, deckName, moduleName) {
-    const normCrm = (crmIds || '').split(/[,;/\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean).sort().join('|');
-    const input = `${(bsCode||'').toLowerCase()}||${normCrm}||${(deckName||'').trim().toLowerCase()}||${(moduleName||'').trim().toLowerCase()}`;
-    return crypto.createHash('sha256').update(input).digest('hex').slice(0, 16);
+  function normCrmIds(raw) {
+    return (raw || '').split(/[,;/\s]+/).map(s => s.trim().toLowerCase()).filter(Boolean).sort().join('|');
   }
   try {
     const db = require('../store/db');
@@ -1877,9 +1875,25 @@ router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
     if (!fileRow.rows.length || !fileRow.rows[0].file_data) return res.status(404).json({ error: 'No Excel file for this BS' });
     const { file_data, file_name } = fileRow.rows[0];
 
-    const fixRows = await db.query(`SELECT * FROM catalog_excel_fixes WHERE bs_code = $1`, [bsCode]);
+    // Load fixes joined with their matching log rows to get the original Excel values for matching
+    const fixRows = await db.query(`
+      SELECT f.*, r.crm_ids AS orig_crm_ids, r.deck_name AS orig_deck_name, r.module_name AS orig_module_name
+      FROM catalog_excel_fixes f
+      LEFT JOIN catalog_matching_log_rows r
+        ON r.row_hash = f.row_hash OR ('row-' || r.id::text) = f.row_hash
+      WHERE f.bs_code = $1
+    `, [bsCode]);
+
+    // Build lookup keyed by normalised (crm_ids, deck_name, module_name)
     const fixMap = {};
-    for (const f of fixRows.rows) fixMap[f.row_hash] = f;
+    for (const f of fixRows.rows) {
+      const crmKey = normCrmIds(f.orig_crm_ids);
+      const deckKey = (f.orig_deck_name || '').trim().toLowerCase();
+      const modKey = (f.orig_module_name || '').trim().toLowerCase();
+      const key = `${crmKey}||${deckKey}||${modKey}`;
+      fixMap[key] = f;
+      console.log('[excel-export] fix key:', key, '→ crm:', f.raw_crm_id, 'name:', f.raw_catalog_name, 'mod:', f.raw_module_code);
+    }
 
     const ExcelJS = require('exceljs');
     const wb = new ExcelJS.Workbook();
@@ -1900,9 +1914,11 @@ router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
         const crmVal = (row.getCell(crmCol).value || '').toString().trim();
         const modVal = moduleCol > 0 ? (row.getCell(moduleCol).value || '').toString().trim() : '';
         if (deckVal) deckName = deckVal;
-        const h = rowHash(bsCode, crmVal, deckName, modVal);
-        const fix = fixMap[h];
+        const key = `${normCrmIds(crmVal)}||${deckName.trim().toLowerCase()}||${modVal.trim().toLowerCase()}`;
+        console.log('[excel-export] row', rowNum, 'key:', key);
+        const fix = fixMap[key];
         if (!fix) return;
+        console.log('[excel-export] MATCH row', rowNum, '→ applying fix');
         if (fix.raw_crm_id) row.getCell(crmCol).value = fix.raw_crm_id;
         if (fix.raw_catalog_name) row.getCell(nameCol).value = fix.raw_catalog_name;
         if (fix.raw_module_code && moduleCol > 0) row.getCell(moduleCol).value = fix.raw_module_code;
