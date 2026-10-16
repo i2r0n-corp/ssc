@@ -32,7 +32,7 @@ let state = {
   exportCart: JSON.parse(sessionStorage.getItem('exportCart') || '[]'),
   filtersExpanded: false,
   sec3Collapsed: false,
-  debug: { bsCode: '', module: '', serviceName: '', status: '', rows: [], totals: null, loading: false, error: null, selectedRow: null, fixForm: null },
+  debug: { bsCode: '', module: '', serviceName: '', status: '', rows: [], totals: null, loading: false, error: null, selectedRow: null, fixForm: null, sortCol: 'bs_code', sortDir: 'asc' },
   selectedServices: new Set(),
   selectedServiceObjects: new Map(),
   keepSelected: true,
@@ -62,7 +62,7 @@ let state = {
   exportLog: { rows: [], loading: false, error: null, loaded: false, selectedRow: null, sortCol: 'logged_at', sortDir: 'desc' },
   currentUser: null,
   myPermissions: { catalog: true, incidents: false, chat: false, debug: false, exportlog: false, admin: false, editor: false },
-  admin: { subTab: 'permissions', users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, mcpClosedCollapsed: false, usersCollapsed: false, visitorCollapsed: false, mcpLog: [], mcpLogLoading: false, mcpLogError: null, mcpLogCollapsed: false, selectedMcpLog: null, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null, chart1Collapsed: false, chart2Collapsed: false, chart3Collapsed: false, elChart1Collapsed: false, elChart2Collapsed: false, elChart3Collapsed: false, elChart4Collapsed: false, debugLog: [], debugLogLoading: false, debugLogError: null, selectedDebugFix: null },
+  admin: { subTab: 'permissions', users: [], usersLoading: false, usersError: null, newEmail: '', visitorLog: [], visitorLastSeen: [], visitorLoading: false, visitorError: null, mcpRequests: [], mcpRequestsLoading: false, mcpRequestsError: null, mcpOpenCollapsed: false, mcpClosedCollapsed: false, usersCollapsed: false, visitorCollapsed: false, mcpLog: [], mcpLogLoading: false, mcpLogError: null, mcpLogCollapsed: false, selectedMcpLog: null, selectedVisitorUser: null, visitSortCol: 'visited_at', visitSortDir: 'desc', selectedVisit: null, chart1Collapsed: false, chart2Collapsed: false, chart3Collapsed: false, elChart1Collapsed: false, elChart2Collapsed: false, elChart3Collapsed: false, elChart4Collapsed: false, debugLog: [], debugLogLoading: false, debugLogError: null, selectedDebugFix: null, debugLogSortCol: 'last_applied_at', debugLogSortDir: 'desc' },
   mcpModal: { open: false, sent: false, sending: false, error: null },
   accessDeniedModal: false,
   backendDown: false,
@@ -1695,9 +1695,16 @@ function renderDebugPage() {
     return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.72rem;font-weight:600;background:${bg};color:${color}">${s||''}</span>`;
   };
 
-  const rowsHtml = rows.length === 0 && !loading ? `
+  const { sortCol: dsc, sortDir: dsd } = state.debug;
+  const sortedRows = [...rows].sort((a, b) => {
+    const av = (a[dsc] || '').toString().toLowerCase();
+    const bv = (b[dsc] || '').toString().toLowerCase();
+    return dsd === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+
+  const rowsHtml = sortedRows.length === 0 && !loading ? `
     <tr><td colspan="7" style="text-align:center;padding:2rem;color:#6a6a6a;">No records found</td></tr>` :
-    rows.map(r => `
+    sortedRows.map(r => `
       <tr onclick="openDebugRow(${r.id})" style="cursor:pointer">
         <td style="font-size:0.78rem;color:#556B82;white-space:nowrap">${r.bs_code||''}</td>
         <td style="font-size:0.78rem;color:#6a6a6a;white-space:nowrap">${(r.crm_ids||'').substring(0,15)}</td>
@@ -1880,13 +1887,11 @@ function renderDebugPage() {
       <table class="service-table">
         <thead>
           <tr>
-            <th>BS Code</th>
-            <th>Excel CRM ID</th>
-            <th>Deck Name</th>
-            <th>Service Name</th>
-            <th>Module</th>
-            <th>Status</th>
-            <th>Code</th>
+            ${(([sc,sd]) => {
+              const arrow = col => sc===col ? (sd==='asc'?'▲':'▼') : '⇅';
+              const th = (col,label) => `<th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="window.sortDebugLog('${col}')">${label} <span style="opacity:0.5;font-size:0.7em">${arrow(col)}</span></th>`;
+              return [th('bs_code','BS Code'), th('crm_ids','Excel CRM ID'), th('deck_name','Deck Name'), th('service_name','Service Name'), th('module_name','Module'), th('status','Status'), '<th>Code</th>'].join('');
+            })([state.debug.sortCol, state.debug.sortDir])}
           </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
@@ -2120,6 +2125,20 @@ window.sortExportLog = function(col) {
   const el = state.exportLog;
   if (el.sortCol === col) { el.sortDir = el.sortDir === 'asc' ? 'desc' : 'asc'; }
   else { el.sortCol = col; el.sortDir = 'asc'; }
+  render();
+};
+
+window.sortDebugLog = function(col) {
+  const d = state.debug;
+  if (d.sortCol === col) { d.sortDir = d.sortDir === 'asc' ? 'desc' : 'asc'; }
+  else { d.sortCol = col; d.sortDir = 'asc'; }
+  render();
+};
+
+window.sortAdminDebugLog = function(col) {
+  const a = state.admin;
+  if (a.debugLogSortCol === col) { a.debugLogSortDir = a.debugLogSortDir === 'asc' ? 'desc' : 'asc'; }
+  else { a.debugLogSortCol = col; a.debugLogSortDir = 'asc'; }
   render();
 };
 
@@ -2364,7 +2383,7 @@ window.adminToggleUsers      = function() { state.admin.usersCollapsed      = !s
 window.adminToggleVisitor    = function() { state.admin.visitorCollapsed    = !state.admin.visitorCollapsed;    render(); };
 window.adminToggleMcpLog     = function() { state.admin.mcpLogCollapsed     = !state.admin.mcpLogCollapsed;     render(); };
 window.adminSetSubTab        = function(t) { state.admin.subTab = t; render(); };
-window.adminOpenDebugFix     = function(idx) { state.admin.selectedDebugFix = idx; render(); };
+window.adminOpenDebugFix     = function(hash) { state.admin.selectedDebugFix = hash; render(); };
 window.adminCloseDebugFix    = function() { state.admin.selectedDebugFix = null; render(); };window.adminToggleChart1     = function() { state.admin.chart1Collapsed = !state.admin.chart1Collapsed; render(); };
 window.adminToggleChart2     = function() { state.admin.chart2Collapsed = !state.admin.chart2Collapsed; render(); };
 window.adminToggleChart3     = function() { state.admin.chart3Collapsed = !state.admin.chart3Collapsed; render(); };
@@ -2785,17 +2804,25 @@ function renderAdminPage() {
         ${debugLogLoading ? '<div style="color:#6a6a6a;font-size:0.85rem">Loading…</div>' : ''}
         ${debugLogError ? `<div class="error-strip">⚠ ${debugLogError}</div>` : ''}
         ${!debugLogLoading && debugLog.length === 0 ? '<div style="color:#6a6a6a;font-size:0.85rem">No fixes recorded yet.</div>' : ''}
-    ${debugLog.length > 0 ? `
-        <table class="service-table" style="font-size:0.78rem">
+    ${debugLog.length > 0 ? (() => {
+      const { debugLogSortCol: asc, debugLogSortDir: asd } = state.admin;
+      const arrow = col => asc===col ? (asd==='asc'?'▲':'▼') : '⇅';
+      const th = (col, label) => `<th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="window.sortAdminDebugLog('${col}')">${label} <span style="opacity:0.5;font-size:0.7em">${arrow(col)}</span></th>`;
+      const sorted = [...debugLog].sort((a, b) => {
+        const av = (a[asc] || '').toString().toLowerCase();
+        const bv = (b[asc] || '').toString().toLowerCase();
+        return asd === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+      });
+      return `<table class="service-table" style="font-size:0.78rem">
           <thead><tr>
-            <th>Date</th><th>Fixed by</th><th>BS</th><th>Deck Name</th>
-            <th>Orig Status</th><th>Service Code</th><th>Module Code</th>
+            ${th('last_applied_at','Date')}${th('fixed_by','Fixed by')}${th('bs_code','BS')}${th('deck_name','Deck Name')}
+            ${th('orig_status','Orig Status')}${th('service_code','Service Code')}${th('module_code','Module Code')}
           </tr></thead>
           <tbody>
-            ${debugLog.map((r, idx) => {
+            ${sorted.map((r, idx) => {
               const statusBg = r.orig_status === 'No Module Match' ? '#fff3cd' : r.orig_status === 'No Service Match' ? '#f8d7da' : '#e2e3e5';
               const dt = r.last_applied_at ? new Date(r.last_applied_at).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
-              return `<tr onclick="window.adminOpenDebugFix(${idx})" style="cursor:pointer">
+              return `<tr onclick="window.adminOpenDebugFix('${(r.row_hash||'').replace(/'/g,"\\'")}')" style="cursor:pointer">
               <td style="white-space:nowrap">${dt}</td>
               <td>${(r.fixed_by||'').replace(/</g,'&lt;')}</td>
               <td style="white-space:nowrap">${r.bs_code||''}</td>
@@ -2806,9 +2833,10 @@ function renderAdminPage() {
             </tr>`;
             }).join('')}
           </tbody>
-        </table>` : ''}
-        ${state.admin.selectedDebugFix !== null && debugLog[state.admin.selectedDebugFix] ? (() => {
-          const f = debugLog[state.admin.selectedDebugFix];
+        </table>`;
+    })() : ''}
+        ${state.admin.selectedDebugFix !== null && debugLog.find(x => x.row_hash === state.admin.selectedDebugFix) ? (() => {
+          const f = debugLog.find(x => x.row_hash === state.admin.selectedDebugFix);
           const dt = f.last_applied_at ? new Date(f.last_applied_at).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
           const row = (k, v) => v ? `<tr><td style="color:#6a6a6a;font-size:0.78rem;padding:5px 10px;white-space:nowrap;font-weight:600">${k}</td><td style="font-size:0.82rem;padding:5px 10px">${v}</td></tr>` : '';
           return `<div class="modal-overlay" onclick="if(event.target===this)window.adminCloseDebugFix()">
