@@ -274,13 +274,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_log_user_hour ON catalog_mcp_log(logon
 CREATE INDEX IF NOT EXISTS idx_mcp_log_hour ON catalog_mcp_log(hour_bucket DESC);
 
 CREATE TABLE IF NOT EXISTS catalog_saved_selections (
-  id            BIGSERIAL PRIMARY KEY,
-  user_email    TEXT NOT NULL,
-  name          TEXT NOT NULL,
-  filters       JSONB NOT NULL DEFAULT '{}',
-  selected_keys JSONB NOT NULL DEFAULT '[]',
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  id                 BIGSERIAL PRIMARY KEY,
+  user_email         TEXT NOT NULL,
+  name               TEXT NOT NULL,
+  filters            JSONB NOT NULL DEFAULT '{}',
+  selected_keys      JSONB NOT NULL DEFAULT '[]',
+  keep_selected      BOOLEAN NOT NULL DEFAULT true,
+  module_granularity BOOLEAN NOT NULL DEFAULT false,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_email, name)
 );
 CREATE INDEX IF NOT EXISTS idx_saved_sel_user ON catalog_saved_selections(user_email);
@@ -312,6 +314,8 @@ async function initSchema() {
     await client.query(`ALTER TABLE catalog_user_permissions ADD COLUMN IF NOT EXISTS tab_editor BOOLEAN NOT NULL DEFAULT false`);
     await client.query(`ALTER TABLE catalog_matching_log_rows ADD COLUMN IF NOT EXISTS row_hash TEXT`);
     await client.query(`ALTER TABLE catalog_excel_fixes ADD COLUMN IF NOT EXISTS fixed_by TEXT`);
+    await client.query(`ALTER TABLE catalog_saved_selections ADD COLUMN IF NOT EXISTS keep_selected BOOLEAN NOT NULL DEFAULT true`);
+    await client.query(`ALTER TABLE catalog_saved_selections ADD COLUMN IF NOT EXISTS module_granularity BOOLEAN NOT NULL DEFAULT false`);
     console.log('[db] Schema initialised');
   } finally {
     client.release();

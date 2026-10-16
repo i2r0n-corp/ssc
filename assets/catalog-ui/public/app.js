@@ -209,6 +209,20 @@ async function applyFilters() {
 
     const data = await apiFetch(url);
     state.filteredServices = data.services || [];
+    // Patch selectedServiceObjects with full data from results (needed after load-selection rebuild)
+    if (state.selectedServices.size > 0 && state.selectedServiceObjects.size > 0) {
+      const byCode = {};
+      state.filteredServices.forEach(s => { byCode[s.code] = s; });
+      state.selectedServiceObjects.forEach((obj, key) => {
+        const code = key.includes('||') ? key.split('||')[0] : key;
+        if (byCode[code]) state.selectedServiceObjects.set(key, { ...byCode[code], _selKey: obj._selKey, _bsCode: obj._bsCode, _moduleCode: obj._moduleCode });
+      });
+    }
+    // After a load-selection, flip showOnlySelected once results are ready
+    if (state._pendingShowSelected) {
+      state._pendingShowSelected = false;
+      state.showOnlySelected = true;
+    }
     // When keepSelected is OFF, drop selections no longer in results
     if (!state.keepSelected && state.selectedServices.size > 0) {
       if (state.moduleGranularity) {
@@ -3127,7 +3141,13 @@ window.doSaveSelection = async function() {
   try {
     await apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections`, {
       method: 'POST',
-      body: JSON.stringify({ name, filters: { ...state.filters }, selectedKeys: keys })
+      body: JSON.stringify({
+        name,
+        filters: { ...state.filters },
+        selectedKeys: keys,
+        keepSelected: state.keepSelected,
+        moduleGranularity: state.moduleGranularity,
+      })
     });
     const rows = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections`);
     state.savedSelections = rows;
@@ -3142,12 +3162,24 @@ window.loadSavedSelection = function(id) {
   if (!saved) return;
   const defaultFilters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', maxFocusTopics: [], maxFocusTopicsMode: 'merge', deckName: '', namingType: '', etLabelType: 'engagement' };
   state.filters = { ...defaultFilters, ...(saved.filters || {}) };
+  state.keepSelected = saved.keep_selected != null ? !!saved.keep_selected : true;
+  state.moduleGranularity = !!saved.module_granularity;
   state.selectedServices = new Set(Array.isArray(saved.selected_keys) ? saved.selected_keys : []);
+  // Build stub objects from keys — will be enriched with full data once applyFilters returns
   state.selectedServiceObjects = new Map();
-  state.keepSelected = true;
+  state.selectedServices.forEach(key => {
+    if (key.includes('||')) {
+      const [code, bs, mc] = key.split('||');
+      state.selectedServiceObjects.set(key, { code, _selKey: key, _bsCode: (bs && bs !== 'null') ? bs : null, _moduleCode: (mc && mc !== 'null') ? mc : null });
+    } else {
+      state.selectedServiceObjects.set(key, { code: key, _selKey: key, _bsCode: null, _moduleCode: null });
+    }
+  });
+  state.showOnlySelected = false;
+  state._pendingShowSelected = true; // flip to true after applyFilters enriches objects
   state.saveSelPopup.open = false;
   state.loadSelPopup.open = false;
-  render();
+  applyFilters();
 };
 
 window.deleteSavedSelection = async function(id) {

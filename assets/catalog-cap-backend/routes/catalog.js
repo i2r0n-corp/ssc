@@ -1959,7 +1959,7 @@ router.get('/saved-selections', async (req, res) => {
   try {
     const db = require('../store/db');
     const { rows } = await db.query(
-      `SELECT id, name, filters, selected_keys, updated_at
+      `SELECT id, name, filters, selected_keys, keep_selected, module_granularity, updated_at
        FROM catalog_saved_selections WHERE user_email = $1 ORDER BY updated_at DESC`,
       [userEmail]
     );
@@ -1973,16 +1973,16 @@ router.post('/saved-selections', async (req, res) => {
   const payload = getJwtPayload(req);
   const userEmail = (payload?.user_name || payload?.email || '').toLowerCase();
   if (!userEmail) return res.status(401).json({ error: 'Unauthorized' });
-  const { name, filters, selectedKeys } = req.body || {};
+  const { name, filters, selectedKeys, keepSelected, moduleGranularity } = req.body || {};
   if (!name?.trim()) return res.status(400).json({ error: 'name required' });
   try {
     const db = require('../store/db');
     await db.query(
-      `INSERT INTO catalog_saved_selections (user_email, name, filters, selected_keys, updated_at)
-       VALUES ($1, $2, $3, $4, NOW())
+      `INSERT INTO catalog_saved_selections (user_email, name, filters, selected_keys, keep_selected, module_granularity, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
        ON CONFLICT (user_email, name) DO UPDATE
-         SET filters = $3, selected_keys = $4, updated_at = NOW()`,
-      [userEmail, name.trim(), JSON.stringify(filters || {}), JSON.stringify(selectedKeys || [])]
+         SET filters = $3, selected_keys = $4, keep_selected = $5, module_granularity = $6, updated_at = NOW()`,
+      [userEmail, name.trim(), JSON.stringify(filters || {}), JSON.stringify(selectedKeys || []), !!keepSelected, !!moduleGranularity]
     );
     res.json({ ok: true });
   } catch (e) {
