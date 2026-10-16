@@ -3149,14 +3149,14 @@ function renderLoadSelPopup() {
     <div class="modal-box" style="max-width:480px">
       <button class="modal-close" onclick="window.closeLoadSelPopup()">✕</button>
       <h3 style="margin-top:0;font-size:1rem;margin-bottom:1rem">Saved selections</h3>
-      <div style="max-height:360px;overflow-y:auto;overflow-x:visible;border:1px solid #dce3ea;border-radius:6px">
+      <div style="max-height:360px;overflow-y:auto;border:1px solid #dce3ea;border-radius:6px">
         ${savedList.length === 0
           ? `<div style="padding:0.75rem 1rem;font-size:0.85rem;color:#8696A9">No saved selections.</div>`
           : savedList.map(s => {
               const dt = new Date(s.updated_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'});
               const keyCount = Array.isArray(s.selected_keys) ? s.selected_keys.length : 0;
               const infoIcon = s.description
-                ? `<span class="info-tip" data-tip="${s.description.replace(/"/g,'&quot;')}" style="flex-shrink:0"><img src="/info.svg" style="width:12px;height:12px;opacity:0.35;vertical-align:middle;transition:opacity 0.15s" /></span>`
+                ? `<img src="/info.svg" title="${s.description.replace(/"/g,'&quot;')}" style="width:12px;height:12px;opacity:0.45;flex-shrink:0;cursor:default" />`
                 : `<span style="display:inline-flex;width:12px;height:12px;flex-shrink:0"></span>`;
               return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;border-bottom:1px solid #f0f3f7">
                 ${infoIcon}
