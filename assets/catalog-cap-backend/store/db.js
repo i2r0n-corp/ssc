@@ -272,6 +272,18 @@ CREATE TABLE IF NOT EXISTS catalog_mcp_log (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_log_user_hour ON catalog_mcp_log(logon_name, hour_bucket);
 CREATE INDEX IF NOT EXISTS idx_mcp_log_hour ON catalog_mcp_log(hour_bucket DESC);
+
+CREATE TABLE IF NOT EXISTS catalog_saved_selections (
+  id            BIGSERIAL PRIMARY KEY,
+  user_email    TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  filters       JSONB NOT NULL DEFAULT '{}',
+  selected_keys JSONB NOT NULL DEFAULT '[]',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_email, name)
+);
+CREATE INDEX IF NOT EXISTS idx_saved_sel_user ON catalog_saved_selections(user_email);
 `;
 
 async function initSchema() {

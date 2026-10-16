@@ -68,6 +68,8 @@ let state = {
   backendDown: false,
   exportTotal: null,
   sessionId: Math.random().toString(36).slice(2),
+  savedSelections: [],
+  saveSelPopup: { open: false, nameInput: '', saving: false, listOpen: false },
 };
 
 function saveCart() {
@@ -338,6 +340,7 @@ function renderSelectionControls() {
     <span style="display:flex;align-items:center;gap:0.4rem;flex-shrink:0;flex-wrap:wrap">
       <button class="btn btn-secondary btn-sm" ${(!state.keepSelected||selCount===0)?'disabled':''} onclick="window.toggleShowOnlySelected()" style="white-space:nowrap${state.showOnlySelected&&state.keepSelected&&selCount>0?';background:#0070F2;color:#fff;border-color:#0070F2':''}">Show selected</button>
       <button class="btn btn-secondary btn-sm" ${selCount===0?'disabled':''} onclick="window.clearSelected()" style="white-space:nowrap">Clear selected</button>
+      <button class="btn btn-secondary btn-sm" ${selCount===0?'disabled':''} onclick="window.openSaveSelPopup()" style="white-space:nowrap">Save selection</button>
       <button class="btn btn-secondary btn-sm" ${!hasActiveFilters?'disabled':''} onclick="window.clearFilters()" style="white-space:nowrap">Reset</button>
     </span>
   </div>`;
@@ -3006,6 +3009,106 @@ window.requestMcpAccess = async function() {
   state.mcpModal.sending = false; render();
 };
 
+// ── Save selection popup ──────────────────────────────────────────────────────
+
+function renderSaveSelPopup() {
+  const p = state.saveSelPopup;
+  if (!p.open) return '';
+  const savedList = state.savedSelections;
+  return `
+  <div class="modal-overlay" onclick="if(event.target===this)window.closeSaveSelPopup()">
+    <div class="modal-box" style="max-width:440px">
+      <button class="modal-close" onclick="window.closeSaveSelPopup()">✕</button>
+      <h3 style="margin-top:0;font-size:1rem;margin-bottom:1rem">Save current selection</h3>
+      <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:1rem">
+        <input type="text" class="form-control form-control-sm" style="flex:1"
+          placeholder="Selection name…"
+          value="${(p.nameInput||'').replace(/"/g,'&quot;')}"
+          oninput="state.saveSelPopup.nameInput=this.value"
+          onkeydown="if(event.key==='Enter')window.doSaveSelection()">
+        <button class="btn btn-primary btn-sm" ${p.saving||!p.nameInput?.trim()?'disabled':''}
+          onclick="window.doSaveSelection()">${p.saving?'Saving…':'Save'}</button>
+      </div>
+      <div>
+        <a href="#" style="font-size:0.8rem;color:#0070F2;text-decoration:none"
+          onclick="state.saveSelPopup.listOpen=!state.saveSelPopup.listOpen;render();return false">
+          ${p.listOpen?'▲':'▼'} Saved selections (${savedList.length})
+        </a>
+        ${p.listOpen ? `
+        <div style="margin-top:0.5rem;max-height:260px;overflow-y:auto;border:1px solid #dce3ea;border-radius:6px">
+          ${savedList.length === 0
+            ? `<div style="padding:0.75rem 1rem;font-size:0.85rem;color:#8696A9">No saved selections yet.</div>`
+            : savedList.map(s => {
+                const dt = new Date(s.updated_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'});
+                const keyCount = Array.isArray(s.selected_keys) ? s.selected_keys.length : 0;
+                return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;border-bottom:1px solid #f0f3f7">
+                  <span style="flex:1;font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.name.replace(/"/g,'&quot;')}">${s.name}</span>
+                  <span style="font-size:0.75rem;color:#8696A9;white-space:nowrap">${keyCount} svc · ${dt}</span>
+                  <button class="btn btn-secondary btn-sm" style="padding:0.15rem 0.5rem;font-size:0.75rem" onclick="window.loadSavedSelection(${s.id})">Load</button>
+                  <button class="btn btn-secondary btn-sm" style="padding:0.15rem 0.5rem;font-size:0.75rem;color:#c0392b" onclick="window.deleteSavedSelection(${s.id})">✕</button>
+                </div>`;
+              }).join('')
+          }
+        </div>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+window.openSaveSelPopup = async function() {
+  state.saveSelPopup.open = true;
+  state.saveSelPopup.saving = false;
+  render();
+  try {
+    const rows = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections`);
+    state.savedSelections = rows;
+  } catch (e) { /* non-fatal */ }
+  render();
+};
+
+window.closeSaveSelPopup = function() {
+  state.saveSelPopup.open = false;
+  render();
+};
+
+window.doSaveSelection = async function() {
+  const name = (state.saveSelPopup.nameInput || '').trim();
+  if (!name) return;
+  state.saveSelPopup.saving = true; render();
+  const keys = [...state.selectedServices];
+  try {
+    await apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections`, {
+      method: 'POST',
+      body: JSON.stringify({ name, filters: { ...state.filters }, selectedKeys: keys })
+    });
+    const rows = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections`);
+    state.savedSelections = rows;
+    state.saveSelPopup.open = false;
+  } catch (e) { /* non-fatal */ }
+  state.saveSelPopup.saving = false;
+  render();
+};
+
+window.loadSavedSelection = function(id) {
+  const saved = state.savedSelections.find(s => String(s.id) === String(id));
+  if (!saved) return;
+  const defaultFilters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', maxFocusTopics: [], maxFocusTopicsMode: 'merge', deckName: '', namingType: '', etLabelType: 'engagement' };
+  state.filters = { ...defaultFilters, ...(saved.filters || {}) };
+  state.selectedServices = new Set(Array.isArray(saved.selected_keys) ? saved.selected_keys : []);
+  state.selectedServiceObjects = new Map();
+  state.keepSelected = true;
+  state.saveSelPopup.open = false;
+  render();
+};
+
+window.deleteSavedSelection = async function(id) {
+  try {
+    await apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections/${id}`, { method: 'DELETE' });
+    state.savedSelections = state.savedSelections.filter(s => String(s.id) !== String(id));
+  } catch (e) { /* non-fatal */ }
+  render();
+};
+
 function render() {
   const app = document.getElementById('app');
   if (!app) return;
@@ -3060,6 +3163,7 @@ function render() {
     ${renderExcelSettingsModal()}
     ${renderExportLogDetailModal()}
     ${renderMcpModal()}
+    ${renderSaveSelPopup()}
     ${state.accessDeniedModal ? `
     <div class="modal-overlay" onclick="if(event.target===this)window.closeAccessDenied()">
       <div class="modal-box" style="max-width:420px">
