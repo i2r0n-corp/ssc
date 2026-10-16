@@ -69,7 +69,7 @@ let state = {
   exportTotal: null,
   sessionId: Math.random().toString(36).slice(2),
   savedSelections: [],
-  saveSelPopup: { open: false, nameInput: '', saving: false },
+  saveSelPopup: { open: false, nameInput: '', descInput: '', saving: false },
   loadSelPopup: { open: false },
 };
 
@@ -3057,12 +3057,13 @@ window.requestMcpAccess = async function() {
 function renderSaveSelPopup() {
   const p = state.saveSelPopup;
   if (!p.open) return '';
+  const savedList = state.savedSelections;
   return `
   <div class="modal-overlay" onclick="if(event.target===this)window.closeSaveSelPopup()">
-    <div class="modal-box" style="max-width:440px">
+    <div class="modal-box" style="max-width:460px">
       <button class="modal-close" onclick="window.closeSaveSelPopup()">✕</button>
       <h3 style="margin-top:0;font-size:1rem;margin-bottom:1rem">Save current selection</h3>
-      <div style="display:flex;gap:0.5rem;align-items:center">
+      <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.6rem">
         <input type="text" id="save-sel-name-input" class="form-control form-control-sm" style="flex:1"
           placeholder="Selection name…"
           value="${(p.nameInput||'').replace(/"/g,'&quot;')}"
@@ -3071,6 +3072,25 @@ function renderSaveSelPopup() {
         <button id="save-sel-btn" class="btn btn-primary btn-sm" ${p.saving||!p.nameInput?.trim()?'disabled':''}
           onclick="window.doSaveSelection()">${p.saving?'Saving…':'Save'}</button>
       </div>
+      <textarea class="form-control form-control-sm" rows="2" style="width:100%;margin-bottom:1rem;resize:vertical"
+        placeholder="Description (optional)…"
+        oninput="state.saveSelPopup.descInput=this.value">${(p.descInput||'').replace(/</g,'&lt;')}</textarea>
+      ${savedList.length > 0 ? `
+      <div style="font-size:0.8rem;font-weight:600;color:#1D2D3E;margin-bottom:0.4rem">Saved selections</div>
+      <div style="max-height:220px;overflow-y:auto;border:1px solid #dce3ea;border-radius:6px">
+        ${savedList.map(s => {
+            const dt = new Date(s.updated_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'});
+            const keyCount = Array.isArray(s.selected_keys) ? s.selected_keys.length : 0;
+            return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0.75rem;border-bottom:1px solid #f0f3f7">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.name.replace(/"/g,'&quot;')}">${s.name}</div>
+                ${s.description ? `<div style="font-size:0.75rem;color:#8696A9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.description.replace(/</g,'&lt;')}</div>` : ''}
+              </div>
+              <span style="font-size:0.75rem;color:#8696A9;white-space:nowrap">${keyCount} svc · ${dt}</span>
+              <button class="btn btn-secondary btn-sm" style="padding:0.15rem 0.5rem;font-size:0.75rem;color:#c0392b;flex-shrink:0" onclick="window.deleteSavedSelection(${s.id})">✕</button>
+            </div>`;
+          }).join('')}
+      </div>` : ''}
     </div>
   </div>`;
 }
@@ -3085,7 +3105,11 @@ window.openSaveSelPopup = function() {
   state.saveSelPopup.open = true;
   state.saveSelPopup.saving = false;
   state.saveSelPopup.nameInput = '';
+  state.saveSelPopup.descInput = '';
   render();
+  apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections`)
+    .then(rows => { state.savedSelections = rows; render(); })
+    .catch(() => {});
 };
 
 window.closeSaveSelPopup = function() {
@@ -3108,7 +3132,10 @@ function renderLoadSelPopup() {
               const dt = new Date(s.updated_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'});
               const keyCount = Array.isArray(s.selected_keys) ? s.selected_keys.length : 0;
               return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;border-bottom:1px solid #f0f3f7">
-                <span style="flex:1;font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.name.replace(/"/g,'&quot;')}">${s.name}</span>
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.name.replace(/"/g,'&quot;')}">${s.name}</div>
+                  ${s.description ? `<div style="font-size:0.75rem;color:#8696A9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.description.replace(/</g,'&lt;')}</div>` : ''}
+                </div>
                 <span style="font-size:0.75rem;color:#8696A9;white-space:nowrap">${keyCount} svc · ${dt}</span>
                 <button class="btn btn-secondary btn-sm" style="padding:0.15rem 0.5rem;font-size:0.75rem" onclick="window.loadSavedSelection(${s.id})">Load</button>
                 <button class="btn btn-secondary btn-sm" style="padding:0.15rem 0.5rem;font-size:0.75rem;color:#c0392b" onclick="window.deleteSavedSelection(${s.id})">✕</button>
@@ -3143,6 +3170,7 @@ window.doSaveSelection = async function() {
       method: 'POST',
       body: JSON.stringify({
         name,
+        description: (state.saveSelPopup.descInput || '').trim(),
         filters: { ...state.filters },
         selectedKeys: keys,
         keepSelected: state.keepSelected,

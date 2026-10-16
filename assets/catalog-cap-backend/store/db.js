@@ -277,6 +277,7 @@ CREATE TABLE IF NOT EXISTS catalog_saved_selections (
   id                 BIGSERIAL PRIMARY KEY,
   user_email         TEXT NOT NULL,
   name               TEXT NOT NULL,
+  description        TEXT NOT NULL DEFAULT '',
   filters            JSONB NOT NULL DEFAULT '{}',
   selected_keys      JSONB NOT NULL DEFAULT '[]',
   keep_selected      BOOLEAN NOT NULL DEFAULT true,
@@ -316,6 +317,7 @@ async function initSchema() {
     await client.query(`ALTER TABLE catalog_excel_fixes ADD COLUMN IF NOT EXISTS fixed_by TEXT`);
     await client.query(`ALTER TABLE catalog_saved_selections ADD COLUMN IF NOT EXISTS keep_selected BOOLEAN NOT NULL DEFAULT true`);
     await client.query(`ALTER TABLE catalog_saved_selections ADD COLUMN IF NOT EXISTS module_granularity BOOLEAN NOT NULL DEFAULT false`);
+    await client.query(`ALTER TABLE catalog_saved_selections ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''`);
     console.log('[db] Schema initialised');
   } finally {
     client.release();
