@@ -2765,22 +2765,26 @@ function renderAdminPage() {
         ${debugLogLoading ? '<div style="color:#6a6a6a;font-size:0.85rem">Loading…</div>' : ''}
         ${debugLogError ? `<div class="error-strip">⚠ ${debugLogError}</div>` : ''}
         ${!debugLogLoading && debugLog.length === 0 ? '<div style="color:#6a6a6a;font-size:0.85rem">No fixes recorded yet.</div>' : ''}
-        ${debugLog.length > 0 ? `
+    ${debugLog.length > 0 ? `
         <table class="service-table" style="font-size:0.78rem">
           <thead><tr>
             <th>Date</th><th>Fixed by</th><th>BS</th><th>Deck Name</th>
             <th>Orig Status</th><th>Service Code</th><th>Module Code</th>
           </tr></thead>
           <tbody>
-            ${debugLog.map(r => `<tr>
-              <td style="white-space:nowrap">${r.last_applied_at ? new Date(r.last_applied_at).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</td>
+            ${debugLog.map(r => {
+              const statusBg = r.orig_status === 'No Module Match' ? '#fff3cd' : r.orig_status === 'No Service Match' ? '#f8d7da' : '#e2e3e5';
+              const dt = r.last_applied_at ? new Date(r.last_applied_at).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+              return `<tr>
+              <td style="white-space:nowrap">${dt}</td>
               <td>${(r.fixed_by||'').replace(/</g,'&lt;')}</td>
               <td style="white-space:nowrap">${r.bs_code||''}</td>
               <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(r.deck_name||'').replace(/"/g,'&quot;')}">${r.deck_name||''}</td>
-              <td><span style="display:inline-block;padding:2px 7px;border-radius:10px;font-size:0.7rem;font-weight:600;background:${r.orig_status==='No Module Match'?'#fff3cd':r.orig_status==='No Service Match'?'#f8d7da':'#e2e3e5'};color:#333">${r.orig_status||''}</span></td>
+              <td><span style="display:inline-block;padding:2px 7px;border-radius:10px;font-size:0.7rem;font-weight:600;background:${statusBg};color:#333">${r.orig_status||''}</span></td>
               <td style="font-size:0.72rem;color:#0070F2">${r.service_code||''}</td>
               <td style="font-size:0.72rem;color:#556B82">${r.module_code||''}</td>
-            </tr>`).join('')}
+            </tr>`;
+            }).join('')}
           </tbody>
         </table>` : ''}
       </div>`
