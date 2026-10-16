@@ -658,7 +658,7 @@ function renderCatalogResults() {
 
   return `
     ${loading ? '<div class="loading"><div class="loading-spinner"></div> Loading...</div>' : ''}
-    ${!hasSearched && !loading ? '' : !loading && state.filteredServices.length === 0 ? `
+    ${!hasSearched && !loading && !(state.showOnlySelected && state.keepSelected && selCount > 0) ? '' : !loading && state.filteredServices.length === 0 && !(state.showOnlySelected && state.keepSelected && selCount > 0) ? `
       <div class="empty-state">
         <div style="font-size:2rem">😕</div>
         <p>No services found. Try adjusting your filters.</p>
