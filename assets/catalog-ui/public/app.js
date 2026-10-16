@@ -324,7 +324,21 @@ function renderSelectionControls() {
   const hasActiveFilters = !!(f.query || f.engagementType || f.businessScenario || f.deckName || f.namingType || f.modules.length || f.phases.length || f.supercats.length || f.advancedLoS.length || f.foundationalCats.length || f.maxFocusTopics.length);
 
   const countHtml = (() => {
-    if (!hasSearched) return `<span style="font-size:0.8rem;color:#8696A9">Use filters to explore the catalog</span>`;
+    if (!hasSearched) {
+      if (selCount === 0) return `<span style="font-size:0.8rem;color:#8696A9">Use filters to explore the catalog</span>`;
+      const selInfo = gran
+        ? (() => {
+            const svcPart = `${uniqueSelectedCodes} service${uniqueSelectedCodes!==1?'s':''}`;
+            const { bsCount, hasNoBs } = granBsCodes;
+            const bsParts = [];
+            if (bsCount > 0) bsParts.push(`${bsCount} BS`);
+            if (hasNoBs) bsParts.push('General');
+            const ctxPart = bsParts.length ? ` across ${bsParts.join(' + ')}` : '';
+            return `${svcPart}${ctxPart} selected`;
+          })()
+        : `${selCount} selected`;
+      return `<span style="font-size:0.8rem;color:#8696A9">Use filters to explore the catalog &nbsp;</span><span style="color:#003366;font-weight:600">${selInfo}</span>`;
+    }
     const pills = [];
     if (etCounts.max > 0)         pills.push(`<span class="badge badge-max">${isService ? 'Premium' : 'Max'} — ${etCounts.max}</span>`);
     if (isService) {
@@ -1053,10 +1067,13 @@ window.clearFilters = function() {
   state.filters = { query: '', engagementType: '', businessScenario: '', module: '', modules: [], phases: [], phaseMode: 'merge', supercats: [], advancedLoS: [], advancedLoSMode: 'merge', foundationalCats: [], foundationalCatsMode: 'merge', maxFocusTopics: [], maxFocusTopicsMode: 'merge', deckName: '', namingType: '', etLabelType: 'engagement' };
   state.filteredServices = [];
   state.catalog.hasSearched = false;
-  state.selectedServices.clear();
-  state.selectedServiceObjects.clear();
+  if (!state.keepSelected) {
+    state.selectedServices.clear();
+    state.selectedServiceObjects.clear();
+    state.showOnlySelected = false;
+    state.moduleGranularity = false;
+  }
   state.showOnlySelected = false;
-  state.moduleGranularity = false;
   render();
 };
 
