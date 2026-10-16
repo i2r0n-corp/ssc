@@ -1379,6 +1379,24 @@ router.get('/admin/mcp-log/:id', requireAdmin, async (req, res) => {
   }
 });
 
+router.get('/admin/debug-log', requireAdmin, async (req, res) => {
+  try {
+    const db = require('../store/db');
+    const result = await db.query(`
+      SELECT f.row_hash, f.bs_code, f.fixed_by, f.last_applied_at,
+             f.raw_crm_id, f.raw_module_code, f.service_code, f.module_code,
+             r.deck_name, r.module_name, r.service_name AS orig_service_name, r.status AS orig_status
+      FROM catalog_excel_fixes f
+      LEFT JOIN catalog_matching_log_rows r ON r.row_hash = f.row_hash OR ('row-' || r.id::text) = f.row_hash
+      ORDER BY f.last_applied_at DESC
+      LIMIT 500
+    `);
+    res.json({ rows: result.rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Excel export ──────────────────────────────────────────────────────────────
 router.post('/export-excel', async (req, res) => {
   try {
