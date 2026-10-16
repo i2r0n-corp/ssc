@@ -1302,9 +1302,6 @@ window.generatePptx = async function(template) {
       // Resolve stream label for PPTX
       let resolvedStreamMode = s.streamMode;
       let resolvedStreamCustom = s.streamCustom;
-      if ((!bsCode || serviceModuleMap) && resolvedStreamMode !== 'customNoBS') {
-        resolvedStreamMode = 'moduleOnly';
-      }
       // Build selectedModuleCodes: explicit selection, or all BS modules when BS selected + none checked
       const selectedModuleCodes = (() => {
         if (mods.length > 1) return mods;
@@ -1338,6 +1335,9 @@ window.generatePptx = async function(template) {
         return entries;
       })();
       // Stream column is meaningful when we have BS/module context (either via filter or via selection)
+      if ((!bsCode || serviceModuleMap) && resolvedStreamMode !== 'customNoBS') {
+        resolvedStreamMode = 'moduleOnly';
+      }
       const hasModuleContext = !!(bsCode || serviceModuleMap);
       body.listOptions = {
         cols: { ...s.cols, stream: hasModuleContext ? s.cols.stream : false },
