@@ -3092,9 +3092,9 @@ function renderSaveSelPopup() {
         <button id="save-sel-btn" class="btn btn-primary btn-sm" ${p.saving||!p.nameInput?.trim()?'disabled':''}
           onclick="window.doSaveSelection()">${p.saving?'Saving…':'Save'}</button>
       </div>
-      <textarea class="form-control form-control-sm" rows="2" style="width:100%;margin-bottom:1rem;resize:vertical"
+      <textarea id="save-sel-desc-input" class="form-control form-control-sm" rows="2" style="width:100%;margin-bottom:1rem;resize:vertical"
         placeholder="Description (optional)…"
-        oninput="state.saveSelPopup.descInput=this.value">${(p.descInput||'').replace(/</g,'&lt;')}</textarea>
+        oninput="window.onSaveSelDescInput(this.value)">${(p.descInput||'').replace(/</g,'&lt;')}</textarea>
       ${savedList.length > 0 ? `
       <div style="font-size:0.8rem;font-weight:600;color:#1D2D3E;margin-bottom:0.4rem">Saved selections</div>
       <div style="max-height:220px;overflow-y:auto;border:1px solid #dce3ea;border-radius:6px">
@@ -3121,6 +3121,10 @@ window.onSaveSelNameInput = function(val) {
   if (btn) btn.disabled = !val.trim();
 };
 
+window.onSaveSelDescInput = function(val) {
+  state.saveSelPopup.descInput = val;
+};
+
 window.openSaveSelPopup = function() {
   state.saveSelPopup.open = true;
   state.saveSelPopup.saving = false;
@@ -3145,7 +3149,7 @@ function renderLoadSelPopup() {
     <div class="modal-box" style="max-width:480px">
       <button class="modal-close" onclick="window.closeLoadSelPopup()">✕</button>
       <h3 style="margin-top:0;font-size:1rem;margin-bottom:1rem">Saved selections</h3>
-      <div style="max-height:360px;overflow-y:auto;border:1px solid #dce3ea;border-radius:6px">
+      <div style="max-height:360px;overflow-y:auto;overflow-x:visible;border:1px solid #dce3ea;border-radius:6px">
         ${savedList.length === 0
           ? `<div style="padding:0.75rem 1rem;font-size:0.85rem;color:#8696A9">No saved selections.</div>`
           : savedList.map(s => {
