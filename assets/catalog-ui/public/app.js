@@ -1198,8 +1198,18 @@ window.toggleSelectAll = function(checked) {
       });
     }
   } else {
-    state.selectedServices.clear();
-    state.selectedServiceObjects.clear();
+    if (gran) {
+      const rows = buildGranularRows(state.filteredServices, bsCode);
+      rows.forEach(r => {
+        state.selectedServices.delete(r._selKey);
+        state.selectedServiceObjects.delete(r._selKey);
+      });
+    } else {
+      state.filteredServices.forEach(s => {
+        state.selectedServices.delete(s.code);
+        state.selectedServiceObjects.delete(s.code);
+      });
+    }
   }
   patchResults();
 };
