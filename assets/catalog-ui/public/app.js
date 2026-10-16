@@ -325,6 +325,15 @@ function renderSelectionControls() {
   const uniqueSelectedCodes = gran
     ? new Set([...state.selectedServiceObjects.keys()].map(k => k.split('||')[0])).size
     : selCount;
+  const granBsCodes = gran ? (() => {
+    const bs = new Set(); let hasNoBs = false;
+    state.selectedServiceObjects.forEach((obj, key) => {
+      if (!key.includes('||')) return;
+      const bsVal = (obj._bsCode && obj._bsCode !== 'null') ? obj._bsCode : null;
+      if (bsVal) bs.add(bsVal); else hasNoBs = true;
+    });
+    return { bsCount: bs.size, hasNoBs };
+  })() : null;
   const { etCounts = { max: 0, advanced: 0, foundational: 0 } } = state.catalog.filterCounts || {};
   const total = state.filteredServices.length;
   const isService = state.filters.etLabelType === 'service';
@@ -345,7 +354,15 @@ function renderSelectionControls() {
     }
     const selInfo = selCount === 0 ? '' :
       gran
-        ? ` &nbsp;<span style="color:#003366;font-weight:600">${selCount} selection${selCount!==1?'s':''} across ${uniqueSelectedCodes} service${uniqueSelectedCodes!==1?'s':''}</span>`
+        ? (() => {
+            const svcPart = `${uniqueSelectedCodes} service${uniqueSelectedCodes!==1?'s':''}`;
+            const { bsCount, hasNoBs } = granBsCodes;
+            const bsParts = [];
+            if (bsCount > 0) bsParts.push(`${bsCount} BS`);
+            if (hasNoBs) bsParts.push('General');
+            const ctxPart = bsParts.length ? ` across ${bsParts.join(' + ')}` : '';
+            return ` &nbsp;<span style="color:#003366;font-weight:600">${svcPart}${ctxPart} selected</span>`;
+          })()
         : ` &nbsp;<span style="color:#003366;font-weight:600">${selCount} selected</span>`;
     return `${pills.join('')}<span style="font-size:0.8rem;color:#6a6a6a">overall: <strong>${total}</strong></span>${selInfo}`;
   })();
@@ -3134,10 +3151,13 @@ function renderLoadSelPopup() {
           : savedList.map(s => {
               const dt = new Date(s.updated_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'});
               const keyCount = Array.isArray(s.selected_keys) ? s.selected_keys.length : 0;
+              const infoIcon = s.description
+                ? `<span title="${s.description.replace(/"/g,'&quot;')}" style="display:inline-flex;align-items:center;justify-content:center;width:0.82rem;height:0.82rem;border-radius:50%;background:#1D6FA4;color:#fff;font-size:0.6rem;font-weight:700;cursor:default;flex-shrink:0;line-height:1">?</span>`
+                : `<span style="display:inline-flex;width:0.82rem;height:0.82rem;flex-shrink:0"></span>`;
               return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.75rem;border-bottom:1px solid #f0f3f7">
+                ${infoIcon}
                 <div style="flex:1;min-width:0">
                   <div style="font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${s.name.replace(/"/g,'&quot;')}">${s.name}</div>
-                  ${s.description ? `<div style="font-size:0.75rem;color:#8696A9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.description.replace(/</g,'&lt;')}</div>` : ''}
                 </div>
                 <span style="font-size:0.75rem;color:#8696A9;white-space:nowrap">${keyCount} svc · ${dt}</span>
                 <button class="btn btn-secondary btn-sm" style="padding:0.15rem 0.5rem;font-size:0.75rem" onclick="window.loadSavedSelection(${s.id})">Load</button>
