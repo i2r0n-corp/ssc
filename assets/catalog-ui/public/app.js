@@ -3051,7 +3051,7 @@ function renderSaveSelPopup() {
         <input type="text" id="save-sel-name-input" class="form-control form-control-sm" style="flex:1"
           placeholder="Selection name…"
           value="${(p.nameInput||'').replace(/"/g,'&quot;')}"
-          oninput="state.saveSelPopup.nameInput=this.value;document.getElementById('save-sel-btn').disabled=!this.value.trim()"
+          oninput="state.saveSelPopup.nameInput=this.value;render();document.getElementById('save-sel-name-input')&&(el=>{ el.focus(); el.setSelectionRange(el.value.length,el.value.length); })(document.getElementById('save-sel-name-input'))"
           onkeydown="if(event.key==='Enter')window.doSaveSelection()">
         <button id="save-sel-btn" class="btn btn-primary btn-sm" ${p.saving||!p.nameInput?.trim()?'disabled':''}
           onclick="window.doSaveSelection()">${p.saving?'Saving…':'Save'}</button>
