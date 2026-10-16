@@ -7,8 +7,11 @@ const fs = require('fs');
 
 function stripModName(s) {
   if (!s) return '';
-  const a = s.includes(' // ') ? s.split(' // ').slice(1).join(' // ') : s;
-  return a.replace(/^Module\s+[^:]+:\s*/i, '').trim() || a;
+  // Format: "BS Name // Module N // Actual Name" or "BS Name // Module N: Actual Name"
+  const parts = s.split(' // ');
+  // Find first part that doesn't start with "Module <number>"
+  const name = parts.find((p, i) => i > 0 && !/^Module\s+\S/i.test(p)) || parts[parts.length - 1];
+  return name.replace(/^Module\s+[^:]+:\s*/i, '').trim() || s;
 }
 const path = require('path');
 const snapshot = require('../store/snapshot');
@@ -1869,8 +1872,11 @@ router.post('/debug/fix', requireEditor, async (req, res) => {
 router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
   const { bsCode } = req.params;
   function normCrmIds(raw) {
+    const s = (raw || '').trim().toLowerCase();
+    const NA_WHOLE = new Set(['n/a', 'na', 'a/n', 'an', '-', 'tbd', 'n.a.', '']);
+    if (NA_WHOLE.has(s)) return '';
     const NA = new Set(['n/a', 'na', 'a/n', 'an', '-', 'tbd', 'n.a.']);
-    const parts = (raw || '').split(/[,;/\s]+/).map(s => s.trim().toLowerCase()).filter(s => s && !NA.has(s));
+    const parts = s.split(/[,;\s]+/).map(p => p.trim()).filter(p => p && !NA.has(p));
     return parts.sort().join('|');
   }
   try {

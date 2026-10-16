@@ -6,8 +6,11 @@ const zlib = require('zlib');
 
 function stripModName(s) {
   if (!s) return '';
-  const a = s.includes(' // ') ? s.split(' // ').slice(1).join(' // ') : s;
-  return a.replace(/^Module\s+[^:]+:\s*/i, '').trim() || a;
+  // Format: "BS Name // Module N // Actual Name" or "BS Name // Module N: Actual Name"
+  const parts = s.split(' // ');
+  // Find first part that doesn't start with "Module <number>"
+  const name = parts.find((p, i) => i > 0 && !/^Module\s+\S/i.test(p)) || parts[parts.length - 1];
+  return name.replace(/^Module\s+[^:]+:\s*/i, '').trim() || s;
 }
 
 // ── ZIP read/write ────────────────────────────────────────────────────────────
