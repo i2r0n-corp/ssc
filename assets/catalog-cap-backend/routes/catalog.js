@@ -1881,47 +1881,39 @@ router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
     const fixMap = {};
     for (const f of fixRows.rows) fixMap[f.row_hash] = f;
 
-    const XLSX = require('xlsx');
-    const wb = XLSX.read(file_data, { type: 'buffer', cellStyles: true });
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(file_data);
 
-    for (const sheetName of wb.SheetNames) {
-      const ws = wb.Sheets[sheetName];
-      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-      let crmCol = 0, nameCol = 1, moduleCol = -1;
-
-      // Detect header row (row 0) for module column
-      for (let c = range.s.c; c <= range.e.c; c++) {
-        const cell = ws[XLSX.utils.encode_cell({ r: 0, c })];
-        if (cell && /business.?module/i.test((cell.v||'').toString())) moduleCol = c;
-      }
-
+    wb.eachSheet(ws => {
       let deckName = '';
-      for (let r = 1; r <= range.e.r; r++) {
-        const getCellVal = c => { const cell = ws[XLSX.utils.encode_cell({ r, c })]; return cell ? (cell.v||'').toString().trim() : ''; };
-        const crmVal = getCellVal(crmCol);
-        const nameVal = getCellVal(nameCol);
-        const modVal = moduleCol >= 0 ? getCellVal(moduleCol) : '';
-        const firstCell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
-        if (firstCell && firstCell.v) deckName = firstCell.v.toString().trim();
+      let crmCol = 1, nameCol = 2, moduleCol = -1;
+      ws.eachRow((row, rowNum) => {
+        if (rowNum === 1) {
+          row.eachCell((cell, colNum) => {
+            const v = (cell.value||'').toString().toLowerCase();
+            if (/business.?module/i.test(v)) moduleCol = colNum;
+          });
+          return;
+        }
+        const crmVal = (row.getCell(crmCol).value || '').toString().trim();
+        const nameVal = (row.getCell(nameCol).value || '').toString().trim();
+        const modVal = moduleCol > 0 ? (row.getCell(moduleCol).value || '').toString().trim() : '';
+        if (row.getCell(1).value) deckName = row.getCell(1).value.toString().trim();
         const h = rowHash(bsCode, crmVal, deckName, modVal);
         const fix = fixMap[h];
-        if (!fix) continue;
-        const setCell = (c, v) => {
-          const addr = XLSX.utils.encode_cell({ r, c });
-          if (!ws[addr]) ws[addr] = {};
-          ws[addr].v = v; ws[addr].t = 's';
-        };
-        if (fix.raw_crm_id) setCell(crmCol, fix.raw_crm_id);
-        if (fix.raw_catalog_name) setCell(nameCol, fix.raw_catalog_name);
-        if (fix.raw_module_code && moduleCol >= 0) setCell(moduleCol, fix.raw_module_code);
-      }
-    }
+        if (!fix) return;
+        if (fix.raw_crm_id) row.getCell(crmCol).value = fix.raw_crm_id;
+        if (fix.raw_catalog_name) row.getCell(nameCol).value = fix.raw_catalog_name;
+        if (fix.raw_module_code && moduleCol > 0) row.getCell(moduleCol).value = fix.raw_module_code;
+      });
+    });
 
-    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    const buf = await wb.xlsx.writeBuffer();
     const outName = file_name || `${bsCode}.xlsx`;
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${outName}"`);
-    res.send(buf);
+    res.send(Buffer.from(buf));
   } catch (e) {
     console.error('[excel-export-fix]', e);
     res.status(500).json({ error: e.message });
