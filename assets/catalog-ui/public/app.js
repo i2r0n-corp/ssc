@@ -3051,7 +3051,7 @@ function renderSaveSelPopup() {
         <input type="text" id="save-sel-name-input" class="form-control form-control-sm" style="flex:1"
           placeholder="Selection name…"
           value="${(p.nameInput||'').replace(/"/g,'&quot;')}"
-          oninput="state.saveSelPopup.nameInput=this.value;render();document.getElementById('save-sel-name-input')&&(el=>{ el.focus(); el.setSelectionRange(el.value.length,el.value.length); })(document.getElementById('save-sel-name-input'))"
+          oninput="window.onSaveSelNameInput(this.value)"
           onkeydown="if(event.key==='Enter')window.doSaveSelection()">
         <button id="save-sel-btn" class="btn btn-primary btn-sm" ${p.saving||!p.nameInput?.trim()?'disabled':''}
           onclick="window.doSaveSelection()">${p.saving?'Saving…':'Save'}</button>
@@ -3082,9 +3082,16 @@ function renderSaveSelPopup() {
   </div>`;
 }
 
+window.onSaveSelNameInput = function(val) {
+  state.saveSelPopup.nameInput = val;
+  const btn = document.getElementById('save-sel-btn');
+  if (btn) btn.disabled = !val.trim();
+};
+
 window.openSaveSelPopup = function() {
   state.saveSelPopup.open = true;
   state.saveSelPopup.saving = false;
+  state.saveSelPopup.nameInput = '';
   render();
   // Fetch saved list in background — only re-render if listOpen so the input isn't disturbed
   apiFetch(`${CAP_BACKEND_URL}/api/catalog/saved-selections`)
