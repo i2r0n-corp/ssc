@@ -918,7 +918,7 @@ window.navigate = function(page) {
   render();
   if (page === 'catalog' && !state.catalog.bsMap) loadCatalog();
   if (page === 'debug') loadDebugLog();
-  if (page === 'admin') { loadAdminUsers(); loadAdminVisitorLog(); loadAdminMcpRequests(); loadExportLog(); loadDebugLog(); }
+  if (page === 'admin') { loadAdminUsers(); loadAdminVisitorLog(); loadAdminMcpRequests(); loadExportLog(); loadAdminDebugLog(); }
   // Log page visit
   apiFetch(`${CAP_BACKEND_URL}/api/catalog/visitor`, { method: 'POST', body: JSON.stringify({ page, sessionId: state.sessionId }) }).catch(() => {});
 };
@@ -2324,7 +2324,7 @@ async function loadAdminMcpRequests() {
 }
 window.loadAdminMcpRequests = loadAdminMcpRequests;
 
-async function loadDebugLog() {
+async function loadAdminDebugLog() {
   state.admin.debugLogLoading = true; state.admin.debugLogError = null;
   try {
     const data = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/admin/debug-log`);
