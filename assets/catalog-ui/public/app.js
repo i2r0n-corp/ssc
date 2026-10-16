@@ -688,7 +688,7 @@ function renderCatalogResults() {
           } else {
             rows = state.filteredServices.slice(0, 2000).map(svc => ({ ...svc, _selKey: svc.code, _bsCode: null, _moduleCode: null }));
           }
-          if (state.sort.col && !gran) {
+          if (state.sort.col && state.sort.col !== 'bsMod') {
             const ET_SORT_ORDER = ['Max Success Plan','Advanced Success Plan','Enterprise Support','Embedded Launch Activities','Cloud Prepackaged Services'];
             rows = [...rows].sort((a, b) => {
               if (state.sort.col === 'name') {
