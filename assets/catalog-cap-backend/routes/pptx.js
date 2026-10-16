@@ -258,7 +258,7 @@ router.post('/generatePptx', async (req, res) => {
 
         const token = uuidv4();
         downloadTokens.set(token, { fileId, expires: Date.now() + DOWNLOAD_TOKEN_TTL_MS });
-        return res.json({ downloadUrl: `/api/pptx/download/${token}`, filename });
+        return res.json({ downloadUrl: `/api/pptx/download/${fileId}?token=${token}`, filename });
       }
 
       const svcs = services.map(s => {
