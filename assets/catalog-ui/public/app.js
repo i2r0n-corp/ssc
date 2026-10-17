@@ -306,6 +306,7 @@ function engagementBadge(et) {
 
 function renderSelectionControls() {
   const selCount = state.selectedServices.size;
+  const gran = state.moduleGranularity && state.keepSelected;
   const { etCounts = { max: 0, advanced: 0, foundational: 0 } } = state.catalog.filterCounts || {};
   const total = state.filteredServices.length;
   const isService = state.filters.etLabelType === 'service';
@@ -326,7 +327,13 @@ function renderSelectionControls() {
       if (etCounts.advanced > 0)    pills.push(`<span class="badge badge-adv">Advanced — ${etCounts.advanced}</span>`);
       if (etCounts.foundational > 0) pills.push(`<span class="badge badge-ent">Foundational — ${etCounts.foundational}</span>`);
     }
-    return `${pills.join('')}<span style="font-size:0.8rem;color:#6a6a6a">Found: <strong>${total}</strong></span>`;
+    const uniqueTotal = gran ? new Set(state.filteredServices.map(s => s.code)).size : null;
+    const overallStr = gran && uniqueTotal !== total
+      ? `Overall: <strong>${total} (${uniqueTotal} unique)</strong>`
+      : `Overall: <strong>${total}</strong>`;
+    const foundLabel = `<span style="font-size:0.8rem;color:#6a6a6a">Found:</span>`;
+    const overallLabel = `<span style="font-size:0.8rem;color:#6a6a6a">${overallStr}</span>`;
+    return `${foundLabel}${pills.length ? ' ' : ''}${pills.join('')}${pills.length ? ' ' : ''}${overallLabel}`;
   })();
 
   return `<div id="sel-controls-strip" style="padding:0.5rem 1rem 0.75rem;display:flex;align-items:center;gap:0.5rem;width:100%;flex-wrap:wrap">
@@ -631,17 +638,20 @@ function renderCatalogResults() {
     return { bsCount: bs.size, hasNoBs };
   })() : null;
   const selInfoHtml = (() => {
-    if (selCount === 0) return '';
-    const svcPart = gran && selCount !== uniqueSelectedCodes ? `${selCount}(${uniqueSelectedCodes} unique)` : `${selCount}`;
+    const keepDot = `<span title="${state.keepSelected ? 'Preserve selection when filtering is ON' : 'Preserve selection when filtering is OFF'}" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${state.keepSelected ? '#28a745' : '#adb5bd'};flex-shrink:0;cursor:default"></span>`;
+    const granDot = `<span title="${gran ? 'Module granularity is ON' : 'Module granularity is OFF'}" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${gran ? '#28a745' : '#adb5bd'};flex-shrink:0;cursor:default"></span>`;
+    const dots = `<span style="display:inline-flex;align-items:center;gap:3px">${keepDot}${granDot}</span>`;
+    if (selCount === 0) return dots;
+    const svcPart = gran && selCount !== uniqueSelectedCodes ? `${selCount} (${uniqueSelectedCodes} unique)` : `${selCount}`;
     if (gran && granBsCodes) {
       const { bsCount, hasNoBs } = granBsCodes;
       const bsParts = [];
       if (bsCount > 0) bsParts.push(`${bsCount} BS`);
       if (hasNoBs) bsParts.push('General');
       const ctxPart = bsParts.length ? ` across ${bsParts.join(' + ')}` : '';
-      return `<span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Selected:</span> <span style="color:#003366;font-weight:600">${svcPart}${ctxPart}</span>`;
+      return `${dots} <span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Selected:</span> <span style="color:#003366;font-weight:600">${svcPart}${ctxPart}</span>`;
     }
-    return `<span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Selected:</span> <span style="color:#003366;font-weight:600">${svcPart}</span>`;
+    return `${dots} <span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Selected:</span> <span style="color:#003366;font-weight:600">${svcPart}</span>`;
   })();
 
   return `
@@ -652,9 +662,9 @@ function renderCatalogResults() {
         <p>No services found. Try adjusting your filters.</p>
       </div>` : !loading ? `
     <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center;flex-wrap:wrap">
+      <span style="display:inline-flex;align-items:center;gap:0.4rem">${selInfoHtml}</span>
       <span style="flex:1"></span>
       ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="color:#155724;font-weight:600;font-size:0.8rem">Successfully downloaded</span>` : ''}
-      ${selInfoHtml ? `<span style="display:inline-flex;align-items:center;gap:0.3rem">${selInfoHtml}</span>` : ''}
       <span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Export to:</span>
       <button class="btn btn-primary btn-sm" onclick="openExcelSettings()" title="Export to Excel" style="display:inline-flex;align-items:center;gap:5px">
         <img src="excel.svg" style="height:18px;width:auto" alt="" />${selCount > 0 ? `(${selCount})` : '(all)'}
