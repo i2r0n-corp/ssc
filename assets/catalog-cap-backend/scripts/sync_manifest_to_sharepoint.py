@@ -145,6 +145,16 @@ def main():
             minutes_since = (now - last_check).total_seconds() / 60
             if minutes_since < CHECK_INTERVAL:
                 print(f"⏭️  Last check was {minutes_since:.0f} min ago — minimum is {CHECK_INTERVAL} min. Skipping.")
+                log.setdefault("runs", [])
+                log["runs"] = log["runs"][-50:]
+                log["runs"].append({
+                    "time": now.strftime("%Y-%m-%d %H:%M:%S UTC"),
+                    "duration_sec": 0,
+                    "mode": "scheduled",
+                    "result": "skipped_interval",
+                    "minutes_since_last": int(minutes_since),
+                })
+                write_log(log)
                 return
             print(f"⏱️  Last check: {last_check.strftime('%Y-%m-%d %H:%M:%S')} UTC ({minutes_since:.0f} min ago)")
         else:
@@ -252,6 +262,25 @@ def main():
 
     if not args.manual:
         log["lastCheck"] = now.isoformat()
+
+    end_time = datetime.now(timezone.utc)
+    duration_sec = int((end_time - now).total_seconds())
+    run_record = {
+        "time": now.strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "duration_sec": duration_sec,
+        "mode": "manual" if args.manual else "scheduled",
+        "result": "no_changes" if (uploaded == 0 and errors == 0 and missing == 0 and bad_structure == 0) else "completed",
+        "uploaded": uploaded,
+        "skipped": skipped,
+        "missing": missing,
+        "excluded": excluded,
+        "bad_structure": bad_structure,
+        "errors": errors,
+    }
+    log.setdefault("runs", [])
+    log["runs"] = log["runs"][-50:]
+    log["runs"].append(run_record)
+
     write_log(log)
 
     print(f"\n{'='*55}")
