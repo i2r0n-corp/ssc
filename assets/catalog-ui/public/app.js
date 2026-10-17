@@ -3263,20 +3263,39 @@ window.loadSavedSelection = function(id) {
   state.keepSelected = saved.keep_selected != null ? !!saved.keep_selected : true;
   state.moduleGranularity = !!saved.module_granularity;
   state.selectedServices = new Set(Array.isArray(saved.selected_keys) ? saved.selected_keys : []);
-  // Build stub objects from keys — will be enriched with full data once applyFilters returns
+  // Build stub objects from keys — enriched below via direct fetch
   state.selectedServiceObjects = new Map();
+  const uniqueCodes = [];
   state.selectedServices.forEach(key => {
     if (key.includes('||')) {
       const [code, bs, mc] = key.split('||');
       state.selectedServiceObjects.set(key, { code, _selKey: key, _bsCode: (bs && bs !== 'null') ? bs : null, _moduleCode: (mc && mc !== 'null') ? mc : null });
+      if (!uniqueCodes.includes(code)) uniqueCodes.push(code);
     } else {
       state.selectedServiceObjects.set(key, { code: key, _selKey: key, _bsCode: null, _moduleCode: null });
+      if (!uniqueCodes.includes(key)) uniqueCodes.push(key);
     }
   });
   state.showOnlySelected = false;
-  state._pendingShowSelected = true; // flip to true after applyFilters enriches objects
+  state._pendingShowSelected = true;
   state.saveSelPopup.open = false;
   state.loadSelPopup.open = false;
+  // Fetch full service data for selected codes so name/ET are available before applyFilters returns
+  if (uniqueCodes.length > 0) {
+    apiFetch(`${CAP_BACKEND_URL}/api/catalog/services/by-codes`, {
+      method: 'POST',
+      body: JSON.stringify({ codes: uniqueCodes })
+    }).then(rows => {
+      if (!Array.isArray(rows)) return;
+      const byCode = {};
+      rows.forEach(s => { byCode[s.code] = s; });
+      state.selectedServiceObjects.forEach((obj, key) => {
+        const code = key.includes('||') ? key.split('||')[0] : key;
+        if (byCode[code]) state.selectedServiceObjects.set(key, { ...byCode[code], _selKey: obj._selKey, _bsCode: obj._bsCode, _moduleCode: obj._moduleCode });
+      });
+      render();
+    }).catch(() => {});
+  }
   applyFilters();
 };
 

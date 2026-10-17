@@ -1950,6 +1950,24 @@ router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
   }
 });
 
+// ── Services by codes (for load-selection enrichment) ─────────────────────────
+
+router.post('/services/by-codes', async (req, res) => {
+  const codes = Array.isArray(req.body?.codes) ? req.body.codes.slice(0, 500) : [];
+  if (codes.length === 0) return res.json([]);
+  try {
+    const db = require('../store/db');
+    const placeholders = codes.map((_, i) => `$${i + 1}`).join(',');
+    const { rows } = await db.query(
+      `SELECT code, name, engagement_type, short_description, service_object FROM catalog_services WHERE code = ANY(ARRAY[${placeholders}])`,
+      codes
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Saved selections ──────────────────────────────────────────────────────────
 
 router.get('/saved-selections', async (req, res) => {
