@@ -1362,7 +1362,7 @@ window.generatePptx = async function(template) {
         yearTo:   s.years ? s.yearTo   : '0',
         groupByET: true,
         groupMode: (!hasModuleContext || resolvedStreamMode === 'custom' || resolvedStreamMode === 'customNoBS') ? 'acrossAll' : 'perModule',
-        useDeckName: state.filters.namingType === 'deck' && bsActive,
+        useDeckName: state.filters.namingType === 'deck' && !!bsCode,
         yearBorders: s.years ? s.yearBorders : false,
         title: s.title,
         bsCode: serviceModuleMap ? null : bsCode,
@@ -1502,7 +1502,7 @@ function renderPptxListSettingsModal() {
   const disStyle = 'opacity:0.45;pointer-events:none';
 
   const streamOptions = streamAvailable ? `
-    <div style="margin-top:0.4rem;margin-left:1.5rem;padding:0.5rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;display:flex;flex-direction:column;gap:0.3rem;${streamOn?'':'display:none'}">
+    <div style="margin-top:0.4rem;margin-left:1.5rem;padding:0.5rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;flex-direction:column;gap:0.3rem;display:${streamOn?'flex':'none'}">
       <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;cursor:pointer">
         <input type="radio" name="streamMode" value="bsAndModule" ${s.streamMode==='bsAndModule'?'checked':''} onchange="setPptxStreamMode('bsAndModule')"/>
         Business Scenario + Module Name
@@ -1626,6 +1626,7 @@ function renderPptxListSettingsModal() {
                 <div>
                   <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year From</div>
                   <input type="text" id="pptx-year-from" maxlength="4" oninput="setPptxYearFrom(this.value)"
+                    value="${s.yearFrom}"
                     style="width:72px;padding:0.35rem 0.4rem;font-size:0.85rem;border:1px solid ${!yearValid&&s.yearFrom.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
                     placeholder="2026"/>
                 </div>
@@ -1633,6 +1634,7 @@ function renderPptxListSettingsModal() {
                 <div>
                   <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year To</div>
                   <input type="text" id="pptx-year-to" maxlength="4" oninput="setPptxYearTo(this.value)"
+                    value="${s.yearTo}"
                     style="width:72px;padding:0.35rem 0.4rem;font-size:0.85rem;border:1px solid ${!yearValid&&s.yearTo.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
                     placeholder="2030"/>
                 </div>
