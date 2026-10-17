@@ -21,11 +21,22 @@ function getLogonName(req) {
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-function requireMcpSecret(req, res, next) {
-  const secret = process.env.MCP_SECRET;
-  if (!secret) return next();
-  const auth = req.headers['authorization'] || '';
-  if (auth !== `Bearer ${secret}`) return res.status(401).json({ error: 'Unauthorized' });
+async function requireCatalogAccess(req, res, next) {
+  const logonName = getLogonName(req);
+  if (!logonName) return res.status(401).json({ error: 'Unauthorized — no user identity in token' });
+  try {
+    const db = require('../store/db');
+    const r = await db.query(
+      `SELECT tab_catalog FROM catalog_user_permissions WHERE email = $1`,
+      [logonName]
+    );
+    if (r.rows.length === 0 || !r.rows[0].tab_catalog) {
+      return res.status(403).json({ error: 'Forbidden — catalog access not granted for this user' });
+    }
+  } catch (e) {
+    console.error('[mcp-auth] DB check failed:', e.message);
+    return res.status(500).json({ error: 'Auth check failed' });
+  }
   next();
 }
 
@@ -384,15 +395,7 @@ async function handleRpc(body, logonName) {
 const sseClients = new Map();
 
 // Joule POSTs to /sse first to initialize — if no auth token, return 401 with WWW-Authenticate
-router.post('/sse', async (req, res) => {
-  const auth = req.headers['authorization'] || '';
-  if (!auth.startsWith('Bearer ')) {
-    const host = req.headers['x-forwarded-host'] || req.headers.host || '';
-    const proto = req.headers['x-forwarded-proto'] || 'https';
-    const base = `${proto}://${host}`;
-    res.setHeader('WWW-Authenticate', `Bearer realm="${base}", authorization_uri="${base}/authorize", token_uri="${base}/token"`);
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
+router.post('/sse', requireCatalogAccess, async (req, res) => {
   const body = req.body;
   if (!body || typeof body !== 'object') return res.status(400).json({ error: 'Invalid body' });
   const logonName = getLogonName(req);
@@ -428,7 +431,7 @@ router.get('/sse', (req, res) => {
 });
 
 // ── Message endpoint ──────────────────────────────────────────────────────────
-router.post('/message', async (req, res) => {
+router.post('/message', requireCatalogAccess, async (req, res) => {
   const clientId = req.query.clientId;
   const sseRes = clientId ? sseClients.get(clientId) : null;
 
@@ -453,7 +456,7 @@ router.post('/message', async (req, res) => {
 });
 
 // ── Simple HTTP fallback (for clients that don't use SSE) ─────────────────────
-router.post('/rpc', async (req, res) => {
+router.post('/rpc', requireCatalogAccess, async (req, res) => {
   const body = req.body;
   if (!body || typeof body !== 'object') return res.status(400).json({ error: 'Invalid JSON-RPC body' });
   const logonName = getLogonName(req);
