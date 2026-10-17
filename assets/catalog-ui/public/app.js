@@ -52,6 +52,8 @@ let state = {
     streamCustom: '',
     truncateObjectives: false,
     switchTypes: false,
+    namingType: '',
+    etLabelType: 'engagement',
     colNames: { phases: '', component: '', tier: '', objectives: '', pd: '', stream: '' },
   },
   excelSettings: {
@@ -1348,14 +1350,14 @@ window.generatePptx = async function(template) {
         yearTo:   s.years ? s.yearTo   : '0',
         groupByET: true,
         groupMode: (!hasModuleContext || resolvedStreamMode === 'custom' || resolvedStreamMode === 'customNoBS') ? 'acrossAll' : 'perModule',
-        useDeckName: state.filters.namingType === 'deck' && !!bsCode,
+        useDeckName: s.namingType === 'deck' && !!bsCode,
         yearBorders: s.years ? s.yearBorders : false,
         title: s.title,
         bsCode: serviceModuleMap ? null : bsCode,
         streamMode: resolvedStreamMode,
         streamCustom: resolvedStreamCustom,
         truncateObjectives: s.truncateObjectives,
-        switchTypes: state.filters.etLabelType === 'service',
+        switchTypes: s.etLabelType === 'service',
         colNames: s.colNames || {},
         moduleName: (() => {
           if (state.selectedServices.size > 0) return null;
@@ -1390,6 +1392,8 @@ window.closeServiceDetail = function() {
 };
 
 window.openPptxListSettings = function() {
+  state.pptxListSettings.namingType = state.filters.namingType || '';
+  state.pptxListSettings.etLabelType = state.filters.etLabelType || 'engagement';
   state.pptxListSettings.open = true; render();
 };
 window.openExcelSettings = function() {
@@ -1408,6 +1412,12 @@ window.setExcelYear = function(field, val) {
 };
 window.closePptxListSettings = function() {
   state.pptxListSettings.open = false; render();
+};
+window.setPptxNamingType = function(val) {
+  state.pptxListSettings.namingType = val; render();
+};
+window.setPptxEtLabelType = function(val) {
+  state.pptxListSettings.etLabelType = val; render();
 };
 window.togglePptxCol = function(col) {
   state.pptxListSettings.cols[col] = !state.pptxListSettings.cols[col]; render();
@@ -1473,19 +1483,21 @@ function renderPptxListSettingsModal() {
 
   const cn = s.colNames || {};
 
-  // info-tip using info.svg
   const tip = (text) => `<span class="info-tip" data-tip="${text}" style="flex-shrink:0;display:inline-flex;align-items:center"><img src="/info.svg" style="width:12px;height:12px;opacity:0.35;vertical-align:middle;transition:opacity 0.15s"/></span>`;
 
-  const colNameInput = (col, placeholder) =>
-    `<input type="text" maxlength="16" placeholder="${placeholder}"
+  const colNameInput = (col, defaultLabel) =>
+    `<input type="text" maxlength="16" placeholder="default: ${defaultLabel}"
       value="${(cn[col]||'').replace(/"/g,'&quot;')}"
       oninput="setPptxColName('${col}',this.value)"
-      style="width:110px;padding:0.2rem 0.4rem;font-size:0.78rem;border:1px solid #c0cdd8;border-radius:4px;color:#556;flex-shrink:0"/>`;
+      style="width:100%;padding:0.2rem 0.4rem;font-size:0.78rem;border:1px solid #c0cdd8;border-radius:4px;color:#556"/>`;
 
-  const rowStyle = 'display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.75rem;border-bottom:1px solid #f0f3f7';
+  // 3-column row: 30% label-zone | 30% controls-zone | 40% name-input-zone
+  const colRow = (content) => `<div style="display:flex;align-items:stretch;gap:0;border-bottom:1px solid #f0f3f7;width:100%">${content}</div>`;
+  const zone1 = (content) => `<div style="width:30%;min-width:0;display:flex;align-items:center;gap:0.4rem;padding:0.4rem 0.5rem 0.4rem 0.75rem;flex-shrink:0">${content}</div>`;
+  const zone2 = (content) => `<div style="width:30%;min-width:0;display:flex;align-items:center;padding:0.4rem 0.5rem;border-left:1px solid #f0f3f7;flex-shrink:0">${content}</div>`;
+  const zone3 = (content) => `<div style="width:40%;min-width:0;padding:0.4rem 0.5rem 0.4rem 0.5rem;border-left:1px solid #f0f3f7">${content}</div>`;
   const chkStyle = 'cursor:pointer;flex-shrink:0';
-  const labelStyle = 'font-size:0.85rem;flex:1;min-width:0';
-  const disStyle = 'opacity:0.45;pointer-events:none';
+  const labelStyle = 'font-size:0.85rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
 
   const streamOptions = streamAvailable ? `
     <div style="margin-top:0.4rem;margin-left:1.5rem;padding:0.5rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;flex-direction:column;gap:0.3rem;display:${streamOn?'flex':'none'}">
@@ -1527,61 +1539,68 @@ function renderPptxListSettingsModal() {
         ${tip('Select which columns appear in the output table and customise their header names (max 16 chars)')}
         <span style="font-weight:600;font-size:0.82rem;color:#1D2D3E">Columns</span>
       </div>
-      <div style="border:1px solid #dce3ea;border-radius:6px;margin-bottom:0.75rem;overflow:hidden">
+
+      <!-- Column header row -->
+      <div style="display:flex;gap:0;border:1px solid #dce3ea;border-radius:6px 6px 0 0;background:#f7f8f9;overflow:hidden">
+        <div style="width:30%;padding:0.3rem 0.5rem 0.3rem 0.75rem;font-size:0.72rem;font-weight:600;color:#6a6a6a;text-transform:uppercase;letter-spacing:0.04em">Column</div>
+        <div style="width:30%;padding:0.3rem 0.5rem;font-size:0.72rem;font-weight:600;color:#6a6a6a;text-transform:uppercase;letter-spacing:0.04em;border-left:1px solid #dce3ea">Options</div>
+        <div style="width:40%;padding:0.3rem 0.5rem;font-size:0.72rem;font-weight:600;color:#6a6a6a;text-transform:uppercase;letter-spacing:0.04em;border-left:1px solid #dce3ea">Custom Header Name</div>
+      </div>
+      <div style="border:1px solid #dce3ea;border-top:none;border-radius:0 0 6px 6px;margin-bottom:0.75rem;overflow:hidden">
 
         <!-- Phases -->
-        <div style="${rowStyle}">
-          <input type="checkbox" ${s.cols.phases?'checked':''} style="${chkStyle}" onchange="togglePptxCol('phases')"/>
-          ${tip('Shows the SAP Activate phases (Prepare, Discover, Explore…) applicable to this service')}
-          <span style="${labelStyle}">Activate Phases</span>
-          ${colNameInput('phases','Activate Phases')}
-        </div>
+        ${colRow(`
+          ${zone1(`<input type="checkbox" ${s.cols.phases?'checked':''} style="${chkStyle}" onchange="togglePptxCol('phases')"/>
+            ${tip('Shows the SAP Activate phases (Prepare, Discover, Explore…) applicable to this service')}
+            <span style="${labelStyle}">Activate Phases</span>`)}
+          ${zone2('')}
+          ${zone3(colNameInput('phases','Activate Phases'))}
+        `)}
 
         <!-- Service Name -->
-        <div style="${rowStyle}">
-          <input type="checkbox" ${s.cols.component?'checked':''} style="${chkStyle}" onchange="togglePptxCol('component')"/>
-          ${tip('Service name as shown in the catalogue or, if available, the BS deck name')}
-          <span style="${labelStyle}">Service Name</span>
-          ${colNameInput('component','Service Name')}
-          <div class="mode-switch" style="margin-bottom:0;${bsActive?'':'opacity:0.4;pointer-events:none'}" title="${bsActive?'':'Only available when Business Scenario is selected'}">
-            <button class="${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType','catalog')">Catalogue</button>
-            <button class="${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType','deck')">Deck</button>
-          </div>
-        </div>
+        ${colRow(`
+          ${zone1(`<input type="checkbox" ${s.cols.component?'checked':''} style="${chkStyle}" onchange="togglePptxCol('component')"/>
+            ${tip('Service name as shown in the catalogue or, if available, the BS deck name')}
+            <span style="${labelStyle}">Name</span>`)}
+          ${zone2(`<div class="mode-switch" style="margin-bottom:0;${bsActive?'':'opacity:0.4;pointer-events:none'}" title="${bsActive?'':'Only available when Business Scenario is selected'}">
+            <button class="${s.namingType !== 'deck' ? 'active' : ''}" onclick="setPptxNamingType('catalog')">Catalogue</button>
+            <button class="${s.namingType === 'deck' ? 'active' : ''}" onclick="setPptxNamingType('deck')">Deck</button>
+          </div>`)}
+          ${zone3(colNameInput('component','Service Name'))}
+        `)}
 
         <!-- Type -->
-        <div style="${rowStyle}">
-          <input type="checkbox" ${s.cols.tier?'checked':''} style="${chkStyle}" onchange="togglePptxCol('tier')"/>
-          ${tip('Shows the engagement type label — switch between Engagement Type wording and Service Type wording')}
-          <span style="${labelStyle}">Service Classification Type</span>
-          ${colNameInput('tier','Type')}
-          <div class="mode-switch" style="margin-bottom:0">
-            <button class="${state.filters.etLabelType !== 'service' ? 'active' : ''}" onclick="updateFilter('etLabelType','engagement')">Engagement</button>
-            <button class="${state.filters.etLabelType === 'service' ? 'active' : ''}" onclick="updateFilter('etLabelType','service')">Service</button>
-          </div>
-        </div>
+        ${colRow(`
+          ${zone1(`<input type="checkbox" ${s.cols.tier?'checked':''} style="${chkStyle}" onchange="togglePptxCol('tier')"/>
+            ${tip('Shows the engagement type label — switch between Engagement Type wording and Service Type wording')}
+            <span style="${labelStyle}">Classification Type</span>`)}
+          ${zone2(`<div class="mode-switch" style="margin-bottom:0">
+            <button class="${s.etLabelType !== 'service' ? 'active' : ''}" onclick="setPptxEtLabelType('engagement')">Engagement</button>
+            <button class="${s.etLabelType === 'service' ? 'active' : ''}" onclick="setPptxEtLabelType('service')">Service</button>
+          </div>`)}
+          ${zone3(colNameInput('tier','Type'))}
+        `)}
 
         <!-- Short Description / Objectives -->
-        <div style="${rowStyle};flex-wrap:wrap">
-          <div style="display:flex;align-items:center;gap:0.5rem;width:100%">
-            <input type="checkbox" ${s.cols.objectives?'checked':''} style="${chkStyle}" onchange="togglePptxCol('objectives')"/>
+        ${colRow(`
+          ${zone1(`<input type="checkbox" ${s.cols.objectives?'checked':''} style="${chkStyle}" onchange="togglePptxCol('objectives')"/>
             ${tip('Service description text — content varies by engagement type (Key Benefits for Max, Summary for Advanced, Description for Foundational)')}
-            <span style="${labelStyle}">Service's Short Description</span>
-            ${colNameInput('objectives','Objectives')}
-            <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.78rem;${truncateEnabled?'cursor:pointer':'opacity:0.45;cursor:not-allowed'}" title="${truncateEnabled?'':'Only applies when ET is unset or Foundational'}">
-              <input type="checkbox" ${s.truncateObjectives?'checked':''} ${truncateEnabled?'':'disabled'} onchange="setPptxTruncateObjectives(this.checked)" style="cursor:${truncateEnabled?'pointer':'not-allowed'}"/>
-              Truncate to 3 sentences
-            </label>
-          </div>
-        </div>
+            <span style="${labelStyle}">Short Description</span>`)}
+          ${zone2(`<label style="display:flex;align-items:center;gap:0.35rem;font-size:0.78rem;${truncateEnabled?'cursor:pointer':'opacity:0.45;cursor:not-allowed'}" title="${truncateEnabled?'':'Only applies when ET is unset or Foundational'}">
+            <input type="checkbox" ${s.truncateObjectives?'checked':''} ${truncateEnabled?'':'disabled'} onchange="setPptxTruncateObjectives(this.checked)" style="cursor:${truncateEnabled?'pointer':'not-allowed'}"/>
+            Truncate EGIs description to 3 sentences
+          </label>`)}
+          ${zone3(colNameInput('objectives','Objectives'))}
+        `)}
 
         <!-- Typical Efforts / PD -->
-        <div style="${rowStyle};${pdEnabled?'':''+disStyle}">
-          <input type="checkbox" ${s.cols.pd?'checked':''} ${pdEnabled?'':'disabled'} style="${chkStyle}${pdEnabled?'':';cursor:not-allowed'}" onchange="togglePptxCol('pd')" title="${pdEnabled?'':'Not available when Engagement Type is Advanced or Foundational'}"/>
-          ${tip('Adds a narrow PD column with typical effort estimates — only populated for Max services')}
-          <span style="${labelStyle}">Typical Efforts</span>
-          ${colNameInput('pd','PD')}
-        </div>
+        ${colRow(`
+          ${zone1(`<input type="checkbox" ${s.cols.pd?'checked':''} ${pdEnabled?'':'disabled'} style="${chkStyle}${pdEnabled?'':';cursor:not-allowed'}" onchange="togglePptxCol('pd')" title="${pdEnabled?'':'Not available when Engagement Type is Advanced or Foundational'}"/>
+            ${tip('Adds a narrow PD column with typical effort estimates — only populated for Max services')}
+            <span style="${labelStyle};${pdEnabled?'':'opacity:0.45'}">Typical Efforts</span>`)}
+          ${zone2('')}
+          ${zone3(`<div style="${pdEnabled?'':'opacity:0.45;pointer-events:none'}">${colNameInput('pd','PD')}</div>`)}
+        `)}
 
         <!-- Divider -->
         <div style="height:1px;background:#dce3ea"></div>
@@ -1594,8 +1613,8 @@ function renderPptxListSettingsModal() {
             <div style="display:flex;align-items:center;gap:0.5rem">
               <input type="checkbox" ${streamOn?'checked':''} ${streamAvailable?'':'disabled'} style="${chkStyle}" onchange="togglePptxCol('stream')"/>
               ${tip('A narrow column showing the BS/Module grouping label, displayed rotated alongside grouped service rows')}
-              <span style="${labelStyle};font-size:0.85rem">BS / Module Names</span>
-              ${colNameInput('stream','Stream')}
+              <span style="font-size:0.85rem;flex:1;min-width:0">BS / Module Names</span>
+              <div style="width:110px;flex-shrink:0">${colNameInput('stream','Stream')}</div>
             </div>
             ${streamOptions}
           </div>
@@ -1605,7 +1624,7 @@ function renderPptxListSettingsModal() {
             <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:${s.years?'0.4rem':'0'}">
               <input type="checkbox" ${s.years?'checked':''} style="${chkStyle}" onchange="setPptxYears(this.checked)"/>
               ${tip('Inserts year columns so services can be mapped to a delivery timeline')}
-              <span style="${labelStyle};font-size:0.85rem">Timeline (Years)</span>
+              <span style="font-size:0.85rem;flex:1;min-width:0">Timeline (Years)</span>
             </div>
             <div style="margin-top:0.4rem;padding:0.5rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${s.years?'':'display:none'}">
               <div style="display:flex;gap:0.75rem;align-items:flex-end;margin-bottom:0.5rem">
