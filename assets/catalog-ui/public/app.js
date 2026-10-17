@@ -306,7 +306,6 @@ function engagementBadge(et) {
 
 function renderSelectionControls() {
   const selCount = state.selectedServices.size;
-  const gran = state.moduleGranularity && state.keepSelected;
   const { etCounts = { max: 0, advanced: 0, foundational: 0 } } = state.catalog.filterCounts || {};
   const total = state.filteredServices.length;
   const isService = state.filters.etLabelType === 'service';
@@ -327,12 +326,8 @@ function renderSelectionControls() {
       if (etCounts.advanced > 0)    pills.push(`<span class="badge badge-adv">Advanced — ${etCounts.advanced}</span>`);
       if (etCounts.foundational > 0) pills.push(`<span class="badge badge-ent">Foundational — ${etCounts.foundational}</span>`);
     }
-    const uniqueTotal = gran ? new Set(state.filteredServices.map(s => s.code)).size : null;
-    const overallStr = gran && uniqueTotal !== total
-      ? `Overall: <strong>${total} (${uniqueTotal} unique)</strong>`
-      : `Overall: <strong>${total}</strong>`;
     const foundLabel = `<span style="font-size:0.8rem;color:#6a6a6a">Found:</span>`;
-    const overallLabel = `<span style="font-size:0.8rem;color:#6a6a6a">${overallStr}</span>`;
+    const overallLabel = `<span style="font-size:0.8rem;color:#6a6a6a">Overall: <strong>${total}</strong></span>`;
     return `${foundLabel}${pills.length ? ' ' : ''}${pills.join('')}${pills.length ? ' ' : ''}${overallLabel}`;
   })();
 
@@ -1504,7 +1499,7 @@ function renderPptxListSettingsModal() {
   // 3-column row: 30% label-zone | 30% controls-zone | 40% name-input-zone
   const colRow = (content) => `<div style="display:flex;align-items:stretch;gap:0;border-bottom:1px solid #f0f3f7;width:100%">${content}</div>`;
   const zone1 = (content) => `<div style="width:30%;min-width:0;display:flex;align-items:center;gap:0.4rem;padding:0.4rem 0.5rem 0.4rem 0.75rem;flex-shrink:0">${content}</div>`;
-  const zone2 = (content) => `<div style="width:30%;min-width:0;display:flex;align-items:center;padding:0.4rem 0.5rem;border-left:1px solid #f0f3f7;flex-shrink:0">${content}</div>`;
+  const zone2 = (content) => `<div style="width:30%;min-width:0;display:flex;align-items:center;padding:0.4rem 0.5rem;flex-shrink:0">${content}</div>`;
   const zone3 = (content) => `<div style="width:40%;min-width:0;padding:0.4rem 0.5rem 0.4rem 0.5rem;border-left:1px solid #f0f3f7">${content}</div>`;
   const chkStyle = 'cursor:pointer;flex-shrink:0';
   const labelStyle = 'font-size:0.85rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
@@ -1553,10 +1548,10 @@ function renderPptxListSettingsModal() {
       <!-- Column header row -->
       <div style="display:flex;gap:0;border:1px solid #dce3ea;border-radius:6px 6px 0 0;background:#f7f8f9;overflow:hidden">
         <div style="width:30%;padding:0.3rem 0.5rem 0.3rem 0.75rem;font-size:0.72rem;font-weight:600;color:#6a6a6a;text-transform:uppercase;letter-spacing:0.04em">Column</div>
-        <div style="width:30%;padding:0.3rem 0.5rem;font-size:0.72rem;font-weight:600;color:#6a6a6a;text-transform:uppercase;letter-spacing:0.04em;border-left:1px solid #dce3ea">Options</div>
-        <div style="width:40%;padding:0.3rem 0.5rem;font-size:0.72rem;font-weight:600;color:#6a6a6a;text-transform:uppercase;letter-spacing:0.04em;border-left:1px solid #dce3ea">Custom Header Name</div>
+        <div style="width:30%;padding:0.3rem 0.5rem;font-size:0.72rem;font-weight:600;color:#6a6a6a;text-transform:uppercase;letter-spacing:0.04em">Options</div>
+        <div style="width:40%;padding:0.3rem 0.5rem;font-size:0.72rem;font-weight:600;color:#6a6a6a;text-transform:uppercase;letter-spacing:0.04em;border-left:1px solid #dce3ea">Custom PPTX Column Name</div>
       </div>
-      <div style="border:1px solid #dce3ea;border-top:none;border-radius:0 0 6px 6px;margin-bottom:0.75rem;overflow:hidden">
+      <div style="border:1px solid #dce3ea;border-top:none;border-radius:0 0 6px 6px;margin-bottom:0.75rem">
 
         <!-- Phases -->
         ${colRow(`
@@ -1631,12 +1626,12 @@ function renderPptxListSettingsModal() {
 
           <!-- Timeline -->
           <div style="padding:0.4rem 0.75rem">
-            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:${s.years?'0.4rem':'0'}">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
               <input type="checkbox" ${s.years?'checked':''} style="${chkStyle}" onchange="setPptxYears(this.checked)"/>
               ${tip('Inserts year columns so services can be mapped to a delivery timeline')}
               <span style="font-size:0.85rem;flex:1;min-width:0">Timeline (Years)</span>
             </div>
-            <div style="margin-top:0.4rem;padding:0.5rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${s.years?'':'display:none'}">
+            <div style="margin-top:0.4rem;padding:0.5rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${s.years?'':'opacity:0.45;pointer-events:none'}">
               <div style="display:flex;gap:0.75rem;align-items:flex-end;margin-bottom:0.5rem">
                 <div>
                   <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year From</div>
