@@ -1959,10 +1959,22 @@ router.post('/services/by-codes', async (req, res) => {
     const db = require('../store/db');
     const placeholders = codes.map((_, i) => `$${i + 1}`).join(',');
     const { rows } = await db.query(
-      `SELECT code, name, engagement_type, short_description, service_object FROM catalog_services WHERE code = ANY(ARRAY[${placeholders}])`,
+      `SELECT s.*, NULL::text AS deck_name, NULL::text AS bn_bs_code, NULL::text[] AS bs_module_codes
+       FROM catalog_services s WHERE s.code = ANY(ARRAY[${placeholders}])`,
       codes
     );
-    res.json(rows);
+    const services = rows.map(row => {
+      const svc = row.raw_data || {};
+      if (row.deck_name && row.bn_bs_code) {
+        if (!svc.business_scenario_naming) svc.business_scenario_naming = {};
+        svc.business_scenario_naming[row.bn_bs_code] = row.deck_name;
+      }
+      if (row.bs_module_codes && row.bs_module_codes.length > 0) {
+        svc.bs_module_codes = row.bs_module_codes;
+      }
+      return svc;
+    });
+    res.json(services);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
