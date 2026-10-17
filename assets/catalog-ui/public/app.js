@@ -303,20 +303,7 @@ function engagementBadge(et) {
 // ── Pages ─────────────────────────────────────────────────────────────────────
 
 function renderSelectionControls() {
-  const gran = state.moduleGranularity && state.keepSelected;
   const selCount = state.selectedServices.size;
-  const uniqueSelectedCodes = gran
-    ? new Set([...state.selectedServiceObjects.keys()].map(k => k.split('||')[0])).size
-    : selCount;
-  const granBsCodes = gran ? (() => {
-    const bs = new Set(); let hasNoBs = false;
-    state.selectedServiceObjects.forEach((obj, key) => {
-      if (!key.includes('||')) return;
-      const bsVal = (obj._bsCode && obj._bsCode !== 'null') ? obj._bsCode : null;
-      if (bsVal) bs.add(bsVal); else hasNoBs = true;
-    });
-    return { bsCount: bs.size, hasNoBs };
-  })() : null;
   const { etCounts = { max: 0, advanced: 0, foundational: 0 } } = state.catalog.filterCounts || {};
   const total = state.filteredServices.length;
   const isService = state.filters.etLabelType === 'service';
@@ -326,19 +313,7 @@ function renderSelectionControls() {
 
   const countHtml = (() => {
     if (!hasSearched) {
-      if (selCount === 0) return `<span style="font-size:0.8rem;color:#8696A9">Use filters to explore the catalog</span>`;
-      const selInfo = gran
-        ? (() => {
-            const svcPart = selCount !== uniqueSelectedCodes ? `${selCount}(${uniqueSelectedCodes} unique)` : `${selCount}`;
-            const { bsCount, hasNoBs } = granBsCodes;
-            const bsParts = [];
-            if (bsCount > 0) bsParts.push(`${bsCount} BS`);
-            if (hasNoBs) bsParts.push('General');
-            const ctxPart = bsParts.length ? ` across ${bsParts.join(' + ')}` : '';
-            return `${svcPart}${ctxPart} selected`;
-          })()
-        : `${selCount} selected`;
-      return `<span style="font-size:0.8rem;color:#8696A9">Use filters to explore the catalog &nbsp;</span><span style="color:#003366;font-weight:600">${selInfo}</span>`;
+      return `<span style="font-size:0.8rem;color:#8696A9">Use filters to explore the catalog</span>`;
     }
     const pills = [];
     if (etCounts.max > 0)         pills.push(`<span class="badge badge-max">${isService ? 'Premium' : 'Max'} — ${etCounts.max}</span>`);
@@ -349,19 +324,7 @@ function renderSelectionControls() {
       if (etCounts.advanced > 0)    pills.push(`<span class="badge badge-adv">Advanced — ${etCounts.advanced}</span>`);
       if (etCounts.foundational > 0) pills.push(`<span class="badge badge-ent">Foundational — ${etCounts.foundational}</span>`);
     }
-    const selInfo = selCount === 0 ? '' :
-      gran
-        ? (() => {
-            const svcPart = selCount !== uniqueSelectedCodes ? `${selCount}(${uniqueSelectedCodes} unique)` : `${selCount}`;
-            const { bsCount, hasNoBs } = granBsCodes;
-            const bsParts = [];
-            if (bsCount > 0) bsParts.push(`${bsCount} BS`);
-            if (hasNoBs) bsParts.push('General');
-            const ctxPart = bsParts.length ? ` across ${bsParts.join(' + ')}` : '';
-            return ` &nbsp;<span style="color:#003366;font-weight:600">${svcPart}${ctxPart} selected</span>`;
-          })()
-        : ` &nbsp;<span style="color:#003366;font-weight:600">${selCount} selected</span>`;
-    return `${pills.join('')}<span style="font-size:0.8rem;color:#6a6a6a">overall: <strong>${total}</strong></span>${selInfo}`;
+    return `${pills.join('')}<span style="font-size:0.8rem;color:#6a6a6a">Found: <strong>${total}</strong></span>`;
   })();
 
   return `<div id="sel-controls-strip" style="padding:0.5rem 1rem 0.75rem;display:flex;align-items:center;gap:0.5rem;width:100%;flex-wrap:wrap">
@@ -656,6 +619,28 @@ function renderCatalogResults() {
   const uniqueSelectedCodes = gran
     ? new Set([...state.selectedServiceObjects.keys()].map(k => k.split('||')[0])).size
     : selCount;
+  const granBsCodes = gran ? (() => {
+    const bs = new Set(); let hasNoBs = false;
+    state.selectedServiceObjects.forEach((obj, key) => {
+      if (!key.includes('||')) return;
+      const bsVal = (obj._bsCode && obj._bsCode !== 'null') ? obj._bsCode : null;
+      if (bsVal) bs.add(bsVal); else hasNoBs = true;
+    });
+    return { bsCount: bs.size, hasNoBs };
+  })() : null;
+  const selInfoHtml = (() => {
+    if (selCount === 0) return '';
+    const svcPart = gran && selCount !== uniqueSelectedCodes ? `${selCount}(${uniqueSelectedCodes} unique)` : `${selCount}`;
+    if (gran && granBsCodes) {
+      const { bsCount, hasNoBs } = granBsCodes;
+      const bsParts = [];
+      if (bsCount > 0) bsParts.push(`${bsCount} BS`);
+      if (hasNoBs) bsParts.push('General');
+      const ctxPart = bsParts.length ? ` across ${bsParts.join(' + ')}` : '';
+      return `<span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Selected:</span> <span style="color:#003366;font-weight:600">${svcPart}${ctxPart}</span>`;
+    }
+    return `<span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Selected:</span> <span style="color:#003366;font-weight:600">${svcPart}</span>`;
+  })();
 
   return `
     ${loading ? '<div class="loading"><div class="loading-spinner"></div> Loading...</div>' : ''}
@@ -667,6 +652,7 @@ function renderCatalogResults() {
     <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center;flex-wrap:wrap">
       <span style="flex:1"></span>
       ${state.pptx.downloadUrl ? `<span id="pptx-dl-msg" style="color:#155724;font-weight:600;font-size:0.8rem">Successfully downloaded</span>` : ''}
+      ${selInfoHtml ? `<span style="display:inline-flex;align-items:center;gap:0.3rem">${selInfoHtml}</span>` : ''}
       <span style="font-size:0.8rem;color:#6a6a6a;font-weight:600">Export to:</span>
       <button class="btn btn-primary btn-sm" onclick="openExcelSettings()" title="Export to Excel" style="display:inline-flex;align-items:center;gap:5px">
         <img src="excel.svg" style="height:18px;width:auto" alt="" />${selCount > 0 ? `(${selCount})` : '(all)'}
