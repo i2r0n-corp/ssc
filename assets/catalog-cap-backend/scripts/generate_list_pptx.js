@@ -265,16 +265,17 @@ function buildTblGrid(cols, objW, yearCount) {
 
 // ── Build header rows XML ─────────────────────────────────────────────────────
 
-function buildHeaderRows(cols, objW, yearCount, yearFrom, yearBorders) {
+function buildHeaderRows(cols, objW, yearCount, yearFrom, yearBorders, colNames) {
+  const cn = colNames || {};
   const ROW_H = 482208;
   const yield_ = yearCount > 0 && yearBorders;
   let cells = '';
-  if (cols.stream)    cells += headerCell('Stream');
-  if (cols.phases)    cells += headerCell('Activate Phase');
-  if (cols.component) cells += headerCell('Service Name');
-  if (cols.tier)      cells += headerCell('Type');
-  cells += headerCell('Objectives', undefined, yield_);
-  if (cols.pd) cells += headerCell('PD', 'ctr', yield_);
+  if (cols.stream)    cells += headerCell(cn.stream     || 'Stream');
+  if (cols.phases)    cells += headerCell(cn.phases     || 'Activate Phase');
+  if (cols.component) cells += headerCell(cn.component  || 'Service Name');
+  if (cols.tier)      cells += headerCell(cn.tier       || 'Type');
+  cells += headerCell(cn.objectives || 'Objectives', undefined, yield_);
+  if (cols.pd) cells += headerCell(cn.pd || 'PD', 'ctr', yield_);
   for (let i = 0; i < yearCount; i++) {
     const isLast = i === yearCount - 1;
     cells += yearBorders
@@ -308,7 +309,7 @@ function buildDataRows(dataRows, cols, objW, yearCount, yearBorders) {
 
 // ── Slide XML builder ─────────────────────────────────────────────────────────
 
-function buildSlideXml(templateSlideXml, dataRows, slideTitle, streamBlocks, cols, objW, yearCount, yearFrom, yearBorders) {
+function buildSlideXml(templateSlideXml, dataRows, slideTitle, streamBlocks, cols, objW, yearCount, yearFrom, yearBorders, colNames) {
   let xml = templateSlideXml;
 
   // 1. Replace title — match the title placeholder by ph type="title", then replace its <a:t> text
@@ -332,7 +333,7 @@ function buildSlideXml(templateSlideXml, dataRows, slideTitle, streamBlocks, col
   const tableCy    = HEADER_H + totalDataH;
 
   const newGrid    = buildTblGrid(cols, objW, yearCount);
-  const headerRows = buildHeaderRows(cols, objW, yearCount, yearFrom, yearBorders);
+  const headerRows = buildHeaderRows(cols, objW, yearCount, yearFrom, yearBorders, colNames);
   const dataRowXml = buildDataRows(dataRows, cols, objW, yearCount, yearBorders);
 
   xml = xml.slice(0, tblGridStart) + newGrid + headerRows + dataRowXml + xml.slice(tblEnd);
@@ -555,7 +556,7 @@ function generateListPptxBuffer(services, opts = {}) {
         ? [{ text: streamText, rowOffset: 0, rowCount: rows.length }]
         : [];
       outFiles[`ppt/slides/slide${slideNum}.xml`] = buildSlideXml(
-        templateSlide, rows, title, streamBlocks, cols, objW, yearCount, yearFrom, yearBorders
+        templateSlide, rows, title, streamBlocks, cols, objW, yearCount, yearFrom, yearBorders, opts.colNames || {}
       );
       outFiles[`ppt/slides/_rels/slide${slideNum}.xml.rels`] =
         `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +

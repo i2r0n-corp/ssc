@@ -46,12 +46,13 @@ let state = {
     open: false,
     cols: { stream: true, phases: true, component: true, tier: false, objectives: true, pd: false },
     years: false, yearFrom: '2026', yearTo: '2030', yearBorders: false,
-    groupByET: false, useDeckName: false,
+    useDeckName: false,
     title: 'Services Description',
     streamMode: 'bsAndModule',
     streamCustom: '',
     truncateObjectives: false,
     switchTypes: false,
+    colNames: { phases: '', component: '', tier: '', objectives: '', pd: '', stream: '' },
   },
   excelSettings: {
     open: false,
@@ -1359,16 +1360,17 @@ window.generatePptx = async function(template) {
         cols: { ...s.cols, stream: hasModuleContext ? s.cols.stream : false },
         yearFrom: s.years ? s.yearFrom : '0',
         yearTo:   s.years ? s.yearTo   : '0',
-        groupByET: s.groupByET,
+        groupByET: true,
         groupMode: (!hasModuleContext || resolvedStreamMode === 'custom' || resolvedStreamMode === 'customNoBS') ? 'acrossAll' : 'perModule',
-        useDeckName: s.useDeckName,
+        useDeckName: state.filters.namingType === 'deck' && bsActive,
         yearBorders: s.years ? s.yearBorders : false,
         title: s.title,
         bsCode: serviceModuleMap ? null : bsCode,
         streamMode: resolvedStreamMode,
         streamCustom: resolvedStreamCustom,
         truncateObjectives: s.truncateObjectives,
-        switchTypes: s.switchTypes,
+        switchTypes: state.filters.etLabelType === 'service',
+        colNames: s.colNames || {},
         moduleName: (() => {
           if (state.selectedServices.size > 0) return null;
           if (mods.length === 1) return state.catalog.moduleMap[mods[0]] || mods[0];
@@ -1439,6 +1441,9 @@ window.setPptxYearTo = function(v) {
 window.setPptxGroupET = function(v) {
   state.pptxListSettings.groupByET = v; render();
 };
+window.setPptxColName = function(col, val) {
+  state.pptxListSettings.colNames[col] = val.slice(0, 16);
+};
 window.setPptxDeckName = function(v) {
   state.pptxListSettings.useDeckName = v; render();
 };
@@ -1480,122 +1485,167 @@ function renderPptxListSettingsModal() {
   const streamAvailable = bsActive || hasGranSelection;
   const streamOn = s.cols.stream && streamAvailable;
 
-  const sectionLabel = 'font-weight:600;font-size:0.82rem;color:#1D2D3E;margin-bottom:0.5rem;margin-top:0.85rem';
-  const checkLabel   = 'display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem';
-  const checkLabelOff = 'display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;opacity:0.45;cursor:not-allowed;color:#9BA8B0;';
-  const tip = (text) => `<span title="${text}" style="display:inline-flex;align-items:center;justify-content:center;width:0.82rem;height:0.82rem;border-radius:50%;background:#1D6FA4;color:#fff;font-size:0.6rem;font-weight:700;cursor:default;flex-shrink:0;line-height:1">?</span>`;
+  const cn = s.colNames || {};
+
+  // info-tip using info.svg
+  const tip = (text) => `<span class="info-tip" data-tip="${text}" style="flex-shrink:0;display:inline-flex;align-items:center"><img src="/info.svg" style="width:12px;height:12px;opacity:0.35;vertical-align:middle;transition:opacity 0.15s"/></span>`;
+
+  const colNameInput = (col, placeholder) =>
+    `<input type="text" maxlength="16" placeholder="${placeholder}"
+      value="${(cn[col]||'').replace(/"/g,'&quot;')}"
+      oninput="setPptxColName('${col}',this.value)"
+      style="width:110px;padding:0.2rem 0.4rem;font-size:0.78rem;border:1px solid #c0cdd8;border-radius:4px;color:#556;flex-shrink:0"/>`;
+
+  const rowStyle = 'display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.75rem;border-bottom:1px solid #f0f3f7';
+  const chkStyle = 'cursor:pointer;flex-shrink:0';
+  const labelStyle = 'font-size:0.85rem;flex:1;min-width:0';
+  const disStyle = 'opacity:0.45;pointer-events:none';
 
   const streamOptions = streamAvailable ? `
-    <div style="display:flex;flex-direction:column;gap:0.35rem">
-      <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
+    <div style="margin-top:0.4rem;margin-left:1.5rem;padding:0.5rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;display:flex;flex-direction:column;gap:0.3rem;${streamOn?'':'display:none'}">
+      <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;cursor:pointer">
         <input type="radio" name="streamMode" value="bsAndModule" ${s.streamMode==='bsAndModule'?'checked':''} onchange="setPptxStreamMode('bsAndModule')"/>
-        Business Scenario + Module Name ${tip('Combines scenario and module into one stream label for full context')}
+        Business Scenario + Module Name
       </label>
-      <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
+      <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;cursor:pointer">
         <input type="radio" name="streamMode" value="moduleOnly" ${s.streamMode==='moduleOnly'?'checked':''} onchange="setPptxStreamMode('moduleOnly')"/>
-        Only Module Name ${tip('Label shows just the module name, stripping the Business Scenario prefix')}
+        Only Module Name
       </label>
-      <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.875rem">
+      <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.82rem;cursor:pointer">
         <input type="radio" name="streamMode" value="custom" ${s.streamMode==='custom'?'checked':''} onchange="setPptxStreamMode('custom')"/>
-        Custom ${tip('Use your own fixed text as the stream label on every slide')}
+        Custom
       </label>
       ${s.streamMode==='custom' ? `
       <input type="text" id="pptx-stream-custom" maxlength="64" oninput="setPptxStreamCustom(this.value)"
         value="${s.streamCustom.replace(/"/g,'&quot;')}"
-        style="margin-left:1.5rem;width:calc(100% - 1.5rem);padding:0.35rem 0.5rem;font-size:0.875rem;border:1px solid #8696A9;border-radius:4px"
+        style="margin-left:1.25rem;width:calc(100% - 1.25rem);padding:0.3rem 0.5rem;font-size:0.82rem;border:1px solid #8696A9;border-radius:4px"
         placeholder="Custom stream label (max 64 chars)"/>` : ''}
     </div>` : '';
 
   return `
   <div class="modal-overlay" onclick="if(event.target===this)closePptxListSettings()">
-    <div class="modal-box" style="max-width:750px">
+    <div class="modal-box" style="max-width:700px">
       <button class="modal-close" onclick="closePptxListSettings()">✕</button>
       <h3 style="margin-top:0">⚙ PPTX List — Export Settings</h3>
 
-      <div style="font-size:0.82rem;color:#6a6a6a;margin-bottom:1rem">
-        Set up slides header, choose columns to include, and configure formatting options. Changes apply to this export.
-      </div>
-
       <!-- Slide Title -->
-      <div style="${sectionLabel}">Service Title ${tip('Override the slide header text shown at the top of each generated slide')}</div>
-      <input type="text" id="pptx-slide-title" value="${s.title.replace(/"/g,'&quot;')}" oninput="setPptxTitle(this.value)"
-        style="width:100%;margin-bottom:0.5rem" placeholder="Services Description"/>
-
-      <!-- Columns — 4 in one row -->
-      <div style="${sectionLabel}">Columns ${tip('Select which columns appear in the output table')}</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.4rem 1rem;margin-bottom:0.75rem">
-        ${colCheck('phases',     'Activate Phases',  s.cols.phases,     false)}
-        ${colCheck('component',  'Service Name',     s.cols.component,  false)}
-        ${colCheck('tier',       'Type',             s.cols.tier,       false)}
-        ${colCheck('objectives', 'Short Description', s.cols.objectives, false)}
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+        ${tip('Override the slide header text shown at the top of each generated slide')}
+        <span style="font-weight:600;font-size:0.82rem;color:#1D2D3E">Services Descriptions Slides Title</span>
       </div>
+      <input type="text" id="pptx-slide-title" value="${s.title.replace(/"/g,'&quot;')}" oninput="setPptxTitle(this.value)"
+        style="width:100%;margin-bottom:1rem" placeholder="Services Description"/>
 
-      <!-- Stream | Timeline row 50/50 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:0.75rem">
-        <!-- Stream — hidden when no BS or gran selection -->
-        <div style="${streamAvailable ? '' : 'display:none'}">
-          <label style="${streamOn ? checkLabel : checkLabelOff}" ${!streamAvailable?'title="Only available when Business Scenario is selected or gran services are selected"':''}>
-            <input type="checkbox" ${streamOn?'checked':''} ${!streamAvailable?'disabled':''} onchange="togglePptxCol('stream')"/>
-            Stream ${tip('Shows a side label per slide indicating the module or scenario grouping')}
-          </label>
-          <div style="margin-top:0.4rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${streamOn?'':'display:none'}">
-            ${streamOptions}
+      <!-- Columns -->
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+        ${tip('Select which columns appear in the output table and customise their header names (max 16 chars)')}
+        <span style="font-weight:600;font-size:0.82rem;color:#1D2D3E">Columns</span>
+      </div>
+      <div style="border:1px solid #dce3ea;border-radius:6px;margin-bottom:0.75rem;overflow:hidden">
+
+        <!-- Phases -->
+        <div style="${rowStyle}">
+          <input type="checkbox" ${s.cols.phases?'checked':''} style="${chkStyle}" onchange="togglePptxCol('phases')"/>
+          ${tip('Shows the SAP Activate phases (Prepare, Discover, Explore…) applicable to this service')}
+          <span style="${labelStyle}">Activate Phases</span>
+          ${colNameInput('phases','Activate Phases')}
+        </div>
+
+        <!-- Service Name -->
+        <div style="${rowStyle}">
+          <input type="checkbox" ${s.cols.component?'checked':''} style="${chkStyle}" onchange="togglePptxCol('component')"/>
+          ${tip('Service name as shown in the catalogue or, if available, the BS deck name')}
+          <span style="${labelStyle}">Service Name</span>
+          ${colNameInput('component','Service Name')}
+          <div class="mode-switch" style="margin-bottom:0;${bsActive?'':'opacity:0.4;pointer-events:none'}" title="${bsActive?'':'Only available when Business Scenario is selected'}">
+            <button class="${state.filters.namingType !== 'deck' ? 'active' : ''}" onclick="updateFilter('namingType','catalog')">Catalogue</button>
+            <button class="${state.filters.namingType === 'deck' ? 'active' : ''}" onclick="updateFilter('namingType','deck')">Deck</button>
           </div>
         </div>
-        <!-- Timeline (Years) -->
-        <div>
-          <label style="${checkLabel}">
-            <input type="checkbox" ${s.years?'checked':''} onchange="setPptxYears(this.checked)"/>
-            Timeline (Years) ${tip('Inserts year columns so services can be mapped to a delivery timeline')}
-          </label>
-          <div style="margin-top:0.4rem;padding:0.6rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${s.years?'':'opacity:0.45;pointer-events:none;'}">
-            <div style="display:flex;gap:0.75rem;align-items:flex-end;margin-bottom:0.6rem">
-              <div>
-                <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year From</div>
-                <input type="text" id="pptx-year-from" maxlength="4" oninput="setPptxYearFrom(this.value)"
-                  style="width:80px;padding:0.4rem 0.5rem;font-size:0.875rem;border:1px solid ${!yearValid&&s.yearFrom.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
-                  placeholder="2026"/>
-              </div>
-              <div style="padding-bottom:0.5rem;color:#6a6a6a">→</div>
-              <div>
-                <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year To</div>
-                <input type="text" id="pptx-year-to" maxlength="4" oninput="setPptxYearTo(this.value)"
-                  style="width:80px;padding:0.4rem 0.5rem;font-size:0.875rem;border:1px solid ${!yearValid&&s.yearTo.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
-                  placeholder="2030"/>
-              </div>
-              ${!yearValid ? `<div style="font-size:0.72rem;color:#dc3545;align-self:flex-end;padding-bottom:0.5rem">Year From &lt; Year To, and Year To ≤ 2033</div>` : ''}
-            </div>
-            <label style="${checkLabel}">
-              <input type="checkbox" ${s.yearBorders?'checked':''} onchange="setPptxYearBorders(this.checked)"/>
-              Show year column borders
+
+        <!-- Type -->
+        <div style="${rowStyle}">
+          <input type="checkbox" ${s.cols.tier?'checked':''} style="${chkStyle}" onchange="togglePptxCol('tier')"/>
+          ${tip('Shows the engagement type label — switch between Engagement Type wording and Service Type wording')}
+          <span style="${labelStyle}">Service Classification Type</span>
+          ${colNameInput('tier','Type')}
+          <div class="mode-switch" style="margin-bottom:0">
+            <button class="${state.filters.etLabelType !== 'service' ? 'active' : ''}" onclick="updateFilter('etLabelType','engagement')">Engagement</button>
+            <button class="${state.filters.etLabelType === 'service' ? 'active' : ''}" onclick="updateFilter('etLabelType','service')">Service</button>
+          </div>
+        </div>
+
+        <!-- Short Description / Objectives -->
+        <div style="${rowStyle};flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:0.5rem;width:100%">
+            <input type="checkbox" ${s.cols.objectives?'checked':''} style="${chkStyle}" onchange="togglePptxCol('objectives')"/>
+            ${tip('Service description text — content varies by engagement type (Key Benefits for Max, Summary for Advanced, Description for Foundational)')}
+            <span style="${labelStyle}">Service's Short Description</span>
+            ${colNameInput('objectives','Objectives')}
+            <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.78rem;${truncateEnabled?'cursor:pointer':'opacity:0.45;cursor:not-allowed'}" title="${truncateEnabled?'':'Only applies when ET is unset or Foundational'}">
+              <input type="checkbox" ${s.truncateObjectives?'checked':''} ${truncateEnabled?'':'disabled'} onchange="setPptxTruncateObjectives(this.checked)" style="cursor:${truncateEnabled?'pointer':'not-allowed'}"/>
+              Truncate to 3 sentences
             </label>
           </div>
         </div>
-      </div>
 
-      <!-- Options -->
-      <div style="${sectionLabel}">Options</div>
-      <div style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:1.25rem">
-        <label style="${!activeET?checkLabel:checkLabelOff}" ${activeET?'title="Not available when Engagement Type filter is active"':''}>
-          <input type="checkbox" ${s.groupByET?'checked':''} ${activeET?'disabled':''} onchange="setPptxGroupET(this.checked)"/>
-          Grouping rows by Engagement Type ${tip(bsActive && s.streamMode !== 'custom' ? 'Sorts rows within each module by tier: Max first, then Advanced, then Foundational' : 'Sorts all rows by tier across the full list: Max first, then Advanced, then Foundational')}
-        </label>
-        <label style="${bsActive?checkLabel:checkLabelOff}" ${!bsActive?'title="Only available when Business Scenario is selected"':''}>
-          <input type="checkbox" ${s.useDeckName?'checked':''} ${!bsActive?'disabled':''} onchange="setPptxDeckName(this.checked)"/>
-          Use Deck Names in Service Name column ${tip('Replaces technical service names with the presentation deck label for this scenario')}
-        </label>
-        <label style="${truncateEnabled?checkLabel:checkLabelOff}" ${truncateEnabled?'':'title="Only applies when ET is unset or Foundational"'}>
-          <input type="checkbox" ${s.truncateObjectives?'checked':''} ${truncateEnabled?'':'disabled'} onchange="setPptxTruncateObjectives(this.checked)"/>
-          Truncate EGIs description to 3 sentences ${tip('Limits EGI service descriptions to 3 sentences — reduces row height on dense slides')}
-        </label>
-        <label style="${checkLabel}">
-          <input type="checkbox" ${s.switchTypes?'checked':''} onchange="setPptxSwitchTypes(this.checked)"/>
-          Switch Types to Premium / Entitlements ${tip('Replaces engagement type labels with service types: Max → Premium Service, others → Service Entitlement')}
-        </label>
-        <label style="${pdEnabled?checkLabel:checkLabelOff}" ${!pdEnabled?'title="Not available when Engagement Type is Advanced or Foundational"':''}>
-          <input type="checkbox" ${s.cols.pd?'checked':''} ${!pdEnabled?'disabled':''} onchange="togglePptxCol('pd')"/>
-          Show typical effort estimates (if any) in PD column ${tip('Adds a narrow PD column after the objectives with effort estimate numbers for Max services')}
-        </label>
+        <!-- Typical Efforts / PD -->
+        <div style="${rowStyle};${pdEnabled?'':''+disStyle}">
+          <input type="checkbox" ${s.cols.pd?'checked':''} ${pdEnabled?'':'disabled'} style="${chkStyle}${pdEnabled?'':';cursor:not-allowed'}" onchange="togglePptxCol('pd')" title="${pdEnabled?'':'Not available when Engagement Type is Advanced or Foundational'}"/>
+          ${tip('Adds a narrow PD column with typical effort estimates — only populated for Max services')}
+          <span style="${labelStyle}">Typical Efforts</span>
+          ${colNameInput('pd','PD')}
+        </div>
+
+        <!-- Divider -->
+        <div style="height:1px;background:#dce3ea"></div>
+
+        <!-- Stream + Timeline side by side -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0">
+
+          <!-- Stream -->
+          <div style="padding:0.4rem 0.75rem;border-right:1px solid #f0f3f7;${streamAvailable?'':'opacity:0.4;pointer-events:none'}" title="${streamAvailable?'':'Only available when Business Scenario is selected or gran services are selected'}">
+            <div style="display:flex;align-items:center;gap:0.5rem">
+              <input type="checkbox" ${streamOn?'checked':''} ${streamAvailable?'':'disabled'} style="${chkStyle}" onchange="togglePptxCol('stream')"/>
+              ${tip('A narrow column showing the BS/Module grouping label, displayed rotated alongside grouped service rows')}
+              <span style="${labelStyle};font-size:0.85rem">BS / Module Names</span>
+              ${colNameInput('stream','Stream')}
+            </div>
+            ${streamOptions}
+          </div>
+
+          <!-- Timeline -->
+          <div style="padding:0.4rem 0.75rem">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:${s.years?'0.4rem':'0'}">
+              <input type="checkbox" ${s.years?'checked':''} style="${chkStyle}" onchange="setPptxYears(this.checked)"/>
+              ${tip('Inserts year columns so services can be mapped to a delivery timeline')}
+              <span style="${labelStyle};font-size:0.85rem">Timeline (Years)</span>
+            </div>
+            <div style="margin-top:0.4rem;padding:0.5rem 0.75rem;background:#f7f8f9;border-radius:6px;border:1px solid #e0e0e0;${s.years?'':'display:none'}">
+              <div style="display:flex;gap:0.75rem;align-items:flex-end;margin-bottom:0.5rem">
+                <div>
+                  <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year From</div>
+                  <input type="text" id="pptx-year-from" maxlength="4" oninput="setPptxYearFrom(this.value)"
+                    style="width:72px;padding:0.35rem 0.4rem;font-size:0.85rem;border:1px solid ${!yearValid&&s.yearFrom.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
+                    placeholder="2026"/>
+                </div>
+                <div style="padding-bottom:0.4rem;color:#6a6a6a">→</div>
+                <div>
+                  <div style="font-size:0.72rem;color:#6a6a6a;margin-bottom:3px">Year To</div>
+                  <input type="text" id="pptx-year-to" maxlength="4" oninput="setPptxYearTo(this.value)"
+                    style="width:72px;padding:0.35rem 0.4rem;font-size:0.85rem;border:1px solid ${!yearValid&&s.yearTo.length===4?'#dc3545':'#8696A9'};border-radius:4px;text-align:center"
+                    placeholder="2030"/>
+                </div>
+                ${!yearValid ? `<div style="font-size:0.72rem;color:#dc3545;align-self:flex-end;padding-bottom:0.4rem">From &lt; To, and To ≤ 2033</div>` : ''}
+              </div>
+              <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;font-size:0.82rem">
+                <input type="checkbox" ${s.yearBorders?'checked':''} onchange="setPptxYearBorders(this.checked)"/>
+                Show year column borders
+              </label>
+            </div>
+          </div>
+
+        </div>
       </div>
 
       <div style="display:flex;gap:0.75rem;justify-content:flex-end">
@@ -1609,14 +1659,6 @@ function renderPptxListSettingsModal() {
   </div>`;
 }
 
-function colCheck(key, label, checked, disabled, title) {
-  const dis = disabled ? 'disabled' : '';
-  const op  = disabled ? 'opacity:0.45;color:#9BA8B0;' : '';
-  const tt  = title ? `title="${title}"` : '';
-  return `<label style="display:flex;align-items:center;gap:0.5rem;cursor:${disabled?'not-allowed':'pointer'};font-size:0.875rem;${op}" ${tt}>
-    <input type="checkbox" ${checked?'checked':''} ${dis} onchange="togglePptxCol('${key}')"/> ${label}
-  </label>`;
-}
 
 window.exportExcel = async function() {
   const s = state.excelSettings;

@@ -256,6 +256,7 @@ router.post('/generatePptx', async (req, res) => {
           yearBorders:        !!opts.yearBorders,
           switchTypes:        !!opts.switchTypes,
           showPD:             !!(opts.cols && opts.cols.pd),
+          colNames:           opts.colNames || {},
         });
         fs.writeFileSync(filePath, buf);
 
@@ -309,6 +310,7 @@ router.post('/generatePptx', async (req, res) => {
         yearBorders:        !!opts.yearBorders,
         switchTypes:        !!opts.switchTypes,
         showPD:             !!(opts.cols && opts.cols.pd),
+        colNames:           opts.colNames || {},
       });
       fs.writeFileSync(filePath, buf);
 
