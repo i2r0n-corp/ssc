@@ -329,7 +329,7 @@ function renderSelectionControls() {
       if (selCount === 0) return `<span style="font-size:0.8rem;color:#8696A9">Use filters to explore the catalog</span>`;
       const selInfo = gran
         ? (() => {
-            const svcPart = `${uniqueSelectedCodes} service${uniqueSelectedCodes!==1?'s':''}`;
+            const svcPart = selCount !== uniqueSelectedCodes ? `${selCount}(${uniqueSelectedCodes} unique)` : `${selCount}`;
             const { bsCount, hasNoBs } = granBsCodes;
             const bsParts = [];
             if (bsCount > 0) bsParts.push(`${bsCount} BS`);
@@ -352,7 +352,7 @@ function renderSelectionControls() {
     const selInfo = selCount === 0 ? '' :
       gran
         ? (() => {
-            const svcPart = `${uniqueSelectedCodes} service${uniqueSelectedCodes!==1?'s':''}`;
+            const svcPart = selCount !== uniqueSelectedCodes ? `${selCount}(${uniqueSelectedCodes} unique)` : `${selCount}`;
             const { bsCount, hasNoBs } = granBsCodes;
             const bsParts = [];
             if (bsCount > 0) bsParts.push(`${bsCount} BS`);
