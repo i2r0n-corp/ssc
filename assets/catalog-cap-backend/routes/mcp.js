@@ -29,6 +29,14 @@ function requireMcpSecret(req, res, next) {
   next();
 }
 
+// ── Debug header logging (set MCP_DEBUG_HEADERS=true to enable) ───────────────
+router.use((req, res, next) => {
+  if (process.env.MCP_DEBUG_HEADERS === 'true') {
+    console.log(`[mcp-headers] ${req.method} ${req.path}`, JSON.stringify(req.headers, null, 2));
+  }
+  next();
+});
+
 // ── Tool definitions ──────────────────────────────────────────────────────────
 const TOOLS = [
   {
