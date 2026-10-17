@@ -204,6 +204,8 @@
       z-index: 100;
     }
     .info-tip:hover::after, .info-tip:hover::before { opacity: 1; }
+    .info-tip-left::after { left: 0; transform: none; }
+    .info-tip-left::before { left: 6px; transform: none; }
     .el-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start; }
     @media (max-width:762px) { .el-grid { grid-template-columns:1fr; } }
     /* ─────────────────────────────────────────────────────────────────────── */

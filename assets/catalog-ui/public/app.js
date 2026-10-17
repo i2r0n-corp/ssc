@@ -1488,7 +1488,7 @@ function renderPptxListSettingsModal() {
 
   const cn = s.colNames || {};
 
-  const tip = (text) => `<span class="info-tip" data-tip="${text}" style="flex-shrink:0;display:inline-flex;align-items:center"><img src="/info.svg" style="width:12px;height:12px;opacity:0.35;vertical-align:middle;transition:opacity 0.15s"/></span>`;
+  const tip = (text) => `<span class="info-tip info-tip-left" data-tip="${text}" style="flex-shrink:0;display:inline-flex;align-items:center"><img src="/info.svg" style="width:12px;height:12px;opacity:0.35;vertical-align:middle;transition:opacity 0.15s"/></span>`;
 
   const colNameInput = (col, defaultLabel) =>
     `<input type="text" maxlength="16" placeholder="default: ${defaultLabel}"
@@ -1500,7 +1500,7 @@ function renderPptxListSettingsModal() {
   const colRow = (content) => `<div style="display:flex;align-items:stretch;gap:0;border-bottom:1px solid #f0f3f7;width:100%">${content}</div>`;
   const zone1 = (content) => `<div style="width:30%;min-width:0;display:flex;align-items:center;gap:0.4rem;padding:0.4rem 0.5rem 0.4rem 0.75rem;flex-shrink:0">${content}</div>`;
   const zone2 = (content) => `<div style="width:30%;min-width:0;display:flex;align-items:center;padding:0.4rem 0.5rem;flex-shrink:0">${content}</div>`;
-  const zone3 = (content) => `<div style="width:40%;min-width:0;padding:0.4rem 0.5rem 0.4rem 0.5rem;border-left:1px solid #f0f3f7">${content}</div>`;
+  const zone3 = (content) => `<div style="width:40%;min-width:0;padding:0.4rem 0.5rem 0.4rem 0.5rem">${content}</div>`;
   const chkStyle = 'cursor:pointer;flex-shrink:0';
   const labelStyle = 'font-size:0.85rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
 
@@ -1549,7 +1549,7 @@ function renderPptxListSettingsModal() {
       <div style="display:flex;gap:0;border:1px solid #dce3ea;border-radius:6px 6px 0 0;background:#f7f8f9;overflow:hidden">
         <div style="width:30%;padding:0.3rem 0.5rem 0.3rem 0.75rem;font-size:0.72rem;font-weight:600;color:#6a6a6a;text-transform:uppercase;letter-spacing:0.04em">Column</div>
         <div style="width:30%;padding:0.3rem 0.5rem;font-size:0.72rem;font-weight:600;color:#6a6a6a;text-transform:uppercase;letter-spacing:0.04em">Options</div>
-        <div style="width:40%;padding:0.3rem 0.5rem;font-size:0.72rem;font-weight:600;color:#6a6a6a;text-transform:uppercase;letter-spacing:0.04em;border-left:1px solid #dce3ea">Custom PPTX Column Name</div>
+        <div style="width:40%;padding:0.3rem 0.5rem;font-size:0.72rem;font-weight:600;color:#6a6a6a;text-transform:uppercase;letter-spacing:0.04em">Custom PPTX Column Name</div>
       </div>
       <div style="border:1px solid #dce3ea;border-top:none;border-radius:0 0 6px 6px;margin-bottom:0.75rem">
 
