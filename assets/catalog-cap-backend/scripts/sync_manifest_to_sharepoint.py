@@ -29,6 +29,7 @@ EXCEL_FOLDER    = r"C:\Users\I306380\SAP SE\Max Success Plan - Service list - re
 CAP_BACKEND_URL = "https://ssc-catalog-cap-backend.cfapps.us10-001.hana.ondemand.com"
 LOG_FILE        = str(Path(__file__).parent / "sync_log.json")
 CHECK_INTERVAL  = 60  # minutes
+PUBLISH_TOKEN   = os.environ.get("CAP_PUBLISH_TOKEN", "")
 
 # Files to never upload regardless of mode
 EXCLUDED_FILES = {
@@ -98,6 +99,14 @@ def log_entry(log, message):
     print(f"  {message}")
     log.setdefault("history", []).append({"time": ts, "message": message})
 
+def auth_headers(extra=None):
+    h = {}
+    if PUBLISH_TOKEN:
+        h["Authorization"] = f"Bearer {PUBLISH_TOKEN}"
+    if extra:
+        h.update(extra)
+    return h
+
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
@@ -121,7 +130,7 @@ def main():
         # 1. Check if app restarted since last sync — always runs regardless of interval
         force_reupload = False
         try:
-            health_resp = requests.get(f"{CAP_BACKEND_URL}/health", timeout=10)
+            health_resp = requests.get(f"{CAP_BACKEND_URL}/health", headers=auth_headers(), timeout=10)
             health_resp.raise_for_status()
             app_start_time_str = health_resp.json().get("appStartTime")
             if app_start_time_str and last_check_str:
@@ -166,7 +175,7 @@ def main():
     # Fetch manifest
     print(f"\n📋 Fetching manifest from CAP backend...")
     try:
-        resp = requests.get(f"{CAP_BACKEND_URL}/api/catalog/excel-manifest", timeout=15)
+        resp = requests.get(f"{CAP_BACKEND_URL}/api/catalog/excel-manifest", headers=auth_headers(), timeout=15)
         resp.raise_for_status()
         manifest = resp.json()
     except Exception as e:
@@ -203,7 +212,7 @@ def main():
             put_resp = requests.put(
                 f"{CAP_BACKEND_URL}/api/catalog/excel/{bs_code}",
                 data=data,
-                headers={"Content-Type": "application/octet-stream", "X-Filename": filepath.name},
+                headers=auth_headers({"Content-Type": "application/octet-stream", "X-Filename": filepath.name}),
                 timeout=30
             )
             put_resp.raise_for_status()
