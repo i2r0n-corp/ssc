@@ -1092,8 +1092,8 @@ router.get('/injection-log', async (req, res) => {
     // Fixed counts
     const fixedRes = await db.query(`
       SELECT
-        COUNT(*) FILTER (WHERE status='Fixed' AND type='module')) AS fixed_mod,
-        COUNT(*) FILTER (WHERE status='Fixed' AND type='service')) AS fixed_svc
+        COUNT(*) FILTER (WHERE status='Fixed' AND type='module') AS fixed_mod,
+        COUNT(*) FILTER (WHERE status='Fixed' AND type='service') AS fixed_svc
       FROM catalog_matching_log_rows
       WHERE status='Fixed' ${bsCode ? 'AND bs_code=$1' : ''}
     `, bsCode ? [bsCode] : []);
