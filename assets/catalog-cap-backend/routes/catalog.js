@@ -1079,8 +1079,15 @@ router.get('/injection-log', async (req, res) => {
       FROM catalog_injection_log
       ${bsCode ? 'WHERE bs_code = $1' : ''}
     `, bsCode ? [bsCode] : []);
-    const totals = totalsRes.rows[0];
-    const totals = totalsRes.rows[0] || { matched: 0, unmatched: 0, injected: 0, already_linked: 0, unresolved_mod: 0, unresolved_svc: 0 };
+    const totalsRow = totalsRes.rows[0] || {};
+    const totals = {
+      matched: totalsRow.matched || 0,
+      unmatched: totalsRow.unmatched || 0,
+      injected: totalsRow.injected || 0,
+      already_linked: totalsRow.already_linked || 0,
+      unresolved_mod: totalsRow.unresolved_mod || 0,
+      unresolved_svc: totalsRow.unresolved_svc || 0
+    };
 
     // Fixed counts
     const fixedRes = await db.query(`

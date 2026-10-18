@@ -78,6 +78,13 @@
       "excluded": 0,
       "bad_structure": 0,
       "errors": 0
+    },
+    {
+      "time": "2026-10-18 23:35:52 UTC",
+      "duration_sec": 0,
+      "mode": "scheduled",
+      "result": "skipped_interval",
+      "minutes_since_last": 59
     }
   ]
 }
