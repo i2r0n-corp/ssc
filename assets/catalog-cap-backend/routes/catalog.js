@@ -1080,6 +1080,7 @@ router.get('/injection-log', async (req, res) => {
       ${bsCode ? 'WHERE bs_code = $1' : ''}
     `, bsCode ? [bsCode] : []);
     const totals = totalsRes.rows[0];
+    const totals = totalsRes.rows[0] || { matched: 0, unmatched: 0, injected: 0, already_linked: 0, unresolved_mod: 0, unresolved_svc: 0 };
 
     // Fixed counts
     const fixedRes = await db.query(`
