@@ -107,6 +107,14 @@ def auth_headers(extra=None):
         h.update(extra)
     return h
 
+def file_hash(filepath):
+    import hashlib
+    h = hashlib.md5()
+    with open(filepath, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
@@ -160,8 +168,6 @@ def main():
         else:
             print("⚡ First run — uploading all Excel files found in manifest.")
             last_check = None
-    else:
-        last_check = None  # force all files to re-upload
 
     # Fetch manifest
     print(f"\n📋 Fetching manifest from CAP backend...")
@@ -208,6 +214,7 @@ def main():
             )
             put_resp.raise_for_status()
             log_entry(log, f"✅ {bs_code}: uploaded {filepath.name} — queued for enrichment")
+            log.setdefault("fileHashes", {})[bs_code] = file_hash(filepath)
             uploaded += 1
         except Exception as e:
             log_entry(log, f"❌ {bs_code}: failed — {e}")
@@ -252,9 +259,10 @@ def main():
                 missing += 1
                 continue
 
-            mtime = datetime.fromtimestamp(filepath.stat().st_mtime, tz=timezone.utc)
-            if last_check and mtime <= last_check:
-                print(f"  ⏭️  {bs_code}: not modified — skipping")
+            current_hash = file_hash(filepath)
+            stored_hashes = log.get("fileHashes", {})
+            if stored_hashes.get(bs_code) == current_hash:
+                print(f"  ⏭️  {bs_code}: content unchanged — skipping")
                 skipped += 1
                 continue
 
