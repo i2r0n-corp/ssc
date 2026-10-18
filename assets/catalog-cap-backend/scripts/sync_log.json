@@ -1,42 +1,6 @@
 {
-  "lastCheck": "2026-10-04T21:56:32.888667+00:00",
+  "lastCheck": "2026-10-18T18:01:14.058815+00:00",
   "history": [
-    {
-      "time": "2026-10-04 23:56:34",
-      "message": "\u2705 MAX00004: uploaded \u2014 queued for enrichment"
-    },
-    {
-      "time": "2026-10-04 23:56:35",
-      "message": "\u2705 MAX00005: uploaded \u2014 queued for enrichment"
-    },
-    {
-      "time": "2026-10-04 23:56:35",
-      "message": "\u2705 MAX00006: uploaded \u2014 queued for enrichment"
-    },
-    {
-      "time": "2026-10-04 23:56:37",
-      "message": "\u2705 MAX00007: uploaded \u2014 queued for enrichment"
-    },
-    {
-      "time": "2026-10-04 23:56:41",
-      "message": "\u2705 MAX00008: uploaded \u2014 queued for enrichment"
-    },
-    {
-      "time": "2026-10-04 23:56:45",
-      "message": "\u2705 MAX00009: uploaded \u2014 queued for enrichment"
-    },
-    {
-      "time": "2026-10-04 23:56:49",
-      "message": "\u2705 MAX00010: uploaded \u2014 queued for enrichment"
-    },
-    {
-      "time": "2026-10-04 23:56:50",
-      "message": "\u2705 MAX00015: uploaded \u2014 queued for enrichment"
-    },
-    {
-      "time": "2026-10-04 23:56:57",
-      "message": "\u274c MAX00016: failed \u2014 502 Server Error: Bad Gateway for url: https://ssc-catalog-cap-backend.cfapps.us10-001.hana.ondemand.com/api/catalog/excel/MAX00016"
-    },
     {
       "time": "2026-10-04 23:57:00",
       "message": "\u2705 MAX00018: uploaded \u2014 queued for enrichment"
@@ -372,6 +336,84 @@
     {
       "time": "2026-10-05 06:19:12",
       "message": "\u2705 MAX00020: uploaded MAX00020_Transform your finance management_Max Success Plan.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:17",
+      "message": "\u2705 MAX00001: uploaded MAX00001_Max_Business_Scenario_2608_Advanced_Foundational_Service_List.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:20",
+      "message": "\u2705 MAX00002: uploaded MAX00002_Max_Business_Scenario_2608_Advanced_Foundational_Service_List.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:22",
+      "message": "\u2705 MAX00003: uploaded MAX00003_Max_Business_Scenario_2608_Advanced_Foundational_Service_List.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:24",
+      "message": "\u2705 MAX00004: uploaded MAX00004_Max_Business_Scenario_2608_Advanced_Foundational_Service_List.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:25",
+      "message": "\u2705 MAX00005: uploaded MAX00005_Max_Business_Scenario_2608_Advanced_Foundational_Service_List.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:26",
+      "message": "\u2705 MAX00006: uploaded MAX00006_Max_Business_Scenario_2608_Advanced_Foundational_Service_List.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:27",
+      "message": "\u2705 MAX00007: uploaded MAX00007_Max_Business_Scenario_2608_Advanced_Foundational_Service_List.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:29",
+      "message": "\u2705 MAX00008: uploaded MAX00008_Max_Business_Scenario_2608_Advanced_Foundational_Service_List.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:34",
+      "message": "\u2705 MAX00009: uploaded MAX00009_Max_Business_Scenario_2608_Advanced_Foundational_Service_List.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:36",
+      "message": "\u2705 MAX00010: uploaded MAX00010_Accelerate your business transformation with a clean core_Max Success Plan v2608_Service_List.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:38",
+      "message": "\u2705 MAX00013: uploaded MAX00013_Integrate,extend, and innovate with SAP BTP_n.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:42",
+      "message": "\u2705 MAX00015: uploaded MAX00015_Modernize your integration landscape with SAP Integration Suite_Max Success Plan v26088_Advanced_Foundational_Service_List.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:43",
+      "message": "\u2705 MAX00016: uploaded MAX00016_Max_Business_Scenario_2608_Advanced_Foundational_Service_List.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:45",
+      "message": "\u2705 MAX00018: uploaded MAX00018_Max_Business_Scenario_2608_Advanced_Foundational_Service_List.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:46",
+      "message": "\u2705 MAX00019: uploaded MAX00019_Transform your spend management_Max Success Plan_n.xlsx \u2014 queued for enrichment"
+    },
+    {
+      "time": "2026-10-18 20:01:47",
+      "message": "\u2705 MAX00020: uploaded MAX00020_Transform your finance management_Max Success Plan.xlsx \u2014 queued for enrichment"
+    }
+  ],
+  "runs": [
+    {
+      "time": "2026-10-18 18:01:14 UTC",
+      "duration_sec": 33,
+      "mode": "scheduled",
+      "result": "completed",
+      "uploaded": 16,
+      "skipped": 0,
+      "missing": 0,
+      "excluded": 0,
+      "bad_structure": 0,
+      "errors": 0
     }
   ]
 }

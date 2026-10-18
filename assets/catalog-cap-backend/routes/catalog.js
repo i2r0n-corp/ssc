@@ -936,6 +936,13 @@ async function processEnrichQueue() {
             logEntry.unresolvedMod || 0, logEntry.unresolvedSvc || 0
           ]
         );
+
+        // Update last_updated in catalog_sync so UI reflects enrichment time
+        await db.query(
+          `UPDATE catalog_sync SET last_updated = NOW() WHERE id = (SELECT id FROM catalog_sync ORDER BY id DESC LIMIT 1)`
+        );
+        const snap = snapshot.load();
+        if (snap) snap.lastUpdated = new Date().toISOString();
       } catch (dbWriteErr) {
         console.warn('[enrich-queue] DB write failed for ' + bsCode + ':', dbWriteErr.message);
         // Fall back to file snapshot update if DB unavailable
