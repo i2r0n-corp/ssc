@@ -1843,6 +1843,13 @@ router.post('/debug/fix', requireEditor, async (req, res) => {
     }
 
     await db.query(
+      `INSERT INTO catalog_bs_naming (service_code, bs_code, deck_name, match_method)
+       VALUES ($1, $2, $3, 'manual fix')
+       ON CONFLICT (service_code, bs_code) DO UPDATE SET deck_name=EXCLUDED.deck_name, match_method=EXCLUDED.match_method`,
+      [service_code, bs_code, catalog_name || service_name]
+    );
+    
+    await db.query(
       `INSERT INTO catalog_excel_fixes (row_hash, bs_code, raw_crm_id, raw_module_code, raw_catalog_name, service_code, module_code, fixed_by, last_applied_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
        ON CONFLICT (row_hash) DO UPDATE SET
