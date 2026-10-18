@@ -2217,7 +2217,7 @@ window.debugFixSave = async function(rowId) {
       row_hash: r.row_hash || ff.rowHash,
       bs_code: r.bs_code,
       crm_id: ff.crmId || null,
-      module_code: ff.moduleCode || null,
+      module_code: ff.moduleCode || r.module_code || null,
       catalog_name: ff.selectedService?.name || ff.keywords || null,
       service_code_direct: ff.selectedService?.code || ff.codeId || ff.crmServiceCode || null,
     };
