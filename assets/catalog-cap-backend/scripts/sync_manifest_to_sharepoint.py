@@ -127,22 +127,13 @@ def main():
         print("🔧 Manual mode — uploading all manifest files unconditionally.")
         force_reupload = True
     else:
-        # 1. Check if app restarted since last sync — always runs regardless of interval
+        # 1. Check if app restarted since last sync — NO runs (changed 19/10/2026)
         force_reupload = False
         try:
             health_resp = requests.get(f"{CAP_BACKEND_URL}/health", headers=auth_headers(), timeout=10)
             health_resp.raise_for_status()
-            app_start_time_str = health_resp.json().get("appStartTime")
-            if app_start_time_str and last_check_str:
-                app_start_time = datetime.fromisoformat(app_start_time_str.replace('Z', '+00:00'))
-                last_check_dt  = datetime.fromisoformat(last_check_str)
-                if last_check_dt.tzinfo is None:
-                    last_check_dt = last_check_dt.replace(tzinfo=timezone.utc)
-                if app_start_time > last_check_dt:
-                    print(f"🔄 App restarted at {app_start_time.strftime('%Y-%m-%d %H:%M:%S')} UTC — forcing full re-upload.")
-                    force_reupload = True
         except Exception as e:
-            print(f"⚠️  Could not check app start time: {e}")
+            print(f"⚠️  Could not check app health: {e}")
 
     # 2. Only apply interval check if NOT force reupload
     last_check = None
