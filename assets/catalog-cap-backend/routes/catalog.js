@@ -1084,16 +1084,8 @@ router.get('/injection-log', async (req, res) => {
     // Fixed counts
     const fixedRes = await db.query(`
       SELECT
-        COUNT(*) FILTER (WHERE status='Fixed' AND module_code IS NOT NULL AND id IN (
-          SELECT r2.id FROM catalog_matching_log_rows r2
-          LEFT JOIN catalog_excel_fixes f ON f.row_hash = COALESCE(r2.row_hash, 'row-' || r2.id::text)
-          WHERE f.raw_module_code IS NOT NULL
-        )) AS fixed_mod,
-        COUNT(*) FILTER (WHERE status='Fixed' AND module_code IS NOT NULL AND id NOT IN (
-          SELECT r2.id FROM catalog_matching_log_rows r2
-          LEFT JOIN catalog_excel_fixes f ON f.row_hash = COALESCE(r2.row_hash, 'row-' || r2.id::text)
-          WHERE f.raw_module_code IS NOT NULL
-        )) AS fixed_svc
+        COUNT(*) FILTER (WHERE status='Fixed' AND type='module')) AS fixed_mod,
+        COUNT(*) FILTER (WHERE status='Fixed' AND type='service')) AS fixed_svc
       FROM catalog_matching_log_rows
       WHERE status='Fixed' ${bsCode ? 'AND bs_code=$1' : ''}
     `, bsCode ? [bsCode] : []);
@@ -1848,7 +1840,7 @@ router.post('/debug/fix', requireEditor, async (req, res) => {
        ON CONFLICT (service_code, bs_code) DO UPDATE SET deck_name=EXCLUDED.deck_name, match_method=EXCLUDED.match_method`,
       [service_code, bs_code, catalog_name || service_name]
     );
-    
+
     await db.query(
       `INSERT INTO catalog_excel_fixes (row_hash, bs_code, raw_crm_id, raw_module_code, raw_catalog_name, service_code, module_code, fixed_by, last_applied_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
