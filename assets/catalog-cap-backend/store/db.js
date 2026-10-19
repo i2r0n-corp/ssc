@@ -315,6 +315,7 @@ async function initSchema() {
     await client.query(`ALTER TABLE catalog_user_permissions ADD COLUMN IF NOT EXISTS tab_editor BOOLEAN NOT NULL DEFAULT false`);
     await client.query(`ALTER TABLE catalog_matching_log_rows ADD COLUMN IF NOT EXISTS row_hash TEXT`);
     await client.query(`ALTER TABLE catalog_excel_fixes ADD COLUMN IF NOT EXISTS fixed_by TEXT`);
+    await client.query(`ALTER TABLE catalog_excel_fixes ADD COLUMN IF NOT EXISTS original_status TEXT`);
     await client.query(`ALTER TABLE catalog_saved_selections ADD COLUMN IF NOT EXISTS keep_selected BOOLEAN NOT NULL DEFAULT true`);
     await client.query(`ALTER TABLE catalog_saved_selections ADD COLUMN IF NOT EXISTS module_granularity BOOLEAN NOT NULL DEFAULT false`);
     await client.query(`ALTER TABLE catalog_saved_selections ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''`);

@@ -2218,6 +2218,7 @@ window.debugFixSave = async function(rowId) {
       bs_code: r.bs_code,
       crm_id: ff.crmId || null,
       module_code: ff.moduleCode || r.module_code || null,
+      original_status: r.status,
       catalog_name: ff.selectedService?.name || ff.keywords || null,
       service_code_direct: ff.selectedService?.code || ff.codeId || ff.crmServiceCode || null,
     };

@@ -943,6 +943,60 @@ async function processEnrichQueue() {
         );
         const snap = snapshot.load();
         if (snap) snap.lastUpdated = new Date().toISOString();
+        // ── Replay manual fixes for this BS ──────────────────────────────────
+        try {
+          const fixesRes = await db.query(
+            `SELECT f.row_hash, f.service_code, f.module_code, f.raw_catalog_name
+             FROM catalog_excel_fixes f
+             WHERE f.bs_code = $1 AND f.service_code IS NOT NULL
+             AND f.row_hash NOT LIKE 'row-%'`,
+            [bsCode]
+          );
+          let replayed = 0;
+          for (const fix of fixesRes.rows) {
+            const logRowRes = await db.query(
+              `SELECT id FROM catalog_matching_log_rows
+               WHERE row_hash = $1 AND bs_code = $2 AND status != 'Fixed'
+               LIMIT 1`,
+              [fix.row_hash, bsCode]
+            );
+            if (logRowRes.rows.length === 0) continue;
+            const logRowId = logRowRes.rows[0].id;
+            const svcNameRes = await db.query(
+              `SELECT name FROM catalog_services WHERE code = $1 LIMIT 1`,
+              [fix.service_code]
+            );
+            const svcName = svcNameRes.rows[0]?.name || null;
+            if (fix.module_code) {
+              await db.query(
+                `INSERT INTO catalog_hierarchy (parent_code, child_code, position, source)
+                 VALUES ($1, $2, 0, 'excel')
+                 ON CONFLICT (parent_code, child_code) DO NOTHING`,
+                [fix.module_code, fix.service_code]
+              );
+            }
+            await db.query(
+              `INSERT INTO catalog_bs_naming (service_code, bs_code, deck_name, match_method)
+               VALUES ($1, $2, $3, 'manual fix')
+               ON CONFLICT (service_code, bs_code) DO UPDATE SET deck_name=EXCLUDED.deck_name, match_method=EXCLUDED.match_method`,
+              [fix.service_code, bsCode, fix.raw_catalog_name || svcName]
+            );
+            await db.query(
+              `UPDATE catalog_matching_log_rows
+               SET status='Fixed', service_code=$1, service_name=$2, module_code=$3
+               WHERE id=$4`,
+              [fix.service_code, svcName, fix.module_code || null, logRowId]
+            );
+            await db.query(
+              `UPDATE catalog_excel_fixes SET last_applied_at=NOW() WHERE row_hash=$1`,
+              [fix.row_hash]
+            );
+            replayed++;
+          }
+          if (replayed > 0) console.log('[enrich-queue] Replayed ' + replayed + ' manual fixes for ' + bsCode);
+        } catch (replayErr) {
+          console.warn('[enrich-queue] Fix replay failed for ' + bsCode + ':', replayErr.message);
+        }
       } catch (dbWriteErr) {
         console.warn('[enrich-queue] DB write failed for ' + bsCode + ':', dbWriteErr.message);
         // Fall back to file snapshot update if DB unavailable
@@ -1092,8 +1146,16 @@ router.get('/injection-log', async (req, res) => {
     // Fixed counts
     const fixedRes = await db.query(`
       SELECT
-        COUNT(*) FILTER (WHERE status='Fixed' AND type='module') AS fixed_mod,
-        COUNT(*) FILTER (WHERE status='Fixed' AND type='service') AS fixed_svc
+        COUNT(*) FILTER (WHERE status='Fixed' AND id IN (
+          SELECT r2.id FROM catalog_matching_log_rows r2
+          JOIN catalog_excel_fixes f ON f.row_hash = COALESCE(r2.row_hash, 'row-' || r2.id::text)
+          WHERE f.original_status = 'No Module Match'
+        )) AS fixed_mod,
+        COUNT(*) FILTER (WHERE status='Fixed' AND id IN (
+          SELECT r2.id FROM catalog_matching_log_rows r2
+          JOIN catalog_excel_fixes f ON f.row_hash = COALESCE(r2.row_hash, 'row-' || r2.id::text)
+          WHERE f.original_status = 'No Service Match'
+        )) AS fixed_svc
       FROM catalog_matching_log_rows
       WHERE status='Fixed' ${bsCode ? 'AND bs_code=$1' : ''}
     `, bsCode ? [bsCode] : []);
@@ -1114,7 +1176,7 @@ router.get('/injection-log', async (req, res) => {
     const rowsRes = await db.query(`
       SELECT r.id, r.bs_code, r.type, r.status, r.service_code, r.service_name,
              r.module_code, r.module_name, r.deck_name, r.crm_ids, r.created_at, r.row_hash,
-             CASE WHEN f.raw_module_code IS NOT NULL THEN true ELSE false END AS module_was_fixed
+             CASE WHEN f.original_status = 'No Module Match' THEN true ELSE false END AS module_was_fixed
       FROM catalog_matching_log_rows r
       LEFT JOIN catalog_excel_fixes f ON f.row_hash = COALESCE(r.row_hash, 'row-' || r.id::text)
       WHERE 1=1 ${where}
@@ -1813,7 +1875,7 @@ router.get('/debug/validate-code', async (req, res) => {
 });
 
 router.post('/debug/fix', requireEditor, async (req, res) => {
-  const { log_row_id, row_hash, bs_code, crm_id, module_code, catalog_name, service_code_direct } = req.body || {};
+  const { log_row_id, row_hash, bs_code, crm_id, module_code, catalog_name, service_code_direct, original_status } = req.body || {};
   const effectiveHash = row_hash || (log_row_id ? `row-${log_row_id}` : null);
   if (!effectiveHash || !bs_code) return res.status(400).json({ error: 'row_hash (or log_row_id) and bs_code required' });
   const fixedBy = (getJwtPayload(req)?.user_name || getJwtPayload(req)?.email || null);
@@ -1850,11 +1912,11 @@ router.post('/debug/fix', requireEditor, async (req, res) => {
     );
 
     await db.query(
-      `INSERT INTO catalog_excel_fixes (row_hash, bs_code, raw_crm_id, raw_module_code, raw_catalog_name, service_code, module_code, fixed_by, last_applied_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+      `INSERT INTO catalog_excel_fixes (row_hash, bs_code, raw_crm_id, raw_module_code, raw_catalog_name, service_code, module_code, fixed_by, last_applied_at, original_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW(),$9)
        ON CONFLICT (row_hash) DO UPDATE SET
-         raw_crm_id=$3, raw_module_code=$4, raw_catalog_name=$5, service_code=$6, module_code=$7, fixed_by=$8, last_applied_at=NOW()`,
-      [effectiveHash, bs_code, crm_id||null, module_code||null, catalog_name||null, service_code, module_code||null, fixedBy||null]
+         raw_crm_id=$3, raw_module_code=$4, raw_catalog_name=$5, service_code=$6, module_code=$7, fixed_by=$8, last_applied_at=NOW(), original_status=$9`,
+      [effectiveHash, bs_code, crm_id||null, module_code||null, catalog_name||null, service_code, module_code||null, fixedBy||null, original_status||null]
     );
 
     if (log_row_id) {
@@ -1948,7 +2010,7 @@ router.get('/excel-export/:bsCode', requireEditor, async (req, res) => {
         console.log('[excel-export] MATCH row', rowNum, '→ applying fix, module_display_name:', fix.module_display_name, 'raw_module_code:', fix.raw_module_code, 'stripped:', stripModName(fix.module_display_name));
         if (fix.raw_crm_id) row.getCell(crmCol).value = fix.raw_crm_id;
         if (fix.raw_catalog_name) row.getCell(nameCol).value = fix.raw_catalog_name;
-        if (fix.raw_module_code && moduleCol > 0) row.getCell(moduleCol).value = stripModName(fix.module_display_name) || fix.raw_module_code;
+        if (fix.original_status === 'No Module Match' && moduleCol > 0) row.getCell(moduleCol).value = stripModName(fix.module_display_name) || fix.raw_module_code;
         if (fix.service_code && commentsCol > 0) row.getCell(commentsCol).value = fix.service_code;
       });
     });
