@@ -217,6 +217,7 @@ router.post('/generatePptx', async (req, res) => {
           orderedSvcs.push({
             code:              entry.svcCode,
             name:              svc._name || svc.name,
+            _bsCode:           entry.bsCode || null,
             short_description: svc.shortDescription || '',
             summary:           svc.summary || '',
             key_benefits:      svc.keyBenefits || '',

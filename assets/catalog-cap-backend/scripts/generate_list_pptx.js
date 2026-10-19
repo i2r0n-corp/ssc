@@ -465,8 +465,9 @@ function generateListPptxBuffer(services, opts = {}) {
   }
 
   function getSvcRow(svc, streamText, isStreamStart, streamRowSpan) {
-    const name = useDeck && bsCode && svc.business_scenario_naming?.[bsCode]
-      ? svc.business_scenario_naming[bsCode] : (svc.name || '');
+    const effectiveBsCode = bsCode || svc._bsCode || null;
+    const name = useDeck && effectiveBsCode && svc.business_scenario_naming?.[effectiveBsCode]
+      ? svc.business_scenario_naming[effectiveBsCode] : (svc.name || '');
     const phases = (svc.phases||[]).slice().sort((a,b)=>PHASE_ORDER.indexOf(a)-PHASE_ORDER.indexOf(b));
     const allPhases = PHASE_ORDER.every(p => phases.includes(p));
     const phasesText = allPhases ? 'All' : phases.join(', ');
