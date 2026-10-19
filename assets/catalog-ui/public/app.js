@@ -2219,7 +2219,7 @@ window.debugFixSave = async function(rowId) {
       crm_id: ff.crmId || null,
       module_code: ff.moduleCode || r.module_code || null,
       original_status: r.status,
-      catalog_name: ff.selectedService?.name || ff.keywords || null,
+      catalog_name: r.deck_name || ff.selectedService?.name || ff.keywords || null,
       service_code_direct: ff.selectedService?.code || ff.codeId || ff.crmServiceCode || null,
     };
     const d = await apiFetch(`${CAP_BACKEND_URL}/api/catalog/debug/fix`, { method: 'POST', body: JSON.stringify(body) });

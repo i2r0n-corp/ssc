@@ -946,8 +946,10 @@ async function processEnrichQueue() {
         // ── Replay manual fixes for this BS ──────────────────────────────────
         try {
           const fixesRes = await db.query(
-            `SELECT f.row_hash, f.service_code, f.module_code, f.raw_catalog_name
+            `SELECT f.row_hash, f.service_code, f.module_code, f.raw_catalog_name,
+                    COALESCE(r.deck_name, f.raw_catalog_name) AS effective_deck_name
              FROM catalog_excel_fixes f
+             LEFT JOIN catalog_matching_log_rows r ON r.row_hash = f.row_hash AND r.bs_code = f.bs_code
              WHERE f.bs_code = $1 AND f.service_code IS NOT NULL
              AND f.row_hash NOT LIKE 'row-%'`,
             [bsCode]
@@ -979,7 +981,7 @@ async function processEnrichQueue() {
               `INSERT INTO catalog_bs_naming (service_code, bs_code, deck_name, match_method)
                VALUES ($1, $2, $3, 'manual fix')
                ON CONFLICT (service_code, bs_code) DO UPDATE SET deck_name=EXCLUDED.deck_name, match_method=EXCLUDED.match_method`,
-              [fix.service_code, bsCode, fix.raw_catalog_name || svcName]
+              [fix.service_code, bsCode, fix.effective_deck_name || svcName]
             );
             await db.query(
               `UPDATE catalog_matching_log_rows
