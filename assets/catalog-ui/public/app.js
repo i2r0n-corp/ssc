@@ -1676,7 +1676,7 @@ window.exportExcel = async function() {
   const s = state.excelSettings;
   const svcs = state.selectedServices.size > 0
     ? s.pdMode
-      ? [...new Map([...state.selectedServiceObjects.values()].map(s => [s.code, s])).values()]
+      ? [...new Map([...state.selectedServiceObjects.values()].map(obj => [obj.code, obj])).values()]
       : [...state.selectedServiceObjects.values()]
     : state.filteredServices;
   if (svcs.length === 0) { alert('No services to export.'); return; }
