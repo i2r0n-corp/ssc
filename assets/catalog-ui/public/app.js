@@ -1674,11 +1674,10 @@ function renderPptxListSettingsModal() {
 
 window.exportExcel = async function() {
   const s = state.excelSettings;
-  const selectedCodes = state.selectedServices.size > 0
-    ? new Set([...state.selectedServices].map(k => k.includes('||') ? k.split('||')[0] : k))
-    : null;
-  const svcs = selectedCodes
-    ? state.filteredServices.filter(x => selectedCodes.has(x.code))
+  const svcs = state.selectedServices.size > 0
+    ? s.pdMode
+      ? [...new Map([...state.selectedServiceObjects.values()].map(s => [s.code, s])).values()]
+      : [...state.selectedServiceObjects.values()]
     : state.filteredServices;
   if (svcs.length === 0) { alert('No services to export.'); return; }
   state.excelSettings.open = false; render();
