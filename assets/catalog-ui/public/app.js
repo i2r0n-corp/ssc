@@ -83,8 +83,16 @@ function saveCart() {
 // ── API helpers ───────────────────────────────────────────────────────────────
 async function apiFetch(url, options = {}) {
   const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...options });
-  if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
-  return res.json();
+  const text = await res.text();
+  if (text.trim().startsWith('<')) {
+    await new Promise(r => setTimeout(r, 3000));
+    const res2 = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...options });
+    const text2 = await res2.text();
+    if (text2.trim().startsWith('<')) throw new Error('Service is starting up, please refresh the page in a moment.');
+    return JSON.parse(text2);
+  }
+  if (!res.ok) throw new Error(`API error ${res.status}: ${text}`);
+  return JSON.parse(text);
 }
 
 async function loadCatalog() {
