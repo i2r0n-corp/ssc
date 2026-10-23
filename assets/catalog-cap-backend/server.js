@@ -246,6 +246,13 @@ async function _restoreExcelFiles() {
 
 startupSync();
 
+// Nightly restart at 03:00 AM CET — CF auto-restarts after process.exit(0)
+const CronJob = require('cron').CronJob;
+new CronJob('0 3 * * *', () => {
+  console.log('[cron] Nightly restart at 3 AM CET — exiting for CF to restart.');
+  setTimeout(() => process.exit(0), 500);
+}, null, true, 'Europe/Berlin');
+
 // 404 fallback
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 
